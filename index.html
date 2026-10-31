@@ -139,7 +139,7 @@
       <h2>ВХОД В ЛИЧНЫЙ КАБИНЕТ</h2>
       <input id="usernameInput" class="field" autocomplete="username" placeholder="Логин игрока" />
       <input id="passwordInput" class="field" type="password" autocomplete="current-password" placeholder="Пароль" />
-      <button id="loginButton" class="action-btn">ВОЙТИ</button>
+      <button id="loginButton" class="action-btn" type="button" onclick="signIn()">ВОЙТИ</button>
       <div class="muted">Вход по логину и паролю. Учётные записи выдаёт администратор.</div>
       <div id="loginMessage" class="message"></div>
     </section>
@@ -331,14 +331,23 @@
       } finally{btn.disabled=false;}
     }
     async function signIn() {
-      const username = $('usernameInput').value.trim(); const password = $('passwordInput').value;
-      if (!username || !password) return setMessage('loginMessage','Введите email или логин и пароль.',true);
-      if (!sb) return setMessage('loginMessage','Сначала настройте SUPABASE_URL и SUPABASE_KEY в index.html.',true);
-      $('loginButton').disabled = true; setMessage('loginMessage','Проверяем данные…');
-      const { data, error } = await sb.auth.signInWithPassword({ email: usernameEmail(username), password });
-      $('loginButton').disabled = false;
-      if (error) return setMessage('loginMessage','Не удалось войти. Проверьте логин и пароль.',true);
-      currentUser = data.user; await showAccount();
+      const button=$('loginButton');
+      try {
+        const username = $('usernameInput')?.value.trim() || '';
+        const password = $('passwordInput')?.value || '';
+        if (!username || !password) return setMessage('loginMessage','Введите логин и пароль.',true);
+        if (!sb) return setMessage('loginMessage','Нет подключения к серверу. Обновите страницу и попробуйте снова.',true);
+        if(button) button.disabled = true;
+        setMessage('loginMessage','Проверяем данные…');
+        const { data, error } = await sb.auth.signInWithPassword({ email: usernameEmail(username), password });
+        if (error) throw error;
+        currentUser = data.user;
+        await showAccount();
+      } catch(err) {
+        setMessage('loginMessage','Не удалось войти: '+(err?.message || 'ошибка соединения'),true);
+      } finally {
+        if(button) button.disabled = false;
+      }
     }
     async function showAccount() {
       const { data: profile, error } = await sb.from('profiles').select('user_id, username, player_id, role, captain_team').eq('user_id', currentUser.id).maybeSingle();

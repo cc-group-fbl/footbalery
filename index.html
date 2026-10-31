@@ -247,6 +247,15 @@
     const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1EBqurekL2MJH4OItnBRY_cF-Le8Q6BHyie7Q3bPMW4Q/export?format=csv';
     let sb = null, currentUser = null, currentProfile = null, activePoll = null;
     const $ = id => document.getElementById(id);
+    // Инициализируем Supabase в самом начале, чтобы более поздняя ошибка интерфейса
+    // не оставляла кнопку входа без подключения к серверу.
+    try {
+      if (window.supabase && SUPABASE_URL.startsWith('https://') && !SUPABASE_KEY.startsWith('ВСТАВЬТЕ_')) {
+        sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      }
+    } catch (connectionInitError) {
+      console.error('Supabase init error:', connectionInitError);
+    }
     function usernameEmail(username) { const value = username.trim().toLowerCase(); return value.includes('@') ? value : value.replace(/[^a-z0-9._-]/g, '-') + '@members.futbolery.local'; }
     function setMessage(id, msg, bad=false) { $(id).textContent = msg || ''; $(id).style.color = bad ? '#ff7777' : '#ffd21f'; }
 
@@ -336,7 +345,7 @@
         const username = $('usernameInput')?.value.trim() || '';
         const password = $('passwordInput')?.value || '';
         if (!username || !password) return setMessage('loginMessage','Введите логин и пароль.',true);
-        if (!sb) return setMessage('loginMessage','Нет подключения к серверу. Обновите страницу и попробуйте снова.',true);
+        if (!sb) return setMessage('loginMessage', !window.supabase ? 'Не загрузилась библиотека Supabase. Проверьте интернет и обновите страницу.' : 'Подключение к Supabase не инициализировано. Обновите страницу.', true);
         if(button) button.disabled = true;
         setMessage('loginMessage','Проверяем данные…');
         const { data, error } = await sb.auth.signInWithPassword({ email: usernameEmail(username), password });
@@ -853,9 +862,16 @@
     $('statsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('newsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('voteBackButton').addEventListener('click',()=>showSection('homeScreen'));$('adminBackButton').addEventListener('click',()=>showSection('homeScreen'));
     $('saveStatsCategorySettings')?.addEventListener('click', saveStatSettings);
     initStatSettings();
-    if(!SUPABASE_URL.startsWith('https://') || SUPABASE_KEY.startsWith('ВСТАВЬТЕ_')) { setMessage('loginMessage','Для подключения сначала укажите Supabase URL и publishable key в index.html.',true); }
-    else if (!window.supabase) { setMessage('loginMessage','Не загрузилась библиотека Supabase. Откройте страницу через интернет-хостинг и обновите её.',true); }
-    else { sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY); sb.auth.getSession().then(async ({data})=>{if(data.session){currentUser=data.session.user;await showAccount();}}).catch(()=>setMessage('loginMessage','Не удалось проверить сессию. Обновите страницу.',true)); }
+    if(!SUPABASE_URL.startsWith('https://') || SUPABASE_KEY.startsWith('ВСТАВЬТЕ_')) {
+      setMessage('loginMessage','Не настроен адрес сервера или ключ Supabase.',true);
+    } else if (!window.supabase) {
+      setMessage('loginMessage','Не загрузилась библиотека Supabase. Проверьте интернет и обновите страницу.',true);
+    } else if (!sb) {
+      setMessage('loginMessage','Не удалось запустить подключение к Supabase. Обновите страницу.',true);
+    } else {
+      sb.auth.getSession().then(async ({data})=>{if(data.session){currentUser=data.session.user;await showAccount();}})
+        .catch(err=>setMessage('loginMessage','Ошибка связи с сервером: '+(err?.message||'не удалось проверить сессию'),true));
+    }
       document.getElementById('refreshAdminUsers')?.addEventListener('click', loadAdminUsers);
 </script>
 </body>

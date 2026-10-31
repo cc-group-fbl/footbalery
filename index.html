@@ -189,8 +189,7 @@
       </section>
       <button type="button" class="small-btn section-back hidden" id="newsBackButton">← На главный экран</button>
       <section id="newsPanel" class="vote-box hidden">
-        <div class="topline"><h2 style="margin:0;text-align:left">НОВОСТИ</h2><button id="enablePushButton" class="small-btn">🔔 Уведомления</button></div>
-        <div id="pushStatus" class="muted">Включите уведомления, чтобы получать сообщения, даже когда сайт закрыт (если браузер поддерживает push).</div>
+        <div class="topline"><h2 style="margin:0;text-align:left">НОВОСТИ</h2></div>
         <div id="newsFeed" style="margin-top:12px"><div class="muted">Загрузка новостей…</div></div>
         <div id="newsMessage" class="message"></div>
       </section>
@@ -210,63 +209,7 @@
           <summary>⚽ Управление матчами</summary>
           <div class="muted">Создавай матчи и управляй регистрацией участников.</div>
           <form id="createMatchForm" style="margin-top:12px">
-            <label class="muted" for="newMatchTitle">Название матча</label>
-            <input id="newMatchTitle" class="field" maxlength="160" placeholder="Например: ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ" required />
-            <label class="muted" for="newMatchDate">Дата матча</label>
-            <input id="newMatchDate" class="field" type="date" required />
-            <label class="muted" for="newMatchTime">Время матча</label>
-            <input id="newMatchTime" class="field" type="time" required />
-            <label class="muted" for="newMatchLocation">Место проведения</label>
-            <input id="newMatchLocation" class="field" maxlength="200" placeholder="Спортивный зал" required />
-            <label class="muted" for="newMatchDeadline">Дедлайн регистрации (необязательно)</label>
-            <input id="newMatchDeadline" class="field" type="datetime-local" />
-            <label class="candidate"><input id="newMatchOpen" type="checkbox" checked><span style="font-size:13px">Сразу открыть регистрацию</span></label>
-            <button id="createMatchButton" class="action-btn" type="submit">СОЗДАТЬ МАТЧ</button>
-          </form>
-          <div id="createMatchMessage" class="message"></div>
-          <h3 style="font-size:14px;margin:18px 0 8px">Заявки на матчи и перевод между командами</h3><div class="muted">Перевод меняет команду только в выбранной заявке, не затрагивая профиль игрока и Google Таблицу.</div><div id="adminMatchApplications" style="margin-top:10px"></div>
-          <h3 style="font-size:14px;margin:18px 0 8px">Матчи и регистрация</h3>
-          <button type="button" id="refreshAdminMatches" class="small-btn">Обновить список</button>
-          <div id="adminMatchesList" style="margin-top:10px"></div>
-        </details>
-        <details class="admin-section" open>
-          <summary>📊 Настройка категорий статистики</summary>
-          <p class="muted">По умолчанию доступны все статистические столбцы Google Таблицы. Отметь галочками то, что нужно показывать в карточке игрока.</p>
-          <label class="candidate"><input type="checkbox" id="statNameEnabled" checked><span style="font-size:13px">Показывать имя игрока</span></label>
-          <div id="statsCategorySettings" style="display:grid;gap:10px;margin-top:12px">
-            <div class="muted">Загрузка заголовков Google Таблицы…</div>
-          </div>
-          <button type="button" id="saveStatsCategorySettings" class="action-btn" style="margin-top:12px">СОХРАНИТЬ КАТЕГОРИИ</button>
-          <div id="statsSettingsMessage" class="message"></div>
-        </details>
-        <details class="admin-section" open>
-        <summary>🗳️ Управление опросами</summary>
-        <div class="muted">Создавайте опросы здесь. Для каждого кандидата укажите ID игрока и имя через вертикальную черту: FTB-001 | Иван Петров. ID должен совпадать с ID игрока в статистике.</div>
-        <form id="createPollForm" style="margin-top:12px">
-          <label class="muted" for="pollTitle">Название опроса</label>
-          <input id="pollTitle" class="field" maxlength="160" placeholder="Например: Лучший игрок месяца" required />
-          <label class="muted" for="pollEndsAt">Дата и время окончания</label>
-          <input id="pollEndsAt" class="field" type="datetime-local" required />
-          <label class="muted" for="pollCandidatesInput">Кандидаты — один на строку</label>
-          <textarea id="pollCandidatesInput" class="field" rows="5" placeholder="FTB-001 | Иван Петров&#10;FTB-002 | Сергей Иванов" required style="resize:vertical"></textarea>
-          <button id="createPollButton" class="action-btn" type="submit">СОЗДАТЬ ОПРОС</button>
-        </form>
-        <div id="createPollMessage" class="message"></div>
-        </details>
-        <details class="admin-section" open>
-        <summary>📰 Новости и информационные сообщения</summary>
-        <h3 style="font-size:14px;margin:18px 0 8px">Новости и информационные сообщения</h3>
-        <div class="muted">Настройте, кому будет видна новость. При публикации уведомления внутри сайта и push (если включён) отправятся только выбранной аудитории.</div>
-        <form id="createNewsForm" style="margin-top:12px">
-          <label class="muted" style="display:block;text-align:left;margin-top:12px">Кому будет видна новость?</label>
-          <label class="candidate"><input type="radio" name="newsAudience" value="all" checked><span style="font-size:13px">Всем участникам сообщества</span></label>
-          <label class="candidate"><input type="radio" name="newsAudience" value="selected"><span style="font-size:13px">Только выбранным пользователям</span></label>
-          <div id="newsRecipientsWrap" class="hidden" style="margin:10px 0;padding:10px;border:1px solid rgba(255,255,255,.12);border-radius:10px"><div style="display:flex;gap:8px;margin-bottom:8px"><button type="button" id="selectAllNewsRecipients" class="small-btn">Выбрать всех</button><button type="button" id="clearNewsRecipients" class="small-btn">Снять выбор</button></div><div id="newsRecipientsList" class="muted" style="text-align:left">Загрузка пользователей…</div></div>
-          <label class="muted" for="newsTitle">Заголовок новости</label><input id="newsTitle" class="field" maxlength="180" placeholder="Например: Изменение расписания" required>
-          <label class="muted" for="newsBody">Текст сообщения</label><textarea id="newsBody" class="field" rows="5" maxlength="8000" placeholder="Введите текст новости…" required style="resize:vertical"></textarea>
-          <label class="muted" for="newsImage">Ссылка на изображение (необязательно)</label><input id="newsImage" class="field" type="url" placeholder="https://…">
-          <label style="display:flex;gap:9px;align-items:center;font-size:12px;margin:12px 0"><input id="newsSendPush" type="checkbox" checked style="accent-color:#ff9100"> Отправить push-уведомление</label>
-          <button id="publishNewsButton" class="action-btn" type="submit">ОПУБЛИКОВАТЬ НОВОСТЬ</button>
+  <button id="publishNewsButton" class="action-btn" type="submit">ОПУБЛИКОВАТЬ НОВОСТЬ</button>
         </form>
         <div id="createNewsMessage" class="message"></div>
         <div id="adminNewsList" style="margin-top:12px"></div>
@@ -318,23 +261,6 @@
       window.scrollTo({top:0,behavior:'smooth'});
     }
 
-    const VAPID_PUBLIC_KEY = 'ВСТАВЬТЕ_VAPID_PUBLIC_KEY_ИЗ_ИНСТРУКЦИИ';
-    function urlBase64ToUint8Array(base64String) { const padding='='.repeat((4-base64String.length%4)%4); const raw=atob((base64String+padding).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from([...raw].map(c=>c.charCodeAt(0))); }
-    async function registerPushIfAvailable(requestPermission=false) {
-      const status=$('pushStatus');
-      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) { if(status) status.textContent='Этот браузер не поддерживает push-уведомления. Новости и уведомления внутри сайта всё равно доступны.'; return; }
-      if (VAPID_PUBLIC_KEY.startsWith('ВСТАВЬТЕ_')) { if(status) status.textContent='Push пока не настроен: администратору нужно добавить VAPID-ключи по инструкции в архиве. Уведомления внутри сайта работают отдельно.'; return; }
-      try {
-        const reg=await navigator.serviceWorker.register('/service-worker.js');
-        if(requestPermission && Notification.permission==='default') { const permission=await Notification.requestPermission(); if(permission!=='granted') { status.textContent='Разрешение на уведомления не выдано. Их можно включить в настройках браузера.'; return; } }
-        if(Notification.permission!=='granted') { status.textContent='Нажмите «🔔 Уведомления» и разрешите уведомления в браузере.'; return; }
-        let sub=await reg.pushManager.getSubscription();
-        if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
-        const {error}=await sb.from('push_subscriptions').upsert({user_id:currentUser.id,endpoint:sub.endpoint,subscription:sub.toJSON(),updated_at:new Date().toISOString()},{onConflict:'user_id,endpoint'});
-        if(error) throw error;
-        if(status) status.textContent='Push-уведомления включены для этого браузера.';
-      } catch(err) { if(status) status.textContent='Не удалось включить push: '+(err.message||'проверьте настройки').slice(0,160); }
-    }
     async function loadNews() {
       const root=$('newsFeed'); if(!root || !sb || !currentUser) return; root.replaceChildren();
       const {data:news,error}=await sb.from('news').select('id,title,body,image_url,author_id,visibility,created_at').order('created_at',{ascending:false}).limit(50);
@@ -377,8 +303,7 @@
         if(visibility==='selected') { const recRows=targetIds.map(user_id=>({news_id:news.id,user_id})); const {error:recError}=await sb.from('news_recipients').insert(recRows);if(recError)throw new Error('Новость создана, но список доступа не сохранён: '+recError.message); }
         const rows=targetIds.map(user_id=>({user_id,news_id:news.id,title:news.title,body:news.body.slice(0,500)}));
         if(rows.length){const {error:notifyError}=await sb.from('notifications').insert(rows);if(notifyError)throw new Error('Новость опубликована, но уведомления внутри сайта не создались: '+notifyError.message);}
-        if($('newsSendPush').checked){const {data:pushData,error:pushError}=await sb.functions.invoke('send-news-push',{body:{news_id:news.id}});if(pushError||pushData?.error)setMessage('createNewsMessage','Новость опубликована; уведомления внутри сайта созданы. Push не отправлен: '+(pushData?.error||pushError?.message||'проверьте настройку функции'),true);else setMessage('createNewsMessage','Новость опубликована. Push отправлен выбранной аудитории.');}
-        else setMessage('createNewsMessage','Новость опубликована, уведомления внутри сайта созданы.');
+        setMessage('createNewsMessage','Новость опубликована, уведомления внутри сайта созданы.');
         $('createNewsForm').reset();$('newsRecipientsWrap').classList.add('hidden');await loadAdminNews();await loadNews();
       } catch(err){
         let diagnostic=''; 
@@ -422,7 +347,7 @@
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       showSection('homeScreen');
-      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); await registerPushIfAvailable(false); if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); await loadAdminMatchApplications(); }
+      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); await loadAdminMatchApplications(); }
     }
     function normalizeHeader(v) {
       return String(v || '').replace(/^\uFEFF/, '').trim().toLowerCase()
@@ -915,7 +840,7 @@
     $('createPollForm').addEventListener('submit',createPoll);
     $('createMemberForm').addEventListener('submit',createMember);
     $('loginButton').addEventListener('click',signIn);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
-    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('enablePushButton').addEventListener('click',()=>registerPushIfAvailable(true));$('createNewsForm').addEventListener('submit',createNews);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap').classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients').addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients').addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',()=>{if(currentProfile&&currentProfile.role==='admin')showSection('adminPanel');});
+    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm').addEventListener('submit',createNews);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap').classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients').addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients').addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',()=>{if(currentProfile&&currentProfile.role==='admin')showSection('adminPanel');});
     $('statsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('newsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('voteBackButton').addEventListener('click',()=>showSection('homeScreen'));$('adminBackButton').addEventListener('click',()=>showSection('homeScreen'));
     $('saveStatsCategorySettings')?.addEventListener('click', saveStatSettings);
     initStatSettings();

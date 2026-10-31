@@ -385,7 +385,7 @@
           const {data:authProfile,error:profileError}=authUser
             ? await sb.from('profiles').select('user_id,role').eq('user_id',authUser.id).maybeSingle()
             : {data:null,error:null};
-          const {data:policyCheck,error:policyError}=await sb.rpc('debug_news_insert_access');
+          const {data:policyCheck,error:policyError}=await sb.rpc('debug_news_insert_access',{p_created_by:currentUser?.id||null,p_visibility:visibility});
           diagnostic='\\nДиагностика: auth.uid='+authId+
             '; currentUser.id='+(currentUser?.id||'нет')+
             '; совпадают='+(!!authUser&&authUser.id===currentUser?.id?'да':'НЕТ')+

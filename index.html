@@ -179,7 +179,7 @@
       <button type="button" class="small-btn section-back hidden" id="matchesBackButton">← На главный экран</button>
       <section id="matchesPanel" class="vote-box hidden"><h2>ЗАЯВКА НА МАТЧ</h2><div class="muted">Выбери матч и команду. Администратор может изменить команду в заявке.</div>
         <form id="matchApplicationForm" style="margin-top:12px"><label class="muted" for="matchSelect">Матч</label><select id="matchSelect" class="field" required><option value="">Загрузка матчей…</option></select>
-        <label class="muted" for="teamSelect">Команда</label><select id="teamSelect" class="field" required><option value="ДЕРЕВЕНСКИЕ">ФК ДЕРЕВЕНСКИЕ</option><option value="ГОРОДСКИЕ">ФК ГОРОДСКИЕ</option></select><button class="action-btn" type="submit">ПОДАТЬ ЗАЯВКУ</button></form><div id="applicationMessage" class="message"></div><h3>Мои заявки</h3><div id="myApplications" class="muted"></div>
+        <label class="muted" for="teamSelect">Команда</label><select id="teamSelect" class="field" required><option value="ДЕРЕВЕНСКИЕ">ФК ДЕРЕВЕНСКИЕ</option><option value="ГОРОДСКИЕ">ФК ГОРОДСКИЕ</option></select><label class="candidate" style="margin:12px 0"><input id="readyToHelp" type="checkbox"><span style="font-size:13px">Готов помочь с организацией и подготовкой матча</span></label><button class="action-btn" type="submit">ПОДАТЬ ЗАЯВКУ</button></form><div id="applicationMessage" class="message"></div><h3>Мои заявки</h3><div id="myApplications" class="muted"></div>
       </section>
       <button type="button" class="small-btn section-back hidden" id="captainBackButton">← На главный экран</button>
       <section id="captainPanel" class="vote-box hidden"><h2>КАПИТАН</h2><div class="muted" id="captainTeamLabel"></div><div id="captainApplications" class="muted" style="margin-top:12px"></div></section>
@@ -224,6 +224,7 @@
             <button id="createMatchButton" class="action-btn" type="submit">СОЗДАТЬ МАТЧ</button>
           </form>
           <div id="createMatchMessage" class="message"></div>
+          <h3 style="font-size:14px;margin:18px 0 8px">Заявки на матчи и перевод между командами</h3><div class="muted">Перевод меняет команду только в выбранной заявке, не затрагивая профиль игрока и Google Таблицу.</div><div id="adminMatchApplications" style="margin-top:10px"></div>
           <h3 style="font-size:14px;margin:18px 0 8px">Матчи и регистрация</h3>
           <button type="button" id="refreshAdminMatches" class="small-btn">Обновить список</button>
           <div id="adminMatchesList" style="margin-top:10px"></div>
@@ -394,7 +395,7 @@
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       showSection('homeScreen');
-      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); await registerPushIfAvailable(false); if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); }
+      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); await registerPushIfAvailable(false); if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); await loadAdminMatchApplications(); }
     }
     function normalizeHeader(v) {
       return String(v || '').replace(/^\uFEFF/, '').trim().toLowerCase()
@@ -489,9 +490,78 @@
         await loadAdminMatches();await loadMatchOptions();
       }finally{button.disabled=false;}
     }
-    async function loadMyApplications(){const root=$('myApplications');if(!root||!sb||!currentUser)return;const {data,error}=await sb.from('match_applications').select('id,team,created_at,matches(title,match_date,match_time,location)').eq('user_id',currentUser.id).order('created_at',{ascending:false});root.replaceChildren();if(error){root.textContent='Не удалось загрузить заявки. Выполните SQL-настройку Supabase.';return;}if(!data?.length){root.textContent='Заявок пока нет.';return;}data.forEach(a=>{const d=document.createElement('div');d.style.cssText='padding:9px 0;border-top:1px solid #ffffff22';d.textContent=(a.matches?.title||'Матч')+' · ФК '+a.team+' · '+(a.matches?.match_date||'дата не указана');root.appendChild(d);});}
-    async function submitMatchApplication(e){e.preventDefault();if(!sb||!currentUser)return;const matchId=$('matchSelect').value,team=$('teamSelect').value;if(!matchId)return setMessage('applicationMessage','Нет доступного матча для заявки.',true);const {error}=await sb.from('match_applications').upsert({match_id:matchId,user_id:currentUser.id,team},{onConflict:'match_id,user_id'});if(error)return setMessage('applicationMessage','Не удалось подать заявку. Проверьте SQL-настройку и сроки регистрации.',true);setMessage('applicationMessage','Заявка сохранена.');await loadMyApplications();}
-    async function loadCaptainApplications(){const root=$('captainApplications');if(!root||!sb||currentProfile?.role!=='captain')return;const team=currentProfile.captain_team;$('captainTeamLabel').textContent=team?'Команда: ФК '+team:'Администратор должен назначить капитану команду в списке учётных записей.';root.replaceChildren();if(!team)return;const {data,error}=await sb.from('match_applications').select('id,team,profiles(username,player_id),matches(title,match_date,match_time,location)').eq('team',team).order('created_at');if(error){root.textContent='Не удалось загрузить состав. Проверьте SQL-настройку и права доступа.';return;}if(!data?.length){root.textContent='Заявок в команду пока нет.';return;}data.forEach(a=>{const d=document.createElement('div');d.style.cssText='padding:10px 0;border-top:1px solid #ffffff22';d.textContent=(a.matches?.title||'Матч')+' — '+(a.profiles?.username||'Игрок')+(a.profiles?.player_id?' ('+a.profiles.player_id+')':'');root.appendChild(d);});}
+    let playerDirectoryCache = null;
+    async function loadPlayerDirectory(){
+      if(playerDirectoryCache) return playerDirectoryCache;
+      const response=await fetch(GOOGLE_SHEET_URL);
+      if(!response.ok) throw new Error('Не удалось загрузить Google Таблицу');
+      const rows=parseCSV(await response.text());
+      if(rows.length<2) return (playerDirectoryCache={});
+      const headers=rows[0].map(normalizeHeader);
+      const col=(...names)=>headers.findIndex(h=>names.map(normalizeHeader).includes(h));
+      const idCol=col('id','player id','id игрока','идентификатор','код игрока');
+      const numberCol=col('number','player number','jersey number','номер','игровой номер','номер игрока','номер футболки');
+      const positionCol=col('position','player position','позиция','игровая позиция','амплуа');
+      if(idCol<0) throw new Error('В Google Таблице не найден столбец ID');
+      const map={};
+      rows.slice(1).forEach(row=>{
+        const id=String(row[idCol]||'').trim().toLowerCase();
+        if(id) map[id]={number:numberCol>=0?String(row[numberCol]||'').trim():'',position:positionCol>=0?String(row[positionCol]||'').trim():''};
+      });
+      playerDirectoryCache=map; return map;
+    }
+    function playerSheetInfo(playerId,directory){
+      return directory[String(playerId||'').trim().toLowerCase()]||{number:'',position:''};
+    }
+    async function loadMyApplications(){
+      const root=$('myApplications');if(!root||!sb||!currentUser)return;
+      const {data,error}=await sb.from('match_applications').select('id,team,ready_to_help,created_at,matches(title,match_date,match_time,location)').eq('user_id',currentUser.id).order('created_at',{ascending:false});
+      root.replaceChildren();if(error){root.textContent='Не удалось загрузить заявки. Проверьте SQL-настройку ready_to_help в Supabase.';return;}
+      if(!data?.length){root.textContent='Заявок пока нет.';return;}
+      data.forEach(a=>{const d=document.createElement('div');d.style.cssText='padding:9px 0;border-top:1px solid #ffffff22';d.textContent=(a.matches?.title||'Матч')+' · ФК '+a.team+' · '+(a.matches?.match_date||'дата не указана')+' · помощь: '+(a.ready_to_help?'готов':'не указана');root.appendChild(d);});
+    }
+    async function submitMatchApplication(e){
+      e.preventDefault();if(!sb||!currentUser)return;
+      const matchId=$('matchSelect').value,team=$('teamSelect').value;
+      if(!matchId)return setMessage('applicationMessage','Нет доступного матча для заявки.',true);
+      const {error}=await sb.from('match_applications').upsert({match_id:matchId,user_id:currentUser.id,team,ready_to_help:$('readyToHelp').checked},{onConflict:'match_id,user_id'});
+      if(error)return setMessage('applicationMessage','Не удалось подать заявку: '+error.message,true);
+      setMessage('applicationMessage','Заявка сохранена.');await loadMyApplications();
+    }
+    function appendApplicationCard(root,a,directory,adminMode){
+      const d=document.createElement('div');d.style.cssText='padding:10px 0;border-top:1px solid #ffffff22;font-size:12px;line-height:1.6';
+      const profile=a.profiles||{},info=playerSheetInfo(profile.player_id,directory);
+      const title=document.createElement('strong');title.textContent=(a.matches?.title||'Матч')+' — '+(profile.username||'Игрок');d.appendChild(title);
+      const details=document.createElement('div');details.textContent='ID: '+(profile.player_id||'—')+' · №: '+(info.number||'не указан')+' · Позиция: '+(info.position||'не указана')+' · Готов помочь: '+(a.ready_to_help?'Да':'Нет');d.appendChild(details);
+      if(adminMode){
+        const select=document.createElement('select');select.className='field';select.style.marginTop='8px';
+        [['ДЕРЕВЕНСКИЕ','ФК ДЕРЕВЕНСКИЕ'],['ГОРОДСКИЕ','ФК ГОРОДСКИЕ']].forEach(([v,label])=>{const o=document.createElement('option');o.value=v;o.textContent=label;select.appendChild(o);});
+        select.value=a.team;
+        select.addEventListener('change',async()=>{select.disabled=true;const {error}=await sb.from('match_applications').update({team:select.value}).eq('id',a.id);if(error){select.value=a.team;setMessage('createMatchMessage','Не удалось перевести игрока: '+error.message,true);}else{a.team=select.value;setMessage('createMatchMessage','Команда изменена только в этой заявке.');}select.disabled=false;});
+        d.appendChild(select);
+      }
+      root.appendChild(d);
+    }
+    async function loadCaptainApplications(){
+      const root=$('captainApplications');if(!root||!sb||currentProfile?.role!=='captain')return;
+      const team=currentProfile.captain_team;
+      $('captainTeamLabel').textContent=team?'Команда: ФК '+team:'Администратор должен назначить капитану команду в списке учётных записей.';
+      root.replaceChildren();if(!team)return;
+      const {data,error}=await sb.from('match_applications').select('id,team,ready_to_help,profiles(username,player_id),matches(title,match_date,match_time,location)').eq('team',team).order('created_at');
+      if(error){root.textContent='Не удалось загрузить состав. Проверьте SQL-настройку и права доступа: '+error.message;return;}
+      if(!data?.length){root.textContent='Заявок в команду пока нет.';return;}
+      let directory={};try{directory=await loadPlayerDirectory();}catch(e){root.textContent='Состав загружен, но данные номеров и позиций из Google Таблицы недоступны.';}
+      data.forEach(a=>appendApplicationCard(root,a,directory,false));
+    }
+    async function loadAdminMatchApplications(){
+      const root=$('adminMatchApplications');if(!root||!sb||currentProfile?.role!=='admin')return;
+      root.textContent='Загрузка заявок…';
+      const {data,error}=await sb.from('match_applications').select('id,team,ready_to_help,profiles(username,player_id),matches(title,match_date,match_time)').order('created_at',{ascending:false}).limit(300);
+      root.replaceChildren();if(error){root.textContent='Не удалось загрузить заявки: '+error.message;return;}
+      if(!data?.length){root.textContent='Заявок на матчи пока нет.';return;}
+      let directory={};try{directory=await loadPlayerDirectory();}catch(e){}
+      data.forEach(a=>appendApplicationCard(root,a,directory,true));
+    }
 
     const DEFAULT_STAT_CATEGORIES = [
       {key:'goals', label:'Голы', aliases:['goals','голы','забитые голы'], element:'statGoals', enabled:true, suffix:''},

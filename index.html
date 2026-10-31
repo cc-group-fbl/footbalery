@@ -206,8 +206,8 @@
           <div id="seasonThemeStatus" class="message" aria-live="polite"></div>
         </div>
         <details class="admin-section" open>
-          <summary>⚽ Управление матчами</summary>
-          <div class="muted">Создавай матчи и управляй регистрацией участников.</div>
+          <summary>⚽ Создание матча</summary>
+          <div class="muted">Создай новый матч и настрой регистрацию участников.</div>
           <form id="createMatchForm" style="margin-top:12px">
             <label class="muted" for="newMatchTitle">Название матча</label>
             <input id="newMatchTitle" class="field" maxlength="160" placeholder="Например: ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ" required />
@@ -223,8 +223,15 @@
             <button id="createMatchButton" class="action-btn" type="submit">СОЗДАТЬ МАТЧ</button>
           </form>
           <div id="createMatchMessage" class="message"></div>
-          <h3 style="font-size:14px;margin:18px 0 8px">Заявки на матчи и перевод между командами</h3><div class="muted">Перевод меняет команду только в выбранной заявке, не затрагивая профиль игрока и Google Таблицу.</div><div id="adminMatchApplications" style="margin-top:10px"></div>
-          <h3 style="font-size:14px;margin:18px 0 8px">Матчи и регистрация</h3>
+        </details>
+        <details class="admin-section">
+          <summary>📋 Заявки игроков и перевод между командами</summary>
+          <div class="muted">Здесь отображаются заявки на матчи. Перевод меняет команду только в выбранной заявке, не затрагивая профиль игрока и Google Таблицу.</div>
+          <div id="adminMatchApplications" style="margin-top:10px"></div>
+        </details>
+        <details class="admin-section">
+          <summary>🗓️ Матчи и регистрация</summary>
+          <div class="muted">Список созданных матчей и управление регистрацией.</div>
           <button type="button" id="refreshAdminMatches" class="small-btn">Обновить список</button>
           <div id="adminMatchesList" style="margin-top:10px"></div>
         </details>

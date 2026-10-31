@@ -368,7 +368,10 @@
       if(image_url&&!/^https:\/\//i.test(image_url))return setMessage('createNewsMessage','Ссылка на изображение должна начинаться с https://',true);
       const btn=$('publishNewsButton');btn.disabled=true;setMessage('createNewsMessage','Публикуем новость…');
       try {
-        const {data:news,error}=await sb.from('news').insert({title,body,image_url:image_url||null,author_id:currentUser.id,created_by:currentUser.id,visibility}).select('id,title,body').single(); if(error)throw error;
+        const newsId=crypto.randomUUID();
+        const {error:insertError}=await sb.from('news').insert({id:newsId,title,body,image_url:image_url||null,author_id:currentUser.id,created_by:currentUser.id,visibility});
+        if(insertError)throw insertError;
+        const news={id:newsId,title,body};
         let targetIds=recipientIds;
         if(visibility==='all') { const {data:profiles,error:profilesError}=await sb.from('profiles').select('user_id');if(profilesError)throw profilesError;targetIds=(profiles||[]).map(p=>p.user_id); }
         if(visibility==='selected') { const recRows=targetIds.map(user_id=>({news_id:news.id,user_id})); const {error:recError}=await sb.from('news_recipients').insert(recRows);if(recError)throw new Error('Новость создана, но список доступа не сохранён: '+recError.message); }

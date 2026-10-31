@@ -209,7 +209,62 @@
           <summary>⚽ Управление матчами</summary>
           <div class="muted">Создавай матчи и управляй регистрацией участников.</div>
           <form id="createMatchForm" style="margin-top:12px">
-  <button id="publishNewsButton" class="action-btn" type="submit">ОПУБЛИКОВАТЬ НОВОСТЬ</button>
+            <label class="muted" for="newMatchTitle">Название матча</label>
+            <input id="newMatchTitle" class="field" maxlength="160" placeholder="Например: ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ" required />
+            <label class="muted" for="newMatchDate">Дата матча</label>
+            <input id="newMatchDate" class="field" type="date" required />
+            <label class="muted" for="newMatchTime">Время матча</label>
+            <input id="newMatchTime" class="field" type="time" required />
+            <label class="muted" for="newMatchLocation">Место проведения</label>
+            <input id="newMatchLocation" class="field" maxlength="200" placeholder="Спортивный зал" required />
+            <label class="muted" for="newMatchDeadline">Дедлайн регистрации (необязательно)</label>
+            <input id="newMatchDeadline" class="field" type="datetime-local" />
+            <label class="candidate"><input id="newMatchOpen" type="checkbox" checked><span style="font-size:13px">Сразу открыть регистрацию</span></label>
+            <button id="createMatchButton" class="action-btn" type="submit">СОЗДАТЬ МАТЧ</button>
+          </form>
+          <div id="createMatchMessage" class="message"></div>
+          <h3 style="font-size:14px;margin:18px 0 8px">Заявки на матчи и перевод между командами</h3><div class="muted">Перевод меняет команду только в выбранной заявке, не затрагивая профиль игрока и Google Таблицу.</div><div id="adminMatchApplications" style="margin-top:10px"></div>
+          <h3 style="font-size:14px;margin:18px 0 8px">Матчи и регистрация</h3>
+          <button type="button" id="refreshAdminMatches" class="small-btn">Обновить список</button>
+          <div id="adminMatchesList" style="margin-top:10px"></div>
+        </details>
+        <details class="admin-section" open>
+          <summary>📊 Настройка категорий статистики</summary>
+          <p class="muted">По умолчанию доступны все статистические столбцы Google Таблицы. Отметь галочками то, что нужно показывать в карточке игрока.</p>
+          <label class="candidate"><input type="checkbox" id="statNameEnabled" checked><span style="font-size:13px">Показывать имя игрока</span></label>
+          <div id="statsCategorySettings" style="display:grid;gap:10px;margin-top:12px">
+            <div class="muted">Загрузка заголовков Google Таблицы…</div>
+          </div>
+          <button type="button" id="saveStatsCategorySettings" class="action-btn" style="margin-top:12px">СОХРАНИТЬ КАТЕГОРИИ</button>
+          <div id="statsSettingsMessage" class="message"></div>
+        </details>
+        <details class="admin-section" open>
+        <summary>🗳️ Управление опросами</summary>
+        <div class="muted">Создавайте опросы здесь. Для каждого кандидата укажите ID игрока и имя через вертикальную черту: FTB-001 | Иван Петров. ID должен совпадать с ID игрока в статистике.</div>
+        <form id="createPollForm" style="margin-top:12px">
+          <label class="muted" for="pollTitle">Название опроса</label>
+          <input id="pollTitle" class="field" maxlength="160" placeholder="Например: Лучший игрок месяца" required />
+          <label class="muted" for="pollEndsAt">Дата и время окончания</label>
+          <input id="pollEndsAt" class="field" type="datetime-local" required />
+          <label class="muted" for="pollCandidatesInput">Кандидаты — один на строку</label>
+          <textarea id="pollCandidatesInput" class="field" rows="5" placeholder="FTB-001 | Иван Петров&#10;FTB-002 | Сергей Иванов" required style="resize:vertical"></textarea>
+          <button id="createPollButton" class="action-btn" type="submit">СОЗДАТЬ ОПРОС</button>
+        </form>
+        <div id="createPollMessage" class="message"></div>
+        </details>
+        <details class="admin-section" open>
+        <summary>📰 Новости и информационные сообщения</summary>
+        <h3 style="font-size:14px;margin:18px 0 8px">Новости и информационные сообщения</h3>
+        <div class="muted">Настройте, кому будет видна новость. При публикации уведомления внутри сайта отправятся только выбранной аудитории.</div>
+        <form id="createNewsForm" style="margin-top:12px">
+          <label class="muted" style="display:block;text-align:left;margin-top:12px">Кому будет видна новость?</label>
+          <label class="candidate"><input type="radio" name="newsAudience" value="all" checked><span style="font-size:13px">Всем участникам сообщества</span></label>
+          <label class="candidate"><input type="radio" name="newsAudience" value="selected"><span style="font-size:13px">Только выбранным пользователям</span></label>
+          <div id="newsRecipientsWrap" class="hidden" style="margin:10px 0;padding:10px;border:1px solid rgba(255,255,255,.12);border-radius:10px"><div style="display:flex;gap:8px;margin-bottom:8px"><button type="button" id="selectAllNewsRecipients" class="small-btn">Выбрать всех</button><button type="button" id="clearNewsRecipients" class="small-btn">Снять выбор</button></div><div id="newsRecipientsList" class="muted" style="text-align:left">Загрузка пользователей…</div></div>
+          <label class="muted" for="newsTitle">Заголовок новости</label><input id="newsTitle" class="field" maxlength="180" placeholder="Например: Изменение расписания" required>
+          <label class="muted" for="newsBody">Текст сообщения</label><textarea id="newsBody" class="field" rows="5" maxlength="8000" placeholder="Введите текст новости…" required style="resize:vertical"></textarea>
+          <label class="muted" for="newsImage">Ссылка на изображение (необязательно)</label><input id="newsImage" class="field" type="url" placeholder="https://…">
+          <button id="publishNewsButton" class="action-btn" type="submit">ОПУБЛИКОВАТЬ НОВОСТЬ</button>
         </form>
         <div id="createNewsMessage" class="message"></div>
         <div id="adminNewsList" style="margin-top:12px"></div>

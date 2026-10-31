@@ -377,7 +377,24 @@
         if($('newsSendPush').checked){const {data:pushData,error:pushError}=await sb.functions.invoke('send-news-push',{body:{news_id:news.id}});if(pushError||pushData?.error)setMessage('createNewsMessage','Новость опубликована; уведомления внутри сайта созданы. Push не отправлен: '+(pushData?.error||pushError?.message||'проверьте настройку функции'),true);else setMessage('createNewsMessage','Новость опубликована. Push отправлен выбранной аудитории.');}
         else setMessage('createNewsMessage','Новость опубликована, уведомления внутри сайта созданы.');
         $('createNewsForm').reset();$('newsRecipientsWrap').classList.add('hidden');await loadAdminNews();await loadNews();
-      } catch(err){setMessage('createNewsMessage','Ошибка публикации: '+(err.message||'проверьте SQL и права администратора'),true);} finally{btn.disabled=false;}
+      } catch(err){
+        let diagnostic=''; 
+        try {
+          const {data:{user:authUser},error:authError}=await sb.auth.getUser();
+          const authId=authUser?.id||'не получен';
+          const {data:authProfile,error:profileError}=authUser
+            ? await sb.from('profiles').select('user_id,role').eq('user_id',authUser.id).maybeSingle()
+            : {data:null,error:null};
+          diagnostic='\\nДиагностика: auth.uid='+authId+
+            '; currentUser.id='+(currentUser?.id||'нет')+
+            '; совпадают='+(!!authUser&&authUser.id===currentUser?.id?'да':'НЕТ')+
+            '; роль в памяти='+(currentProfile?.role||'нет')+
+            '; роль из БД='+(authProfile?.role||'профиль не найден')+
+            (authError?'; auth error='+authError.message:'')+
+            (profileError?'; profile error='+profileError.message:'');
+        } catch(diagError){diagnostic='\\nДиагностику получить не удалось: '+(diagError.message||diagError);}
+        setMessage('createNewsMessage','Ошибка публикации: '+(err.message||'проверьте SQL и права администратора')+diagnostic,true);
+      } finally{btn.disabled=false;}
     }
     async function signIn() {
       const username = $('usernameInput').value.trim(); const password = $('passwordInput').value;

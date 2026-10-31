@@ -459,14 +459,26 @@
         const meta=document.createElement('div');meta.className='muted';meta.textContent=[m.match_date,m.match_time,m.location].filter(Boolean).join(' · ');
         const status=document.createElement('div');status.className='muted';status.textContent=m.is_open?'Регистрация открыта':'Регистрация закрыта';
         info.append(title,meta,status);
-        const toggle=document.createElement('button');toggle.type='button';toggle.className='small-btn';toggle.textContent=m.is_open?'Закрыть регистрацию':'Открыть регистрацию';
-        toggle.addEventListener('click',async()=>{
-          toggle.disabled=true;
-          const {error:updateError}=await sb.from('matches').update({is_open:!m.is_open}).eq('id',m.id);
-          if(updateError){setMessage('createMatchMessage','Не удалось изменить статус: '+updateError.message,true);toggle.disabled=false;return;}
-          await loadAdminMatches();await loadMatchOptions();
+        const actions=document.createElement('div');actions.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
+        const edit=document.createElement('button');edit.type='button';edit.className='small-btn';edit.textContent='Редактировать';
+        edit.addEventListener('click',()=>{
+          const form=document.createElement('form');form.style.cssText='flex:1 1 100%;display:grid;gap:7px;margin-top:8px';
+          const fields=[
+            ['title','Название матча','text',m.title||''],
+            ['match_date','Дата','date',m.match_date||''],
+            ['match_time','Время','time',m.match_time||''],
+            ['location','Место проведения','text',m.location||'']
+          ];
+          const inputs={};
+          fields.forEach(([key,label,type,value])=>{const l=document.createElement('label');l.className='muted';l.textContent=label;const input=document.createElement('input');input.className='field';input.type=type;input.value=value;input.required=true;inputs[key]=input;l.appendChild(input);form.appendChild(l);});
+          const deadlineLabel=document.createElement('label');deadlineLabel.className='muted';deadlineLabel.textContent='Дедлайн регистрации';const deadline=document.createElement('input');deadline.type='datetime-local';deadline.className='field';deadline.value=m.registration_deadline?new Date(m.registration_deadline).toISOString().slice(0,16):'';deadlineLabel.appendChild(deadline);form.appendChild(deadlineLabel);
+          const buttons=document.createElement('div');buttons.style.cssText='display:flex;gap:7px';const save=document.createElement('button');save.type='submit';save.className='small-btn';save.textContent='Сохранить';const cancel=document.createElement('button');cancel.type='button';cancel.className='small-btn';cancel.textContent='Отмена';cancel.addEventListener('click',()=>form.remove());buttons.append(save,cancel);form.appendChild(buttons);
+          form.addEventListener('submit',async e=>{e.preventDefault();save.disabled=true;const payload={title:inputs.title.value.trim(),match_date:inputs.match_date.value,match_time:inputs.match_time.value,location:inputs.location.value.trim(),registration_deadline:deadline.value?new Date(deadline.value).toISOString():null};const {error:updateError}=await sb.from('matches').update(payload).eq('id',m.id);if(updateError){setMessage('createMatchMessage','Не удалось сохранить изменения: '+updateError.message,true);save.disabled=false;return;}setMessage('createMatchMessage','Данные матча обновлены.');await loadAdminMatches();await loadMatchOptions();});
+          row.appendChild(form);edit.disabled=true;
         });
-        row.append(info,toggle);root.appendChild(row);
+        const toggle=document.createElement('button');toggle.type='button';toggle.className='small-btn';toggle.textContent=m.is_open?'Закрыть регистрацию':'Открыть регистрацию';
+        toggle.addEventListener('click',async()=>{toggle.disabled=true;const {error:updateError}=await sb.from('matches').update({is_open:!m.is_open}).eq('id',m.id);if(updateError){setMessage('createMatchMessage','Не удалось изменить статус: '+updateError.message,true);toggle.disabled=false;return;}await loadAdminMatches();await loadMatchOptions();});
+        actions.append(edit,toggle);row.append(info,actions);root.appendChild(row);
       });
     }
     async function createMatch(e){
@@ -661,10 +673,10 @@
         const row=rows.slice(1).find(r=>String(r[idCol]||'').trim().toLowerCase()===String(targetId).trim().toLowerCase());
         $('loadingState').style.display='none';
         if(!row){$('errorState').style.display='block';$('errorState').textContent='Не найдена карточка игрока для ID: '+targetId+'. Проверьте соответствие profiles.player_id и Google Таблицы.';return;}
-        const fullName=val(row,'full name','player name','name','фио','ф.и.о.','фамилия и имя','фамилия имя','имя игрока','имя участника','игрок');
-        const firstName=val(row,'first name','firstname','имя','имя игрока');
-        const lastName=val(row,'last name','lastname','фамилия','фамилия игрока');
-        const playerName=fullName||(firstName+' '+lastName).trim()||val(row,'player','ник','никнейм');
+        const fullName=val(row,'full name','player name','name','фио','ф.и.о.','фамилия и имя','фамилия имя','имя и фамилия','имя фамилия','фамилия, имя','игрок','участник','ф.и.о игрока');
+        const firstName=val(row,'first name','firstname','имя','имя игрока','имя участника','как зовут');
+        const lastName=val(row,'last name','lastname','фамилия','фамилия игрока','фамилия участника');
+        const playerName=fullName||(firstName+' '+lastName).trim()||val(row,'player','ник','никнейм')||currentProfile?.username||'Имя не указано';
         const city=val(row,'city','position','город','позиция','город/позиция','город или позиция','позиция/город','команда/позиция');
         const goals=val(row,'goals','голы','забитые голы','количество голов');
         const mvp=val(row,'mvp','лучший игрок','mvp (лучший игрок)','количество mvp');

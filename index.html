@@ -293,7 +293,7 @@
     }
     async function createNews(e) {
       e.preventDefault(); if(!currentUser||currentProfile?.role!=='admin')return setMessage('createNewsMessage','Публиковать новости может только администратор.',true);
-      const title=$('newsTitle').value.trim(),body=$('newsBody').value.trim(),image_url=$('newsImage').value.trim();
+      const title=$('newsTitle')?.value.trim()||'',body=$('newsBody')?.value.trim()||'',image_url=$('newsImage')?.value.trim()||'';
       const visibility=document.querySelector('input[name="newsAudience"]:checked')?.value||'all';
       const recipientIds=[...document.querySelectorAll('input[name="newsRecipient"]:checked')].map(x=>x.value);
       if(!title||!body)return setMessage('createNewsMessage','Заполните заголовок и текст.',true);
@@ -311,7 +311,7 @@
         const rows=targetIds.map(user_id=>({user_id,news_id:news.id,title:news.title,body:news.body.slice(0,500)}));
         if(rows.length){const {error:notifyError}=await sb.from('notifications').insert(rows);if(notifyError)throw new Error('Новость опубликована, но уведомления внутри сайта не создались: '+notifyError.message);}
         setMessage('createNewsMessage','Новость опубликована, уведомления внутри сайта созданы.');
-        $('createNewsForm').reset();$('newsRecipientsWrap').classList.add('hidden');await loadAdminNews();await loadNews();
+        $('createNewsForm')?.reset();$('newsRecipientsWrap')?.classList.add('hidden');await loadAdminNews();await loadNews();
       } catch(err){
         let diagnostic=''; 
         try {
@@ -456,20 +456,20 @@
     async function createMatch(e){
       e.preventDefault();
       if(!sb||currentProfile?.role!=='admin')return;
-      const button=$('createMatchButton');button.disabled=true;
-      const deadline=$('newMatchDeadline').value;
+      const button=$('createMatchButton');if(!button)return setMessage('createMatchMessage','Форма создания матча не найдена на странице.');button.disabled=true;
+      const deadline=$('newMatchDeadline')?.value||'';
       const payload={
-        title:$('newMatchTitle').value.trim(),
-        match_date:$('newMatchDate').value,
-        match_time:$('newMatchTime').value,
-        location:$('newMatchLocation').value.trim(),
+        title:$('newMatchTitle')?.value.trim()||'',
+        match_date:$('newMatchDate')?.value||'',
+        match_time:$('newMatchTime')?.value||'',
+        location:$('newMatchLocation')?.value.trim()||'',
         registration_deadline:deadline?new Date(deadline).toISOString():null,
-        is_open:$('newMatchOpen').checked
+        is_open:$('newMatchOpen')?.checked??true
       };
       try{
         const {error}=await sb.from('matches').insert(payload);
         if(error){setMessage('createMatchMessage','Не удалось создать матч: '+error.message,true);return;}
-        $('createMatchForm').reset();$('newMatchOpen').checked=true;
+        $('createMatchForm')?.reset();if($('newMatchOpen'))$('newMatchOpen').checked=true;
         setMessage('createMatchMessage','Матч успешно создан.');
         await loadAdminMatches();await loadMatchOptions();
       }finally{button.disabled=false;}
@@ -587,7 +587,7 @@
     function renderStatSettings(){
       const root=$('statsCategorySettings'); if(!root)return;
       root.replaceChildren();
-      const savedName=localStorage.getItem('futboleryStatNameEnabled');$('statNameEnabled').checked=savedName!=='false';
+      const savedName=localStorage.getItem('futboleryStatNameEnabled');if($('statNameEnabled'))$('statNameEnabled').checked=savedName!=='false';
       STAT_CATEGORIES.forEach(def=>{
         const saved=readStatConfig().find(c=>c.key===def.key)||def;
         const row=document.createElement('div');row.className='stats-setting-row';
@@ -617,7 +617,7 @@
         return {...def,enabled:!!check?.checked,column:select?.value||''};
       });
       localStorage.setItem('futboleryStatConfig',JSON.stringify(config));
-      localStorage.setItem('futboleryStatNameEnabled',$('statNameEnabled').checked?'true':'false');
+      localStorage.setItem('futboleryStatNameEnabled',$('statNameEnabled')?.checked===false?'false':'true');
       setMessage('statsSettingsMessage','Настройки категорий сохранены на этом устройстве.');
       if(currentProfile?.player_id) loadPlayerCard(currentProfile.player_id);
     }
@@ -758,9 +758,9 @@
     async function createPoll(e) {
       e.preventDefault();
       if (!sb || !currentUser || !currentProfile || currentProfile.role !== 'admin') return setMessage('createPollMessage','Создавать опросы может только администратор.',true);
-      const title=$('pollTitle').value.trim();
-      const endsValue=$('pollEndsAt').value;
-      const raw=$('pollCandidatesInput').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+      const title=$('pollTitle')?.value.trim()||'';
+      const endsValue=$('pollEndsAt')?.value||'';
+      const raw=($('pollCandidatesInput')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
       if (!title || !endsValue || !raw.length) return setMessage('createPollMessage','Заполните название, срок окончания и список кандидатов.',true);
       const candidates=[];
       for (const line of raw) {
@@ -773,7 +773,7 @@
       }
       const ends_at=new Date(endsValue).toISOString();
       if (new Date(ends_at)<=new Date()) return setMessage('createPollMessage','Дата окончания должна быть в будущем.',true);
-      const button=$('createPollButton'); button.disabled=true; setMessage('createPollMessage','Создаём опрос…');
+      const button=$('createPollButton'); if(!button)return setMessage('createPollMessage','Форма создания опроса не найдена на странице.',true); button.disabled=true; setMessage('createPollMessage','Создаём опрос…');
       try {
         const {data:poll,error}=await sb.from('polls').insert({title,ends_at,is_active:true,created_by:currentUser.id}).select('id').single();
         if(error) throw error;
@@ -854,9 +854,9 @@
     });
     applySeasonTheme('autumn');
     $('createPollForm')?.addEventListener('submit',createPoll);
-    $('createMemberForm').addEventListener('submit',createMember);
+    $('createMemberForm')?.addEventListener('submit',createMember);
     $('loginButton').addEventListener('click',signIn);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
-    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap').classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',()=>{if(currentProfile&&currentProfile.role==='admin')showSection('adminPanel');});
+    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',()=>{if(currentProfile&&currentProfile.role==='admin')showSection('adminPanel');});
     $('statsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('newsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('voteBackButton').addEventListener('click',()=>showSection('homeScreen'));$('adminBackButton').addEventListener('click',()=>showSection('homeScreen'));
     $('saveStatsCategorySettings')?.addEventListener('click', saveStatSettings);
     initStatSettings();

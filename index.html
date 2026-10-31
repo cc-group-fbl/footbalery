@@ -423,7 +423,7 @@
       if(!root||!sb||currentProfile?.role!=='admin') return;
       root.textContent='Загрузка пользователей…';
       const {data,error}=await sb.from('profiles')
-        .select('user_id,username,player_id,role,captain_team').order('username',{ascending:true});
+        .select('user_id,username,player_id,first_name,last_name,role,captain_team').order('username',{ascending:true});
       root.replaceChildren();
       if(error||!data){root.textContent='Не удалось загрузить пользователей. Проверьте права чтения таблицы profiles.';return;}
       if(!data.length){root.textContent='Пользователей пока нет.';return;}
@@ -432,13 +432,17 @@
         item.style.cssText='padding:10px 0;border-top:1px solid rgba(255,255,255,.12);font-size:12px;overflow-wrap:anywhere';
         const name=document.createElement('div');name.style.fontWeight='800';name.textContent=p.username||'Без логина';
         const meta=document.createElement('div');meta.className='muted';meta.textContent='ID игрока: '+(p.player_id||'—');
+        const firstName=document.createElement('input');firstName.className='field';firstName.style.marginTop='8px';firstName.placeholder='Имя';firstName.value=p.first_name||'';
+        const lastName=document.createElement('input');lastName.className='field';lastName.style.marginTop='6px';lastName.placeholder='Фамилия';lastName.value=p.last_name||'';
+        const saveName=document.createElement('button');saveName.type='button';saveName.className='small-btn';saveName.style.marginTop='4px';saveName.textContent='Сохранить имя и фамилию';
+        saveName.addEventListener('click',async()=>{saveName.disabled=true;const {error}=await sb.rpc('update_member_name',{p_user_id:p.user_id,p_first_name:firstName.value,p_last_name:lastName.value});if(error){alert('Не удалось сохранить имя и фамилию: '+error.message);saveName.disabled=false;return;}p.first_name=firstName.value.trim();p.last_name=lastName.value.trim();saveName.textContent='Сохранено';setTimeout(()=>{saveName.textContent='Сохранить имя и фамилию';saveName.disabled=false;},1400);});
         const role=document.createElement('select');role.className='field';role.style.marginTop='6px';
         [['member','Участник'],['captain','Капитан'],['admin','Администратор']].forEach(([v,label])=>{const o=document.createElement('option');o.value=v;o.textContent=label;role.appendChild(o)});
         role.value=['member','captain','admin'].includes(p.role)?p.role:'member';
         role.addEventListener('change',async()=>{const {error}=await sb.from('profiles').update({role:role.value}).eq('user_id',p.user_id);if(error){alert('Не удалось изменить роль. Проверьте SQL-права и политики Supabase.');role.value=p.role||'member';}else{p.role=role.value;}});
         const team=document.createElement('select');team.className='field';team.style.marginTop='6px';[['','Не капитан'],['ДЕРЕВЕНСКИЕ','Капитан ФК ДЕРЕВЕНСКИЕ'],['ГОРОДСКИЕ','Капитан ФК ГОРОДСКИЕ']].forEach(([v,label])=>{const o=document.createElement('option');o.value=v;o.textContent=label;team.appendChild(o)});team.value=p.captain_team||'';
         team.addEventListener('change',async()=>{const {error}=await sb.from('profiles').update({captain_team:team.value||null,role:team.value?'captain':role.value}).eq('user_id',p.user_id);if(error){alert('Не удалось назначить команду капитана. Сначала выполните SQL-настройку.');team.value=p.captain_team||'';}else{p.captain_team=team.value||null;if(team.value)role.value='captain';}});
-        item.append(name,meta,role,team);root.appendChild(item);
+        item.append(name,meta,firstName,lastName,saveName,role,team);root.appendChild(item);
       });
       const note=document.createElement('div');note.className='muted';note.style.marginTop='8px';
       note.textContent='Всего пользователей: '+data.length;root.appendChild(note);
@@ -558,6 +562,7 @@
         select.value=a.team;
         select.addEventListener('change',async()=>{select.disabled=true;const {error}=await sb.from('match_applications').update({team:select.value}).eq('id',a.id);if(error){select.value=a.team;setMessage('createMatchMessage','Не удалось перевести игрока: '+error.message,true);}else{a.team=select.value;setMessage('createMatchMessage','Команда изменена только в этой заявке.');}select.disabled=false;});
         d.appendChild(select);
+        const remove=document.createElement('button');remove.type='button';remove.className='small-btn';remove.style.marginTop='8px';remove.textContent='Удалить заявку';remove.addEventListener('click',async()=>{if(!confirm('Удалить заявку игрока «'+(profile.username||'Игрок')+'» на матч «'+(a.matches?.title||'Матч')+'»? Это действие нельзя отменить.'))return;remove.disabled=true;const {error}=await sb.rpc('admin_delete_match_application',{p_application_id:a.id});if(error){setMessage('createMatchMessage','Не удалось удалить заявку: '+error.message,true);remove.disabled=false;return;}d.remove();setMessage('createMatchMessage','Заявка игрока удалена.');});d.appendChild(remove);
       }
       root.appendChild(d);
     }

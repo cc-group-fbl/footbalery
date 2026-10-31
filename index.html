@@ -389,12 +389,15 @@
             ? await sb.from('profiles').select('user_id,role').eq('user_id',authUser.id).maybeSingle()
             : {data:null,error:null};
           const {data:policyCheck,error:policyError}=await sb.rpc('debug_news_insert_access',{p_created_by:currentUser?.id||null,p_visibility:visibility});
+          const {data:insertAttempt,error:attemptCallError}=await sb.rpc('debug_news_insert_attempt',{p_created_by:currentUser?.id||null,p_visibility:visibility});
           diagnostic='\\nДиагностика: auth.uid='+authId+
             '; currentUser.id='+(currentUser?.id||'нет')+
             '; совпадают='+(!!authUser&&authUser.id===currentUser?.id?'да':'НЕТ')+
             '; роль в памяти='+(currentProfile?.role||'нет')+
             '; роль из БД='+(authProfile?.role||'профиль не найден')+
             '; проверка RLS из сайта='+(policyCheck?JSON.stringify(policyCheck):'не получена')+
+            '; тестовый INSERT='+(insertAttempt?JSON.stringify(insertAttempt):'не получен')+
+            (attemptCallError?'; ошибка вызова тестового INSERT='+attemptCallError.message:'')+
             (authError?'; auth error='+authError.message:'')+
             (profileError?'; profile error='+profileError.message:'')+
             (policyError?'; policy error='+policyError.message:'');

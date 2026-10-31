@@ -602,15 +602,11 @@
     ];
     let sheetHeaders = [];
     let STAT_CATEGORIES = DEFAULT_STAT_CATEGORIES.slice();
-    const STAT_EXCLUDED_HEADERS = ['id','player id','id игрока','идентификатор','код игрока','full name','player name','name','фио','ф.и.о.','фамилия и имя','фамилия и/или имя','фамилия и или имя','first name','firstname','имя','last name','lastname','фамилия','city','город','position','позиция','город/позиция','город или позиция','позиция/город','команда/позиция','awards','достижения','награды'];
     function buildStatCategories(){
-      STAT_CATEGORIES=DEFAULT_STAT_CATEGORIES.slice();
-      sheetHeaders.forEach((header,index)=>{
-        const normalized=normalizeHeader(header);
-        if(!normalized || STAT_EXCLUDED_HEADERS.map(normalizeHeader).includes(normalized)) return;
-        if(STAT_CATEGORIES.some(d=>d.aliases.map(normalizeHeader).includes(normalized))) return;
-        STAT_CATEGORIES.push({key:'extra_'+index,label:header,aliases:[header],element:null,enabled:true,suffix:''});
-      });
+      // Каждая колонка таблицы получает собственный переключатель в панели администратора.
+      STAT_CATEGORIES=sheetHeaders.map((header,index)=>({
+        key:'sheet_'+index,label:header,aliases:[header],element:null,enabled:true,suffix:'',column:header
+      }));
     }
     function readStatConfig(){
       try { const parsed=JSON.parse(localStorage.getItem('futboleryStatConfig')||'null'); if(Array.isArray(parsed)) return STAT_CATEGORIES.map(def=>({...def,...(parsed.find(c=>c.key===def.key)||{}),column:(parsed.find(c=>c.key===def.key)||{}).column||''})); } catch(e){}
@@ -654,24 +650,22 @@
       if(currentProfile?.player_id) loadPlayerCard(currentProfile.player_id);
     }
     function applyStatSettings(row, headers){
-      const config=readStatConfig();
-      const box=$('cardContent')?.querySelector('.stats-grid') || $('cardContent')?.querySelector('[class*="stats"]');
-      config.forEach(c=>{
-        const def=STAT_CATEGORIES.find(d=>d.key===c.key); if(!def)return;
-        let el=def.element?$(def.element)?.closest('.stat-box'):document.querySelector(`[data-extra-stat="${c.key}"]`);
-        if(!def.element&&!el){const grid=$('statGoals')?.parentElement?.parentElement;if(grid){el=document.createElement('div');el.className='stat-box';el.dataset.extraStat=c.key;el.innerHTML='<div class="stat-value"></div><div class="stat-label"></div>';el.querySelector('.stat-label').textContent=def.label;grid.append(el);}}
-        if(c.key==='red'&&!el){
-          const grid=$('statGoals')?.parentElement?.parentElement;
-          if(grid){el=document.createElement('div');el.className='stat-box';el.innerHTML='<div class="stat-value" id="statRed">0</div><div class="stat-label"></div>';el.querySelector('.stat-label').textContent=def.label;grid.append(el);}
-        }
-        if(!el)return;
-        el.style.display=c.enabled?'':'none';
-        const targetId=def.element|| (c.key==='red'?'statRed':null);
-        const valEl=targetId?$(targetId):(el?.querySelector('.stat-value'));
-        if(valEl && !def.element && c.key!=='red') { const idx=c.column?headers.findIndex(h=>normalizeHeader(h)===normalizeHeader(c.column)):-1;valEl.textContent=idx>=0?(row[idx]||'0'):'0';return; }
-        const idx=c.column?headers.findIndex(h=>normalizeHeader(h)===normalizeHeader(c.column)):-1;
-        if(valEl) valEl.textContent=idx>=0?(row[idx]||'0'):'0';
+      const grid=$('statGoals')?.parentElement?.parentElement;
+      if(!grid)return;
+      // Старые фиксированные карточки заменяются единым списком колонок из таблицы.
+      grid.querySelectorAll('.stat-box').forEach(el=>el.style.display='none');
+      grid.querySelectorAll('[data-sheet-stat]').forEach(el=>el.remove());
+      readStatConfig().forEach(c=>{
+        const def=STAT_CATEGORIES.find(d=>d.key===c.key);if(!def)return;
+        const idx=headers.findIndex(h=>normalizeHeader(h)===normalizeHeader(def.column||def.label));
+        if(idx<0)return;
+        const el=document.createElement('div');el.className='stat-box';el.dataset.sheetStat=c.key;
+        const value=document.createElement('div');value.className='stat-value';value.textContent=String(row[idx]??'').trim()||'—';
+        const label=document.createElement('div');label.className='stat-label';label.textContent=def.label;
+        el.append(value,label);el.style.display=c.enabled?'':'none';grid.append(el);
       });
+      $('playerCity').style.display='none';
+      $('awardsList').parentElement.style.display='none';
     }
     async function loadPlayerCard(targetId) {
       $('loadingState').style.display='block'; $('cardContent').style.display='none'; $('errorState').style.display='none';

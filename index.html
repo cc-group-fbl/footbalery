@@ -613,8 +613,8 @@
       });
     }
     function readStatConfig(){
-      try { const parsed=JSON.parse(localStorage.getItem('futboleryStatConfig')||'null'); if(Array.isArray(parsed)) return parsed; } catch(e){}
-      return DEFAULT_STAT_CATEGORIES.map(c=>({...c, column:''}));
+      try { const parsed=JSON.parse(localStorage.getItem('futboleryStatConfig')||'null'); if(Array.isArray(parsed)) return STAT_CATEGORIES.map(def=>({...def,...(parsed.find(c=>c.key===def.key)||{}),column:(parsed.find(c=>c.key===def.key)||{}).column||''})); } catch(e){}
+      return STAT_CATEGORIES.map(c=>({...c, column:''}));
     }
     function renderStatSettings(){
       const root=$('statsCategorySettings'); if(!root)return;

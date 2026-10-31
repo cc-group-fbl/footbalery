@@ -547,18 +547,28 @@
       const team=currentProfile.captain_team;
       $('captainTeamLabel').textContent=team?'Команда: ФК '+team:'Администратор должен назначить капитану команду в списке учётных записей.';
       root.replaceChildren();if(!team)return;
-      const {data,error}=await sb.from('match_applications').select('id,team,ready_to_help,profiles(username,player_id),matches(title,match_date,match_time,location)').eq('team',team).order('created_at');
-      if(error){root.textContent='Не удалось загрузить состав. Проверьте SQL-настройку и права доступа: '+error.message;return;}
+      const {data,error}=await sb.from('match_applications').select('id,user_id,team,ready_to_help,created_at,matches(title,match_date,match_time,location)').eq('team',team).order('created_at');
+      if(error){root.textContent='Не удалось загрузить состав: '+error.message;return;}
       if(!data?.length){root.textContent='Заявок в команду пока нет.';return;}
-      let directory={};try{directory=await loadPlayerDirectory();}catch(e){root.textContent='Состав загружен, но данные номеров и позиций из Google Таблицы недоступны.';}
+      const ids=[...new Set(data.map(a=>a.user_id).filter(Boolean))];
+      const {data:profiles,error:profileError}=await sb.from('profiles').select('user_id,username,player_id').in('user_id',ids);
+      if(profileError){root.textContent='Не удалось загрузить профили игроков: '+profileError.message;return;}
+      const byUser=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p]));
+      data.forEach(a=>{a.profiles=byUser[a.user_id]||{};});
+      let directory={};try{directory=await loadPlayerDirectory();}catch(e){}
       data.forEach(a=>appendApplicationCard(root,a,directory,false));
     }
     async function loadAdminMatchApplications(){
       const root=$('adminMatchApplications');if(!root||!sb||currentProfile?.role!=='admin')return;
       root.textContent='Загрузка заявок…';
-      const {data,error}=await sb.from('match_applications').select('id,team,ready_to_help,profiles(username,player_id),matches(title,match_date,match_time)').order('created_at',{ascending:false}).limit(300);
+      const {data,error}=await sb.from('match_applications').select('id,user_id,team,ready_to_help,created_at,matches(title,match_date,match_time)').order('created_at',{ascending:false}).limit(300);
       root.replaceChildren();if(error){root.textContent='Не удалось загрузить заявки: '+error.message;return;}
       if(!data?.length){root.textContent='Заявок на матчи пока нет.';return;}
+      const ids=[...new Set(data.map(a=>a.user_id).filter(Boolean))];
+      const {data:profiles,error:profileError}=await sb.from('profiles').select('user_id,username,player_id').in('user_id',ids);
+      if(profileError){root.textContent='Не удалось загрузить профили игроков: '+profileError.message;return;}
+      const byUser=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p]));
+      data.forEach(a=>{a.profiles=byUser[a.user_id]||{};});
       let directory={};try{directory=await loadPlayerDirectory();}catch(e){}
       data.forEach(a=>appendApplicationCard(root,a,directory,true));
     }
@@ -625,7 +635,7 @@
         el.style.display=c.enabled?'':'none';
         const targetId=def.element|| (c.key==='red'?'statRed':null);
         const valEl=targetId?$(targetId):null;
-        const idx=c.column?headers.findIndex(h=>h===c.column):-1;
+        const idx=c.column?headers.findIndex(h=>normalizeHeader(h)===normalizeHeader(c.column)):-1;
         if(valEl) valEl.textContent=idx>=0?(row[idx]||'0'):'0';
       });
     }
@@ -661,6 +671,7 @@
         $('statSHB').textContent=shb||'0';$('statJK').textContent=yellow||'0';
         const transferText=transfer||'0';
         $('statTransfer').textContent=transferText.includes('₽')?transferText:transferText+' ₽';
+        applyStatSettings(row, rows[0]);
         $('awardsList').replaceChildren();
         if(awards) awards.split(',').forEach(a=>{const span=document.createElement('span');span.className='award-badge';span.textContent=a.trim();$('awardsList').appendChild(span);});
         else {const span=document.createElement('span');span.className='muted';span.textContent='Достижений пока нет';$('awardsList').appendChild(span);}

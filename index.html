@@ -575,8 +575,8 @@
       if(error){root.textContent='Не удалось загрузить состав: '+error.message;return;}
       if(!data?.length){root.textContent='Заявок в команду пока нет.';return;}
       const ids=[...new Set(data.map(a=>a.user_id).filter(Boolean))];
-      const {data:profiles,error:profileError}=await sb.from('profiles').select('user_id,username,player_id,first_name,last_name').in('user_id',ids);
-      if(profileError){root.textContent='Не удалось загрузить профили игроков: '+profileError.message;return;}
+      const {data:profiles,error:profileError}=await sb.rpc('get_captain_application_profiles',{p_user_ids:ids});
+      if(profileError){root.textContent='Не удалось загрузить имена игроков: '+profileError.message;return;}
       const byUser=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p]));
       data.forEach(a=>{a.profiles=byUser[a.user_id]||{};});
       let directory={};try{directory=await loadPlayerDirectory();}catch(e){}

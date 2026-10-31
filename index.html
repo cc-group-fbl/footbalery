@@ -524,8 +524,14 @@
       e.preventDefault();if(!sb||!currentUser)return;
       const matchId=$('matchSelect').value,team=$('teamSelect').value;
       if(!matchId)return setMessage('applicationMessage','Нет доступного матча для заявки.',true);
-      const {error}=await sb.from('match_applications').upsert({match_id:matchId,user_id:currentUser.id,team,ready_to_help:$('readyToHelp').checked},{onConflict:'match_id,user_id'});
-      if(error)return setMessage('applicationMessage','Не удалось подать заявку: '+error.message,true);
+      const {data:existing,error:checkError}=await sb.from('match_applications').select('id').eq('match_id',matchId).eq('user_id',currentUser.id).limit(1);
+      if(checkError)return setMessage('applicationMessage','Не удалось проверить предыдущую заявку: '+checkError.message,true);
+      if(existing?.length)return setMessage('applicationMessage','На этот матч вы уже подали заявку. Повторная заявка запрещена.',true);
+      const {error}=await sb.from('match_applications').insert({match_id:matchId,user_id:currentUser.id,team,ready_to_help:$('readyToHelp').checked});
+      if(error){
+        if(error.code==='23505')return setMessage('applicationMessage','На этот матч вы уже подали заявку. Повторная заявка запрещена.',true);
+        return setMessage('applicationMessage','Не удалось подать заявку: '+error.message,true);
+      }
       setMessage('applicationMessage','Заявка сохранена.');await loadMyApplications();
     }
     function appendApplicationCard(root,a,directory,adminMode){
@@ -655,7 +661,10 @@
         const row=rows.slice(1).find(r=>String(r[idCol]||'').trim().toLowerCase()===String(targetId).trim().toLowerCase());
         $('loadingState').style.display='none';
         if(!row){$('errorState').style.display='block';$('errorState').textContent='Не найдена карточка игрока для ID: '+targetId+'. Проверьте соответствие profiles.player_id и Google Таблицы.';return;}
-        const playerName=val(row,'name','player','имя','имя игрока','имя участника','фамилия имя','игрок','фио','ф.и.о.','фамилия и имя','ник','никнейм');
+        const fullName=val(row,'full name','player name','name','фио','ф.и.о.','фамилия и имя','фамилия имя','имя игрока','имя участника','игрок');
+        const firstName=val(row,'first name','firstname','имя','имя игрока');
+        const lastName=val(row,'last name','lastname','фамилия','фамилия игрока');
+        const playerName=fullName||(firstName+' '+lastName).trim()||val(row,'player','ник','никнейм');
         const city=val(row,'city','position','город','позиция','город/позиция','город или позиция','позиция/город','команда/позиция');
         const goals=val(row,'goals','голы','забитые голы','количество голов');
         const mvp=val(row,'mvp','лучший игрок','mvp (лучший игрок)','количество mvp');

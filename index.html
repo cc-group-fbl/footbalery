@@ -953,7 +953,6 @@
       if(routes[button.id]) {
         if(button.id==='openCaptainButton' && currentProfile?.role!=='captain') return;
         showSection(routes[button.id]);
-        if(button.id==='openNewsButton') await loadNews();
         if(button.id==='openMatchesButton') { await loadMatchOptions(); await loadMyApplications(); }
         if(button.id==='openCaptainButton') await loadCaptainApplications();
       } else if(button.id==='openAdminButton' && currentProfile?.role==='admin') {

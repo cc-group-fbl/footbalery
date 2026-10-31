@@ -207,6 +207,28 @@
           <div id="seasonThemeStatus" class="message" aria-live="polite"></div>
         </div>
         <details class="admin-section" open>
+          <summary>⚽ Управление матчами</summary>
+          <div class="muted">Создавай матчи и управляй регистрацией участников.</div>
+          <form id="createMatchForm" style="margin-top:12px">
+            <label class="muted" for="newMatchTitle">Название матча</label>
+            <input id="newMatchTitle" class="field" maxlength="160" placeholder="Например: ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ" required />
+            <label class="muted" for="newMatchDate">Дата матча</label>
+            <input id="newMatchDate" class="field" type="date" required />
+            <label class="muted" for="newMatchTime">Время матча</label>
+            <input id="newMatchTime" class="field" type="time" required />
+            <label class="muted" for="newMatchLocation">Место проведения</label>
+            <input id="newMatchLocation" class="field" maxlength="200" placeholder="Спортивный зал" required />
+            <label class="muted" for="newMatchDeadline">Дедлайн регистрации (необязательно)</label>
+            <input id="newMatchDeadline" class="field" type="datetime-local" />
+            <label class="candidate"><input id="newMatchOpen" type="checkbox" checked><span style="font-size:13px">Сразу открыть регистрацию</span></label>
+            <button id="createMatchButton" class="action-btn" type="submit">СОЗДАТЬ МАТЧ</button>
+          </form>
+          <div id="createMatchMessage" class="message"></div>
+          <h3 style="font-size:14px;margin:18px 0 8px">Матчи и регистрация</h3>
+          <button type="button" id="refreshAdminMatches" class="small-btn">Обновить список</button>
+          <div id="adminMatchesList" style="margin-top:10px"></div>
+        </details>
+        <details class="admin-section" open>
           <summary>📊 Настройка категорий статистики</summary>
           <p class="muted">Отметь категории, которые должны отображаться в карточке игрока, и выбери столбец Google Таблицы для каждой. Например, сними галочку «Голы» и включи «Красные карточки».</p>
           <div id="statsCategorySettings" style="display:grid;gap:10px;margin-top:12px">
@@ -372,7 +394,7 @@
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       showSection('homeScreen');
-      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); await registerPushIfAvailable(false); if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); }
+      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); await registerPushIfAvailable(false); if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); }
     }
     function normalizeHeader(v) {
       return String(v || '').replace(/^\uFEFF/, '').trim().toLowerCase()
@@ -420,6 +442,53 @@
       note.textContent='Всего пользователей: '+data.length;root.appendChild(note);
     }
     async function loadMatchOptions(){const sel=$('matchSelect');if(!sel||!sb)return;const {data,error}=await sb.from('matches').select('id,title,match_date,match_time,location,registration_deadline').eq('is_open',true).order('match_date');sel.replaceChildren();if(error||!data?.length){const o=document.createElement('option');o.value='';o.textContent='Пока нет открытых матчей (администратор должен добавить их в таблицу matches)';sel.appendChild(o);return;}data.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=[m.title,m.match_date,m.match_time,m.location].filter(Boolean).join(' · ');sel.appendChild(o);});}
+    async function loadAdminMatches(){
+      const root=$('adminMatchesList');
+      if(!root||!sb||currentProfile?.role!=='admin')return;
+      root.textContent='Загрузка матчей…';
+      const {data,error}=await sb.from('matches').select('id,title,match_date,match_time,location,registration_deadline,is_open').order('match_date',{ascending:false});
+      root.replaceChildren();
+      if(error){root.textContent='Не удалось загрузить матчи: '+error.message;return;}
+      if(!data?.length){root.textContent='Матчей пока нет.';return;}
+      data.forEach(m=>{
+        const row=document.createElement('div');
+        row.style.cssText='padding:10px 0;border-top:1px solid #ffffff22;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap';
+        const info=document.createElement('div');info.style.flex='1 1 180px';
+        const title=document.createElement('strong');title.textContent=m.title||'Матч';
+        const meta=document.createElement('div');meta.className='muted';meta.textContent=[m.match_date,m.match_time,m.location].filter(Boolean).join(' · ');
+        const status=document.createElement('div');status.className='muted';status.textContent=m.is_open?'Регистрация открыта':'Регистрация закрыта';
+        info.append(title,meta,status);
+        const toggle=document.createElement('button');toggle.type='button';toggle.className='small-btn';toggle.textContent=m.is_open?'Закрыть регистрацию':'Открыть регистрацию';
+        toggle.addEventListener('click',async()=>{
+          toggle.disabled=true;
+          const {error:updateError}=await sb.from('matches').update({is_open:!m.is_open}).eq('id',m.id);
+          if(updateError){setMessage('createMatchMessage','Не удалось изменить статус: '+updateError.message,true);toggle.disabled=false;return;}
+          await loadAdminMatches();await loadMatchOptions();
+        });
+        row.append(info,toggle);root.appendChild(row);
+      });
+    }
+    async function createMatch(e){
+      e.preventDefault();
+      if(!sb||currentProfile?.role!=='admin')return;
+      const button=$('createMatchButton');button.disabled=true;
+      const deadline=$('newMatchDeadline').value;
+      const payload={
+        title:$('newMatchTitle').value.trim(),
+        match_date:$('newMatchDate').value,
+        match_time:$('newMatchTime').value,
+        location:$('newMatchLocation').value.trim(),
+        registration_deadline:deadline?new Date(deadline).toISOString():null,
+        is_open:$('newMatchOpen').checked
+      };
+      try{
+        const {error}=await sb.from('matches').insert(payload);
+        if(error){setMessage('createMatchMessage','Не удалось создать матч: '+error.message,true);return;}
+        $('createMatchForm').reset();$('newMatchOpen').checked=true;
+        setMessage('createMatchMessage','Матч успешно создан.');
+        await loadAdminMatches();await loadMatchOptions();
+      }finally{button.disabled=false;}
+    }
     async function loadMyApplications(){const root=$('myApplications');if(!root||!sb||!currentUser)return;const {data,error}=await sb.from('match_applications').select('id,team,created_at,matches(title,match_date,match_time,location)').eq('user_id',currentUser.id).order('created_at',{ascending:false});root.replaceChildren();if(error){root.textContent='Не удалось загрузить заявки. Выполните SQL-настройку Supabase.';return;}if(!data?.length){root.textContent='Заявок пока нет.';return;}data.forEach(a=>{const d=document.createElement('div');d.style.cssText='padding:9px 0;border-top:1px solid #ffffff22';d.textContent=(a.matches?.title||'Матч')+' · ФК '+a.team+' · '+(a.matches?.match_date||'дата не указана');root.appendChild(d);});}
     async function submitMatchApplication(e){e.preventDefault();if(!sb||!currentUser)return;const matchId=$('matchSelect').value,team=$('teamSelect').value;if(!matchId)return setMessage('applicationMessage','Нет доступного матча для заявки.',true);const {error}=await sb.from('match_applications').upsert({match_id:matchId,user_id:currentUser.id,team},{onConflict:'match_id,user_id'});if(error)return setMessage('applicationMessage','Не удалось подать заявку. Проверьте SQL-настройку и сроки регистрации.',true);setMessage('applicationMessage','Заявка сохранена.');await loadMyApplications();}
     async function loadCaptainApplications(){const root=$('captainApplications');if(!root||!sb||currentProfile?.role!=='captain')return;const team=currentProfile.captain_team;$('captainTeamLabel').textContent=team?'Команда: ФК '+team:'Администратор должен назначить капитану команду в списке учётных записей.';root.replaceChildren();if(!team)return;const {data,error}=await sb.from('match_applications').select('id,team,profiles(username,player_id),matches(title,match_date,match_time,location)').eq('team',team).order('created_at');if(error){root.textContent='Не удалось загрузить состав. Проверьте SQL-настройку и права доступа.';return;}if(!data?.length){root.textContent='Заявок в команду пока нет.';return;}data.forEach(a=>{const d=document.createElement('div');d.style.cssText='padding:10px 0;border-top:1px solid #ffffff22';d.textContent=(a.matches?.title||'Матч')+' — '+(a.profiles?.username||'Игрок')+(a.profiles?.player_id?' ('+a.profiles.player_id+')':'');root.appendChild(d);});}
@@ -664,6 +733,8 @@
     }
     async function logout(){await sb.auth.signOut();currentUser=null;currentProfile=null;$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('passwordInput').value='';setMessage('loginMessage','Вы вышли из аккаунта.');}
     $('matchApplicationForm').addEventListener('submit',submitMatchApplication);
+    $('createMatchForm')?.addEventListener('submit',createMatch);
+    $('refreshAdminMatches')?.addEventListener('click',loadAdminMatches);
     $('openMatchesButton').addEventListener('click',async()=>{showSection('matchesPanel');await loadMatchOptions();await loadMyApplications();});
     $('openCaptainButton').addEventListener('click',async()=>{showSection('captainPanel');await loadCaptainApplications();});
     $('matchesBackButton').addEventListener('click',()=>showSection('homeScreen'));$('captainBackButton').addEventListener('click',()=>showSection('homeScreen'));

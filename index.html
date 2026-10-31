@@ -260,13 +260,11 @@
     function setMessage(id, msg, bad=false) { $(id).textContent = msg || ''; $(id).style.color = bad ? '#ff7777' : '#ffd21f'; }
 
     function showSection(sectionId) {
-      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','captainPanel'].forEach(id => $(id).classList.toggle('hidden', id !== sectionId));
-      $('statsBackButton').classList.toggle('hidden', sectionId !== 'statsCard');
-      $('voteBackButton').classList.toggle('hidden', sectionId !== 'votePanel');
-      $('adminBackButton').classList.toggle('hidden', sectionId !== 'adminPanel');
-      $('newsBackButton').classList.toggle('hidden', sectionId !== 'newsPanel');
-      $('matchesBackButton').classList.toggle('hidden', sectionId !== 'matchesPanel');
-      $('captainBackButton').classList.toggle('hidden', sectionId !== 'captainPanel');
+      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','captainPanel'].forEach(id => {
+        const panel=$(id); if(panel) panel.classList.toggle('hidden', id !== sectionId);
+      });
+      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',captainPanel:'captainBackButton'};
+      Object.entries(backButtons).forEach(([panelId,buttonId])=>{const button=$(buttonId);if(button)button.classList.toggle('hidden',sectionId!==panelId);});
       window.scrollTo({top:0,behavior:'smooth'});
     }
 
@@ -872,7 +870,31 @@
       sb.auth.getSession().then(async ({data})=>{if(data.session){currentUser=data.session.user;await showAccount();}})
         .catch(err=>setMessage('loginMessage','Ошибка связи с сервером: '+(err?.message||'не удалось проверить сессию'),true));
     }
-      document.getElementById('refreshAdminUsers')?.addEventListener('click', loadAdminUsers);
+      // Резервная навигация: вкладки работают даже если отдельный обработчик
+    // одной из необязательных форм не удалось подключить.
+    document.addEventListener('click', async (event) => {
+      const button=event.target.closest('button');
+      if(!button) return;
+      const routes={
+        openStatsButton:'statsCard',
+        openVoteButton:'votePanel',
+        openNewsButton:'newsPanel',
+        openMatchesButton:'matchesPanel',
+        openCaptainButton:'captainPanel'
+      };
+      if(routes[button.id]) {
+        if(button.id==='openCaptainButton' && currentProfile?.role!=='captain') return;
+        showSection(routes[button.id]);
+        if(button.id==='openNewsButton') await loadNews();
+        if(button.id==='openMatchesButton') { await loadMatchOptions(); await loadMyApplications(); }
+        if(button.id==='openCaptainButton') await loadCaptainApplications();
+      } else if(button.id==='openAdminButton' && currentProfile?.role==='admin') {
+        showSection('adminPanel');
+      } else if(button.classList.contains('section-back')) {
+        showSection('homeScreen');
+      }
+    });
+    document.getElementById('refreshAdminUsers')?.addEventListener('click', loadAdminUsers);
 </script>
 </body>
 </html>

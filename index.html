@@ -231,7 +231,8 @@
         </details>
         <details class="admin-section" open>
           <summary>📊 Настройка категорий статистики</summary>
-          <p class="muted">Отметь категории, которые должны отображаться в карточке игрока, и выбери столбец Google Таблицы для каждой. Например, сними галочку «Голы» и включи «Красные карточки».</p>
+          <p class="muted">По умолчанию доступны все статистические столбцы Google Таблицы. Отметь галочками то, что нужно показывать в карточке игрока.</p>
+          <label class="candidate"><input type="checkbox" id="statNameEnabled" checked><span style="font-size:13px">Показывать имя игрока</span></label>
           <div id="statsCategorySettings" style="display:grid;gap:10px;margin-top:12px">
             <div class="muted">Загрузка заголовков Google Таблицы…</div>
           </div>
@@ -600,6 +601,17 @@
       {key:'red', label:'Красные карточки', aliases:['red cards','red card','красные карточки','кк','красная карточка'], element:null, enabled:false, suffix:''}
     ];
     let sheetHeaders = [];
+    let STAT_CATEGORIES = DEFAULT_STAT_CATEGORIES.slice();
+    const STAT_EXCLUDED_HEADERS = ['id','player id','id игрока','идентификатор','код игрока','full name','player name','name','фио','ф.и.о.','фамилия и имя','фамилия и/или имя','фамилия и или имя','first name','firstname','имя','last name','lastname','фамилия','city','город','position','позиция','город/позиция','город или позиция','позиция/город','команда/позиция','awards','достижения','награды'];
+    function buildStatCategories(){
+      STAT_CATEGORIES=DEFAULT_STAT_CATEGORIES.slice();
+      sheetHeaders.forEach((header,index)=>{
+        const normalized=normalizeHeader(header);
+        if(!normalized || STAT_EXCLUDED_HEADERS.map(normalizeHeader).includes(normalized)) return;
+        if(STAT_CATEGORIES.some(d=>d.aliases.map(normalizeHeader).includes(normalized))) return;
+        STAT_CATEGORIES.push({key:'extra_'+index,label:header,aliases:[header],element:null,enabled:true,suffix:''});
+      });
+    }
     function readStatConfig(){
       try { const parsed=JSON.parse(localStorage.getItem('futboleryStatConfig')||'null'); if(Array.isArray(parsed)) return parsed; } catch(e){}
       return DEFAULT_STAT_CATEGORIES.map(c=>({...c, column:''}));
@@ -607,7 +619,8 @@
     function renderStatSettings(){
       const root=$('statsCategorySettings'); if(!root)return;
       root.replaceChildren();
-      DEFAULT_STAT_CATEGORIES.forEach(def=>{
+      const savedName=localStorage.getItem('futboleryStatNameEnabled');$('statNameEnabled').checked=savedName!=='false';
+      STAT_CATEGORIES.forEach(def=>{
         const saved=readStatConfig().find(c=>c.key===def.key)||def;
         const row=document.createElement('div');row.className='stats-setting-row';
         const label=document.createElement('label');
@@ -618,7 +631,7 @@
         sheetHeaders.forEach(h=>{const opt=document.createElement('option');opt.value=h;opt.textContent=h;select.append(opt);});
         const guess=sheetHeaders.find(h=>def.aliases.map(normalizeHeader).includes(normalizeHeader(h)));
         select.value=saved.column||guess||'';
-        const hint=document.createElement('div');hint.className='muted';hint.textContent='Источник данных: столбец Google Таблицы';
+        const hint=document.createElement('div');hint.className='muted';hint.textContent='Источник: '+(select.value||'выбери столбец');
         row.append(label,select,hint);root.append(row);
       });
     }
@@ -626,16 +639,17 @@
       try{
         const r=await fetch(GOOGLE_SHEET_URL); if(!r.ok) throw new Error('sheet');
         const rows=parseCSV(await r.text()); sheetHeaders=(rows[0]||[]).map(v=>String(v).trim()).filter(Boolean);
-        renderStatSettings();
+        buildStatCategories();renderStatSettings();
       }catch(e){const root=$('statsCategorySettings');if(root)root.textContent='Не удалось получить заголовки. Проверь доступ к Google Таблице.';}
     }
     function saveStatSettings(){
-      const config=DEFAULT_STAT_CATEGORIES.map(def=>{
+      const config=STAT_CATEGORIES.map(def=>{
         const check=document.querySelector(`[data-stat-enabled="${def.key}"]`);
         const select=document.querySelector(`[data-stat-column="${def.key}"]`);
         return {...def,enabled:!!check?.checked,column:select?.value||''};
       });
       localStorage.setItem('futboleryStatConfig',JSON.stringify(config));
+      localStorage.setItem('futboleryStatNameEnabled',$('statNameEnabled').checked?'true':'false');
       setMessage('statsSettingsMessage','Настройки категорий сохранены на этом устройстве.');
       if(currentProfile?.player_id) loadPlayerCard(currentProfile.player_id);
     }
@@ -643,8 +657,9 @@
       const config=readStatConfig();
       const box=$('cardContent')?.querySelector('.stats-grid') || $('cardContent')?.querySelector('[class*="stats"]');
       config.forEach(c=>{
-        const def=DEFAULT_STAT_CATEGORIES.find(d=>d.key===c.key); if(!def)return;
-        let el=def.element?$(def.element)?.closest('.stat-box'):null;
+        const def=STAT_CATEGORIES.find(d=>d.key===c.key); if(!def)return;
+        let el=def.element?$(def.element)?.closest('.stat-box'):document.querySelector(`[data-extra-stat="${c.key}"]`);
+        if(!def.element&&!el){const grid=$('statGoals')?.parentElement?.parentElement;if(grid){el=document.createElement('div');el.className='stat-box';el.dataset.extraStat=c.key;el.innerHTML='<div class="stat-value"></div><div class="stat-label"></div>';el.querySelector('.stat-label').textContent=def.label;grid.append(el);}}
         if(c.key==='red'&&!el){
           const grid=$('statGoals')?.parentElement?.parentElement;
           if(grid){el=document.createElement('div');el.className='stat-box';el.innerHTML='<div class="stat-value" id="statRed">0</div><div class="stat-label"></div>';el.querySelector('.stat-label').textContent=def.label;grid.append(el);}
@@ -652,7 +667,8 @@
         if(!el)return;
         el.style.display=c.enabled?'':'none';
         const targetId=def.element|| (c.key==='red'?'statRed':null);
-        const valEl=targetId?$(targetId):null;
+        const valEl=targetId?$(targetId):(el?.querySelector('.stat-value'));
+        if(valEl && !def.element && c.key!=='red') { const idx=c.column?headers.findIndex(h=>normalizeHeader(h)===normalizeHeader(c.column)):-1;valEl.textContent=idx>=0?(row[idx]||'0'):'0';return; }
         const idx=c.column?headers.findIndex(h=>normalizeHeader(h)===normalizeHeader(c.column)):-1;
         if(valEl) valEl.textContent=idx>=0?(row[idx]||'0'):'0';
       });
@@ -687,6 +703,7 @@
         $('cardContent').style.display='block';
         $('playerIdTag').textContent='ID: '+(row[idCol]||'');
         $('playerName').textContent=playerName||'Имя не указано';
+        $('playerName').style.display=localStorage.getItem('futboleryStatNameEnabled')==='false'?'none':'';
         $('playerCity').textContent=city||'';
         $('statGoals').textContent=goals||'0';$('statMVP').textContent=mvp||'0';
         $('statSHB').textContent=shb||'0';$('statJK').textContent=yellow||'0';

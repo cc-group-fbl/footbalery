@@ -673,7 +673,7 @@
         const row=rows.slice(1).find(r=>String(r[idCol]||'').trim().toLowerCase()===String(targetId).trim().toLowerCase());
         $('loadingState').style.display='none';
         if(!row){$('errorState').style.display='block';$('errorState').textContent='Не найдена карточка игрока для ID: '+targetId+'. Проверьте соответствие profiles.player_id и Google Таблицы.';return;}
-        const fullName=val(row,'full name','player name','name','фио','ф.и.о.','фамилия и имя','фамилия имя','имя и фамилия','имя фамилия','фамилия, имя','игрок','участник','ф.и.о игрока');
+        const fullName=val(row,'full name','player name','name','фио','ф.и.о.','фамилия и имя','фамилия имя','имя и фамилия','имя фамилия','фамилия, имя','фамилия и/или имя','фамилия и или имя','игрок','участник','ф.и.о игрока');
         const firstName=val(row,'first name','firstname','имя','имя игрока','имя участника','как зовут');
         const lastName=val(row,'last name','lastname','фамилия','фамилия игрока','фамилия участника');
         const playerName=fullName||(firstName+' '+lastName).trim()||val(row,'player','ник','никнейм')||currentProfile?.username||'Имя не указано';

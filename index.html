@@ -275,27 +275,33 @@
         </form>
         <div id="createNewsMessage" class="message"></div>
         <div id="adminNewsList" style="margin-top:12px"></div>
-        <h3 style="font-size:14px;margin:18px 0 8px">Управление пользователями</h3>
-        <div class="muted">Создавайте аккаунты участников. Логин и временный пароль передайте игроку лично. Пароль не сохраняется в списке и не отображается повторно.</div>
-        <form id="createMemberForm" style="margin-top:12px">
-          <label class="muted" for="memberUsername">Логин (латиница, цифры, _ или -)</label>
-          <input id="memberUsername" class="field" minlength="3" maxlength="30" pattern="[A-Za-z0-9_-]{3,30}" autocomplete="off" placeholder="Например: player02" required />
-          <label class="muted" for="memberPlayerId">ID игрока</label>
-          <input id="memberPlayerId" class="field" maxlength="50" placeholder="Например: FTB-002" required />
-          <label class="muted" for="memberPassword">Временный пароль (минимум 8 символов)</label>
-          <input id="memberPassword" class="field" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Задайте временный пароль" required />
-          <button id="createMemberButton" class="action-btn" type="submit">СОЗДАТЬ УЧАСТНИКА</button>
-        </form>
-        <div id="createMemberMessage" class="message"></div>
-        <h3 style="font-size:14px;margin:18px 0 8px">Все зарегистрированные пользователи</h3>
-        <button type="button" id="refreshAdminUsers" class="small-btn">Обновить список</button>
-        <div id="adminUsersList" style="margin-top:10px"></div>
-        <h3 style="font-size:14px;margin:18px 0 8px">Опросы и результаты</h3>
-        <div id="adminResults"></div>
-        <hr style="border:0;border-top:1px solid rgba(255,255,255,.14);margin:22px 0">
-        <h3 style="font-size:14px;margin:18px 0 8px">Устройства участников</h3>
-        <div class="muted">Здесь отображаются устройства и браузеры для голосов, отправленных после обновления сайта. Старые голоса не содержат этих данных.</div>
-        <div id="adminVoteDetails"></div>
+        </details>
+        <details class="admin-section">
+          <summary>👤 Добавление и управление игроками</summary>
+          <h3 style="font-size:14px;margin:18px 0 8px">Создать участника</h3>
+          <div class="muted">Создавайте аккаунты участников. Логин и временный пароль передайте игроку лично. Пароль не сохраняется в списке и не отображается повторно.</div>
+          <form id="createMemberForm" style="margin-top:12px">
+            <label class="muted" for="memberUsername">Логин (латиница, цифры, _ или -)</label>
+            <input id="memberUsername" class="field" minlength="3" maxlength="30" pattern="[A-Za-z0-9_-]{3,30}" autocomplete="off" placeholder="Например: player02" required />
+            <label class="muted" for="memberPlayerId">ID игрока</label>
+            <input id="memberPlayerId" class="field" maxlength="50" placeholder="Например: FTB-002" required />
+            <label class="muted" for="memberPassword">Временный пароль (минимум 8 символов)</label>
+            <input id="memberPassword" class="field" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Задайте временный пароль" required />
+            <button id="createMemberButton" class="action-btn" type="submit">СОЗДАТЬ УЧАСТНИКА</button>
+          </form>
+          <div id="createMemberMessage" class="message"></div>
+          <h3 style="font-size:14px;margin:18px 0 8px">Все зарегистрированные пользователи</h3>
+          <button type="button" id="refreshAdminUsers" class="small-btn">Обновить список</button>
+          <div id="adminUsersList" style="margin-top:10px"></div>
+        </details>
+        <details class="admin-section">
+          <summary>🗳️ Отслеживание голосов и результаты</summary>
+          <h3 style="font-size:14px;margin:18px 0 8px">Опросы и результаты</h3>
+          <div id="adminResults"></div>
+          <hr style="border:0;border-top:1px solid rgba(255,255,255,.14);margin:22px 0">
+          <h3 style="font-size:14px;margin:18px 0 8px">Устройства участников</h3>
+          <div class="muted">Здесь отображаются устройства и браузеры для голосов, отправленных после обновления сайта. Старые голоса не содержат этих данных.</div>
+          <div id="adminVoteDetails"></div>
         </details>
       </section>
     </section>

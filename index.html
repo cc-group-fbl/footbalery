@@ -179,7 +179,7 @@
       <button type="button" class="small-btn section-back hidden" id="matchesBackButton">← На главный экран</button>
       <section id="matchesPanel" class="vote-box hidden"><h2>ЗАЯВКА НА МАТЧ</h2><div class="muted">Выбери матч и команду. Администратор может изменить команду в заявке.</div>
         <form id="matchApplicationForm" style="margin-top:12px"><label class="muted" for="matchSelect">Матч</label><select id="matchSelect" class="field" required><option value="">Загрузка матчей…</option></select>
-        <label class="muted" for="teamSelect">Команда</label><select id="teamSelect" class="field" required><option value="ДЕРЕВЕНСКИЕ">ФК ДЕРЕВЕНСКИЕ</option><option value="ГОРОДСКИЕ">ФК ГОРОДСКИЕ</option></select><label class="candidate" style="margin:12px 0"><input id="readyToHelp" type="checkbox"><span style="font-size:13px">Готов помочь с организацией и подготовкой матча</span></label><button class="action-btn" type="submit">ПОДАТЬ ЗАЯВКУ</button></form><div id="applicationMessage" class="message"></div><h3>Мои заявки</h3><div id="myApplications" class="muted"></div>
+        <label class="muted" for="teamSelect">Команда</label><select id="teamSelect" class="field" required><option value="ДЕРЕВЕНСКИЕ">ФК ДЕРЕВЕНСКИЕ</option><option value="ГОРОДСКИЕ">ФК ГОРОДСКИЕ</option></select><label class="muted" for="applicationPlayerNumber">Игровой номер</label><input id="applicationPlayerNumber" class="field" type="number" min="0" max="99" step="1" placeholder="Например, 10" required><label class="candidate" style="margin:12px 0"><input id="readyToHelp" type="checkbox"><span style="font-size:13px">Готов помочь с организацией и подготовкой матча</span></label><button class="action-btn" type="submit">ПОДАТЬ ЗАЯВКУ</button></form><div id="applicationMessage" class="message"></div><h3>Мои заявки</h3><div id="myApplications" class="muted"></div>
       </section>
       <button type="button" class="small-btn section-back hidden" id="captainBackButton">← На главный экран</button>
       <section id="captainPanel" class="vote-box hidden"><h2>КАПИТАН</h2><div class="muted" id="captainTeamLabel"></div><div id="captainApplications" class="muted" style="margin-top:12px"></div></section>
@@ -544,7 +544,7 @@
       const {data:existing,error:checkError}=await sb.from('match_applications').select('id').eq('match_id',matchId).eq('user_id',currentUser.id).limit(1);
       if(checkError)return setMessage('applicationMessage','Не удалось проверить предыдущую заявку: '+checkError.message,true);
       if(existing?.length)return setMessage('applicationMessage','На этот матч вы уже подали заявку. Повторная заявка запрещена.',true);
-      const {error}=await sb.from('match_applications').insert({match_id:matchId,user_id:currentUser.id,team,ready_to_help:$('readyToHelp').checked});
+      const playerNumber=Number($('applicationPlayerNumber').value);if(!Number.isInteger(playerNumber)||playerNumber<0||playerNumber>99)return setMessage('applicationMessage','Укажите игровой номер от 0 до 99.',true);const {error}=await sb.from('match_applications').insert({match_id:matchId,user_id:currentUser.id,team,player_number:playerNumber,ready_to_help:$('readyToHelp').checked});
       if(error){
         if(error.code==='23505')return setMessage('applicationMessage','На этот матч вы уже подали заявку. Повторная заявка запрещена.',true);
         return setMessage('applicationMessage','Не удалось подать заявку: '+error.message,true);
@@ -554,8 +554,8 @@
     function appendApplicationCard(root,a,directory,adminMode){
       const d=document.createElement('div');d.style.cssText='padding:10px 0;border-top:1px solid #ffffff22;font-size:12px;line-height:1.6';
       const profile=a.profiles||{},info=playerSheetInfo(profile.player_id,directory);
-      const title=document.createElement('strong');title.textContent=(a.matches?.title||'Матч')+' — '+(profile.username||'Игрок');d.appendChild(title);
-      const details=document.createElement('div');details.textContent='ID: '+(profile.player_id||'—')+' · №: '+(info.number||'не указан')+' · Позиция: '+(info.position||'не указана')+' · Готов помочь: '+(a.ready_to_help?'Да':'Нет');d.appendChild(details);
+      const fullName=[profile.first_name,profile.last_name].filter(Boolean).join(' ');const title=document.createElement('strong');title.textContent=(a.matches?.title||'Матч')+' — '+(fullName||profile.username||'Игрок');d.appendChild(title);
+      const details=document.createElement('div');details.textContent=(adminMode?'ID: '+(profile.player_id||'—')+' · ':'')+'№: '+(a.player_number??info.number??'не указан')+' · Позиция: '+(info.position||'не указана')+' · Готов помочь: '+(a.ready_to_help?'Да':'Нет');d.appendChild(details);
       if(adminMode){
         const select=document.createElement('select');select.className='field';select.style.marginTop='8px';
         [['ДЕРЕВЕНСКИЕ','ФК ДЕРЕВЕНСКИЕ'],['ГОРОДСКИЕ','ФК ГОРОДСКИЕ']].forEach(([v,label])=>{const o=document.createElement('option');o.value=v;o.textContent=label;select.appendChild(o);});
@@ -571,11 +571,11 @@
       const team=currentProfile.captain_team;
       $('captainTeamLabel').textContent=team?'Команда: ФК '+team:'Администратор должен назначить капитану команду в списке учётных записей.';
       root.replaceChildren();if(!team)return;
-      const {data,error}=await sb.from('match_applications').select('id,user_id,team,ready_to_help,created_at,matches(title,match_date,match_time,location)').eq('team',team).order('created_at');
+      const {data,error}=await sb.from('match_applications').select('id,user_id,team,player_number,ready_to_help,created_at,matches(title,match_date,match_time,location)').eq('team',team).order('created_at');
       if(error){root.textContent='Не удалось загрузить состав: '+error.message;return;}
       if(!data?.length){root.textContent='Заявок в команду пока нет.';return;}
       const ids=[...new Set(data.map(a=>a.user_id).filter(Boolean))];
-      const {data:profiles,error:profileError}=await sb.from('profiles').select('user_id,username,player_id').in('user_id',ids);
+      const {data:profiles,error:profileError}=await sb.from('profiles').select('user_id,username,player_id,first_name,last_name').in('user_id',ids);
       if(profileError){root.textContent='Не удалось загрузить профили игроков: '+profileError.message;return;}
       const byUser=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p]));
       data.forEach(a=>{a.profiles=byUser[a.user_id]||{};});
@@ -585,7 +585,7 @@
     async function loadAdminMatchApplications(){
       const root=$('adminMatchApplications');if(!root||!sb||currentProfile?.role!=='admin')return;
       root.textContent='Загрузка заявок…';
-      const {data,error}=await sb.from('match_applications').select('id,user_id,team,ready_to_help,created_at,matches(title,match_date,match_time)').order('created_at',{ascending:false}).limit(300);
+      const {data,error}=await sb.from('match_applications').select('id,user_id,team,player_number,ready_to_help,created_at,matches(title,match_date,match_time)').order('created_at',{ascending:false}).limit(300);
       root.replaceChildren();if(error){root.textContent='Не удалось загрузить заявки: '+error.message;return;}
       if(!data?.length){root.textContent='Заявок на матчи пока нет.';return;}
       const ids=[...new Set(data.map(a=>a.user_id).filter(Boolean))];

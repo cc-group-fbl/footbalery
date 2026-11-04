@@ -18,6 +18,7 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  body.theme-loading { visibility:hidden; }
   body {
     font-family: 'Montserrat', sans-serif;
     background: var(--bg-dark);
@@ -153,7 +154,7 @@
     .stats-setting-row select{width:100%;min-width:0;background:#111827;color:#fff;border:1px solid #ffffff33;border-radius:8px;padding:8px}
 </style>
 </head>
-<body>
+<body class="theme-loading">
 
   <div class="stripes-bg">
     <div class="stripe"><div class="stripe-inner"></div></div>
@@ -962,19 +963,25 @@
       return starts[0]?.season || null;
     }
     async function loadSharedSeasonTheme() {
-      if(!sb) return;
+      if(!sb) { document.body.classList.remove('theme-loading'); return; }
       const [{data:scheduleRow,error:scheduleError},{data:legacyRow}]=await Promise.all([
         sb.from('site_settings').select('value').eq('key','season_schedule').maybeSingle(),
         sb.from('site_settings').select('value').eq('key','season_theme').maybeSingle()
       ]);
       if(scheduleError) {
-        applySeasonTheme(legacyRow?.value==='winter'?'winter':'autumn');
+        const cached=localStorage.getItem('futbolerySeasonSchedule');
+        let cachedSchedule={};
+        try { cachedSchedule=JSON.parse(cached||'{}'); } catch(_) {}
+        const cachedActive=getActiveSeason(cachedSchedule);
+        applySeasonTheme(cachedActive || (legacyRow?.value==='winter'?'winter':'autumn'));
         const status=$('seasonThemeStatus');
-        if(status && currentProfile?.role==='admin') status.textContent='Не удалось загрузить расписание сезонов: '+scheduleError.message;
+        if(status && currentProfile?.role==='admin') status.textContent='Не удалось прочитать общее расписание (проверьте разрешение SELECT для посетителей в Supabase): '+scheduleError.message;
+        document.body.classList.remove('theme-loading');
         return;
       }
       let schedule={};
       try { schedule=JSON.parse(scheduleRow?.value||'{}'); } catch(_) {}
+      localStorage.setItem('futbolerySeasonSchedule',JSON.stringify(schedule));
       const active=getActiveSeason(schedule);
       applySeasonTheme(active || (legacyRow?.value==='winter'?'winter':'autumn'));
       ['spring','summer','autumn','winter'].forEach(season=>{
@@ -983,6 +990,7 @@
       });
       const status=$('seasonThemeStatus');
       if(status && currentProfile?.role==='admin' && !active && Object.keys(schedule).length) status.textContent='В расписании пока нет наступившего сезона. Временно используется прежнее оформление.';
+      document.body.classList.remove('theme-loading');
     }
     $('saveSeasonSchedule')?.addEventListener('click',async()=>{
       if(!sb||!currentUser||currentProfile?.role!=='admin') return;
@@ -999,12 +1007,13 @@
       const {error}=await sb.from('site_settings').upsert({key:'season_schedule',value:JSON.stringify(schedule),updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'key'});
       if(button) button.disabled=false;
       if(error) { const status=$('seasonThemeStatus'); if(status) status.textContent='Не удалось сохранить расписание: '+error.message; return; }
+      localStorage.setItem('futbolerySeasonSchedule',JSON.stringify(schedule));
       applySeasonTheme(getActiveSeason(schedule)||'autumn');
       const status=$('seasonThemeStatus'); if(status) status.textContent='Расписание сохранено. Оформление будет переключаться автоматически в заданное время.';
     });
     // Загружаем общую тему и до авторизации, чтобы посетители не видели осень по умолчанию.
-    applySeasonTheme('autumn');
     if(sb) loadSharedSeasonTheme();
+    else { applySeasonTheme('autumn'); document.body.classList.remove('theme-loading'); }
     $('createPollForm')?.addEventListener('submit',createPoll);
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('loginButton').addEventListener('click',signIn);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);

@@ -106,6 +106,20 @@
   .notice-pill { display:inline-block; border-radius:99px; background:#ff5b00; color:#fff; padding:3px 8px; font-size:10px; font-weight:800; margin-left:6px; }
 
   /* Seasonal theme: preserve the existing layout and switch only the color palette. */
+  body.spring-theme { --gold:#f2a4ff; --accent-text:#f8eaff; --accent:#f08cff; --cyan:#65f5c8; }
+  body.spring-theme .stripe:nth-child(odd) .stripe-inner { background:linear-gradient(180deg,#e900f5 0%,#b34acb 24%,#829d9d 49%,#08e85a 75%,#e900f5 100%); }
+  body.spring-theme .stripe:nth-child(even) .stripe-inner { background:linear-gradient(180deg,#d900ef 0%,#a84bc0 25%,#82a49c 50%,#00ed55 76%,#d900ef 100%); }
+  body.spring-theme .action-btn { color:#fff; background:linear-gradient(90deg,#d900ef,#00df68); }
+  body.spring-theme .candidate input { accent-color:#00df68; }
+  body.spring-theme .dashboard-icon { background:rgba(0,230,100,.13); border-color:rgba(0,230,100,.36); }
+  body.spring-theme .dashboard-arrow, body.spring-theme .message { color:#f3b4ff; }
+  body.spring-theme .notice-pill { background:#00d95e; color:#062c17; }
+  body.summer-theme { --gold:#54f0a0; --accent-text:#9cffc4; --accent:#54f0a0; --cyan:#55e6dc; }
+  body.summer-theme .stripe:nth-child(odd) .stripe-inner { background:linear-gradient(180deg,#00a85a 0%,#d5e94a 50%,#00a85a 100%); }
+  body.summer-theme .stripe:nth-child(even) .stripe-inner { background:linear-gradient(180deg,#009b83 0%,#b6ed55 50%,#009b83 100%); }
+  body.summer-theme .action-btn { color:#07351f; background:linear-gradient(90deg,#51e6a0,#d5f56b); }
+  body.summer-theme .candidate input { accent-color:#32d78a; }
+  body.summer-theme .dashboard-arrow, body.summer-theme .message { color:#9cffc4; }
   body.winter-theme { --gold:#38e9ff; --accent-text:#65efff; --accent:#65efff; --cyan:#00e9f2; --bg-dark:#031b56; --card-bg:rgba(4,35,92,.92); --border-color:rgba(88,225,255,.24); }
   /* Replace warm accent text throughout the interface when winter mode is active. */
   body.winter-theme #welcomeText,
@@ -216,9 +230,13 @@
         Важно: срок голосования должен проверяться на стороне Supabase. Проверка только в браузере не защищает от изменения часов устройства; для полной защиты нужна серверная проверка срока и уникальности голоса.
         </div>
         <div class="theme-control">
-          <div class="theme-control-title">🎨 СЕЗОННОЕ ОФОРМЛЕНИЕ</div>
-          <div class="muted" style="text-align:left;margin:0 0 8px">Переключай осеннюю жёлто-оранжевую палитру на зимнюю голубую. Структура сайта и расположение элементов останутся прежними.</div>
-          <button type="button" id="toggleSeasonTheme" class="action-btn">ВКЛЮЧИТЬ ЗИМНИЙ ДИЗАЙН</button>
+          <div class="theme-control-title">🎨 РАСПИСАНИЕ СЕЗОННОГО ОФОРМЛЕНИЯ</div>
+          <div class="muted" style="text-align:left;margin:0 0 10px">Укажи дату и время начала каждого сезона. Оформление будет переключаться автоматически для всех посетителей сайта.</div>
+          <label class="muted" style="display:block;text-align:left">🌸 Начало весны<input id="seasonSpringStart" class="field" type="datetime-local"></label>
+          <label class="muted" style="display:block;text-align:left">☀️ Начало лета<input id="seasonSummerStart" class="field" type="datetime-local"></label>
+          <label class="muted" style="display:block;text-align:left">🍂 Начало осени<input id="seasonAutumnStart" class="field" type="datetime-local"></label>
+          <label class="muted" style="display:block;text-align:left">❄️ Начало зимы<input id="seasonWinterStart" class="field" type="datetime-local"></label>
+          <button type="button" id="saveSeasonSchedule" class="action-btn">СОХРАНИТЬ РАСПИСАНИЕ</button>
           <div id="seasonThemeStatus" class="message" aria-live="polite"></div>
         </div>
         <details class="admin-section" open>
@@ -923,35 +941,70 @@
     $('openCaptainButton').addEventListener('click',async()=>{showSection('captainPanel');await loadCaptainApplications();});
     $('matchesBackButton').addEventListener('click',()=>showSection('homeScreen'));$('captainBackButton').addEventListener('click',()=>showSection('homeScreen'));
     function applySeasonTheme(theme) {
-      const winter = theme === 'winter';
-      document.body.classList.toggle('winter-theme', winter);
-      const button = $('toggleSeasonTheme');
-      const status = $('seasonThemeStatus');
-      if (button) button.textContent = winter ? 'ВЕРНУТЬ ОСЕННИЙ ДИЗАЙН' : 'ВКЛЮЧИТЬ ЗИМНИЙ ДИЗАЙН';
-      if (status) status.textContent = winter ? 'Общий сезон: зима. Голубое оформление включено для всех пользователей.' : 'Общий сезон: осень. Жёлто-оранжевое оформление включено для всех пользователей.';
-      document.querySelectorAll('.theme-control').forEach(el => el.classList.toggle('hidden', currentProfile?.role !== 'admin'));
+      const themes=['spring','summer','autumn','winter'];
+      themes.forEach(name=>document.body.classList.toggle(name+'-theme',name===theme));
+      const labels={spring:'весна',summer:'лето',autumn:'осень',winter:'зима'};
+      const status=$('seasonThemeStatus');
+      if(status && !status.dataset.editing) status.textContent='Сейчас активно оформление: '+(labels[theme]||'осень')+'.';
+      document.querySelectorAll('.theme-control').forEach(el=>el.classList.toggle('hidden',currentProfile?.role!=='admin'));
+    }
+    function toLocalDateTimeValue(iso) {
+      if(!iso) return '';
+      const d=new Date(iso); if(Number.isNaN(d.getTime())) return '';
+      const pad=n=>String(n).padStart(2,'0');
+      return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+    }
+    function getActiveSeason(schedule) {
+      const now=Date.now();
+      const starts=Object.entries(schedule||{}).map(([season,value])=>({season,time:new Date(value).getTime()}))
+        .filter(x=>['spring','summer','autumn','winter'].includes(x.season)&&Number.isFinite(x.time)&&x.time<=now)
+        .sort((a,b)=>b.time-a.time);
+      return starts[0]?.season || null;
     }
     async function loadSharedSeasonTheme() {
-      if (!sb) return;
-      const {data,error}=await sb.from('site_settings').select('value').eq('key','season_theme').maybeSingle();
-      if(error) {
-        applySeasonTheme('autumn');
+      if(!sb) return;
+      const [{data:scheduleRow,error:scheduleError},{data:legacyRow}]=await Promise.all([
+        sb.from('site_settings').select('value').eq('key','season_schedule').maybeSingle(),
+        sb.from('site_settings').select('value').eq('key','season_theme').maybeSingle()
+      ]);
+      if(scheduleError) {
+        applySeasonTheme(legacyRow?.value==='winter'?'winter':'autumn');
         const status=$('seasonThemeStatus');
-        if(status && currentProfile?.role==='admin') status.textContent='Не удалось загрузить общую настройку. Выполни SQL для сезонного оформления и обнови страницу.';
+        if(status && currentProfile?.role==='admin') status.textContent='Не удалось загрузить расписание сезонов: '+scheduleError.message;
         return;
       }
-      applySeasonTheme(data?.value === 'winter' ? 'winter' : 'autumn');
+      let schedule={};
+      try { schedule=JSON.parse(scheduleRow?.value||'{}'); } catch(_) {}
+      const active=getActiveSeason(schedule);
+      applySeasonTheme(active || (legacyRow?.value==='winter'?'winter':'autumn'));
+      ['spring','summer','autumn','winter'].forEach(season=>{
+        const input=$('season'+season[0].toUpperCase()+season.slice(1)+'Start');
+        if(input) input.value=toLocalDateTimeValue(schedule[season]);
+      });
+      const status=$('seasonThemeStatus');
+      if(status && currentProfile?.role==='admin' && !active && Object.keys(schedule).length) status.textContent='В расписании пока нет наступившего сезона. Временно используется прежнее оформление.';
     }
-    $('toggleSeasonTheme')?.addEventListener('click', async () => {
-      if(!sb || !currentUser || currentProfile?.role!=='admin') return;
-      const next=document.body.classList.contains('winter-theme') ? 'autumn' : 'winter';
-      const button=$('toggleSeasonTheme'); if(button) button.disabled=true;
-      const {error}=await sb.from('site_settings').upsert({key:'season_theme',value:next,updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'key'});
+    $('saveSeasonSchedule')?.addEventListener('click',async()=>{
+      if(!sb||!currentUser||currentProfile?.role!=='admin') return;
+      const schedule={};
+      for(const season of ['spring','summer','autumn','winter']) {
+        const value=$('season'+season[0].toUpperCase()+season.slice(1)+'Start')?.value||'';
+        if(value) schedule[season]=new Date(value).toISOString();
+      }
+      const times=Object.values(schedule).map(value=>new Date(value).getTime());
+      if(times.some(time=>!Number.isFinite(time))||new Set(times).size!==times.length) {
+        const status=$('seasonThemeStatus'); if(status) status.textContent='Проверь даты: у разных сезонов не должно быть одинакового времени начала.'; return;
+      }
+      const button=$('saveSeasonSchedule'); if(button) button.disabled=true;
+      const {error}=await sb.from('site_settings').upsert({key:'season_schedule',value:JSON.stringify(schedule),updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'key'});
       if(button) button.disabled=false;
-      if(error) { const status=$('seasonThemeStatus'); if(status) status.textContent='Не удалось сохранить общий дизайн: '+error.message; return; }
-      applySeasonTheme(next);
+      if(error) { const status=$('seasonThemeStatus'); if(status) status.textContent='Не удалось сохранить расписание: '+error.message; return; }
+      applySeasonTheme(getActiveSeason(schedule)||'autumn');
+      const status=$('seasonThemeStatus'); if(status) status.textContent='Расписание сохранено. Оформление будет переключаться автоматически в заданное время.';
     });
+    // Загружаем общую тему и до авторизации, чтобы посетители не видели осень по умолчанию.
     applySeasonTheme('autumn');
+    if(sb) loadSharedSeasonTheme();
     $('createPollForm')?.addEventListener('submit',createPoll);
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('loginButton').addEventListener('click',signIn);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);

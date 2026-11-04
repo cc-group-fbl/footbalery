@@ -12,6 +12,8 @@
     --card-bg: rgba(18, 22, 31, 0.92);
     --border-color: rgba(255, 255, 255, 0.12);
     --gold: #f5c518;
+    --accent-text: #f5c518;
+    --accent: #f5c518;
     --cyan: #00c3ff;
   }
 
@@ -104,7 +106,21 @@
   .notice-pill { display:inline-block; border-radius:99px; background:#ff5b00; color:#fff; padding:3px 8px; font-size:10px; font-weight:800; margin-left:6px; }
 
   /* Seasonal theme: preserve the existing layout and switch only the color palette. */
-  body.winter-theme { --gold:#38e9ff; --cyan:#00e9f2; --bg-dark:#031b56; --card-bg:rgba(4,35,92,.92); --border-color:rgba(88,225,255,.24); }
+  body.winter-theme { --gold:#38e9ff; --accent-text:#65efff; --accent:#65efff; --cyan:#00e9f2; --bg-dark:#031b56; --card-bg:rgba(4,35,92,.92); --border-color:rgba(88,225,255,.24); }
+  /* Replace warm accent text throughout the interface when winter mode is active. */
+  body.winter-theme #welcomeText,
+  body.winter-theme #statGoals,
+  body.winter-theme #statMVP,
+  body.winter-theme #statSHB,
+  body.winter-theme #statJK,
+  body.winter-theme #errorState,
+  body.winter-theme .message,
+  body.winter-theme .dashboard-arrow,
+  body.winter-theme .admin-section>summary::marker { color:#65efff !important; }
+  body.winter-theme .player-id-tag { color:#65efff; border-color:#65efff; }
+  body.winter-theme .award-badge { color:#eafcff; border-color:#65efff; }
+  body.winter-theme .awards-box { background:rgba(0,220,255,.06); border-color:rgba(101,239,255,.55); }
+  body.winter-theme .spinner { border-top-color:#65efff; }
   body.winter-theme .stripe:nth-child(odd) .stripe-inner { background:linear-gradient(180deg,#082bff 0%,#08e6e7 52%,#087bff 100%); }
   body.winter-theme .stripe:nth-child(even) .stripe-inner { background:linear-gradient(180deg,#003bff 0%,#00c9ef 48%,#064dff 100%); }
   body.winter-theme .action-btn { color:#031b56; background:linear-gradient(90deg,#20d9f5,#b5ffff); }
@@ -325,7 +341,7 @@
       console.error('Supabase init error:', connectionInitError);
     }
     function usernameEmail(username) { const value = username.trim().toLowerCase(); return value.includes('@') ? value : value.replace(/[^a-z0-9._-]/g, '-') + '@members.futbolery.local'; }
-    function setMessage(id, msg, bad=false) { $(id).textContent = msg || ''; $(id).style.color = bad ? '#ff7777' : '#ffd21f'; }
+    function setMessage(id, msg, bad=false) { $(id).textContent = msg || ''; $(id).style.color = bad ? '#ff7777' : 'var(--accent-text, #ffd21f)'; }
 
     function showSection(sectionId) {
       ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','captainPanel'].forEach(id => {

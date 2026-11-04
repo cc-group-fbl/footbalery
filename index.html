@@ -649,13 +649,16 @@
       }));
     }
     function readStatConfig(){
+      const remote=currentUser?.user_metadata?.futbolery_stat_config;
+      if(Array.isArray(remote)) return STAT_CATEGORIES.map(def=>({...def,...(remote.find(c=>c.key===def.key)||{}),column:(remote.find(c=>c.key===def.key)||{}).column||''}));
       try { const parsed=JSON.parse(localStorage.getItem('futboleryStatConfig')||'null'); if(Array.isArray(parsed)) return STAT_CATEGORIES.map(def=>({...def,...(parsed.find(c=>c.key===def.key)||{}),column:(parsed.find(c=>c.key===def.key)||{}).column||''})); } catch(e){}
       return STAT_CATEGORIES.map(c=>({...c, column:''}));
     }
     function renderStatSettings(){
       const root=$('statsCategorySettings'); if(!root)return;
       root.replaceChildren();
-      const savedName=localStorage.getItem('futboleryStatNameEnabled');if($('statNameEnabled'))$('statNameEnabled').checked=savedName!=='false';
+      const savedName=currentUser?.user_metadata?.futbolery_stat_name_enabled;
+      if($('statNameEnabled'))$('statNameEnabled').checked=savedName===undefined?localStorage.getItem('futboleryStatNameEnabled')!=='false':savedName!==false;
       STAT_CATEGORIES.forEach(def=>{
         const saved=readStatConfig().find(c=>c.key===def.key)||def;
         const row=document.createElement('div');row.className='stats-setting-row';
@@ -678,16 +681,27 @@
         buildStatCategories();renderStatSettings();
       }catch(e){const root=$('statsCategorySettings');if(root)root.textContent='Не удалось получить заголовки. Проверь доступ к Google Таблице.';}
     }
-    function saveStatSettings(){
+    async function saveStatSettings(){
+      if(!sb||!currentUser){setMessage('statsSettingsMessage','Войдите в аккаунт, чтобы сохранить настройки.',true);return;}
       const config=STAT_CATEGORIES.map(def=>{
         const check=document.querySelector(`[data-stat-enabled="${def.key}"]`);
         const select=document.querySelector(`[data-stat-column="${def.key}"]`);
         return {...def,enabled:!!check?.checked,column:select?.value||''};
       });
-      localStorage.setItem('futboleryStatConfig',JSON.stringify(config));
-      localStorage.setItem('futboleryStatNameEnabled',$('statNameEnabled')?.checked===false?'false':'true');
-      setMessage('statsSettingsMessage','Настройки категорий сохранены на этом устройстве.');
-      if(currentProfile?.player_id) loadPlayerCard(currentProfile.player_id);
+      const nameEnabled=$('statNameEnabled')?.checked!==false;
+      const button=$('saveStatsCategorySettings');if(button)button.disabled=true;
+      try{
+        const metadata={...(currentUser.user_metadata||{}),futbolery_stat_config:config,futbolery_stat_name_enabled:nameEnabled};
+        const {data,error}=await sb.auth.updateUser({data:metadata});
+        if(error)throw error;
+        if(data?.user)currentUser=data.user;
+        localStorage.setItem('futboleryStatConfig',JSON.stringify(config));
+        localStorage.setItem('futboleryStatNameEnabled',nameEnabled?'true':'false');
+        setMessage('statsSettingsMessage','Настройки сохранены в аккаунте. Они будут доступны на других устройствах при входе в этот аккаунт.');
+        if(currentProfile?.player_id)await loadPlayerCard(currentProfile.player_id);
+      }catch(error){
+        setMessage('statsSettingsMessage','Не удалось сохранить настройки в аккаунте: '+(error.message||'ошибка Supabase'),true);
+      }finally{if(button)button.disabled=false;}
     }
     function applyStatSettings(row, headers){
       const grid=$('statGoals')?.parentElement?.parentElement;
@@ -737,7 +751,8 @@
         $('cardContent').style.display='block';
         $('playerIdTag').textContent='ID: '+(row[idCol]||'');
         $('playerName').textContent=playerName||'Имя не указано';
-        $('playerName').style.display=localStorage.getItem('futboleryStatNameEnabled')==='false'?'none':'';
+        const nameEnabled=currentUser?.user_metadata?.futbolery_stat_name_enabled;
+        $('playerName').style.display=(nameEnabled===undefined?localStorage.getItem('futboleryStatNameEnabled')==='false':nameEnabled===false)?'none':'';
         $('playerCity').textContent=city||'';
         $('statGoals').textContent=goals||'0';$('statMVP').textContent=mvp||'0';
         $('statSHB').textContent=shb||'0';$('statJK').textContent=yellow||'0';

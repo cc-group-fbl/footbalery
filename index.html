@@ -214,7 +214,7 @@
       <button type="button" class="small-btn section-back hidden" id="matchesBackButton">← На главный экран</button>
       <section id="matchesPanel" class="vote-box hidden"><h2>ЗАЯВКА НА МАТЧ</h2><div class="muted">Выбери матч и команду. Администратор может изменить команду в заявке.</div>
         <form id="matchApplicationForm" style="margin-top:12px"><label class="muted" for="matchSelect">Матч</label><select id="matchSelect" class="field" required><option value="">Загрузка матчей…</option></select>
-        <label class="muted" for="teamSelect">Команда</label><select id="teamSelect" class="field" required><option value="ДЕРЕВЕНСКИЕ">ФК ДЕРЕВЕНСКИЕ</option><option value="ГОРОДСКИЕ">ФК ГОРОДСКИЕ</option></select><label class="muted" for="applicationPlayerNumber">Игровой номер</label><input id="applicationPlayerNumber" class="field" type="number" min="0" max="99" step="1" placeholder="Например, 10" required><label class="candidate" style="margin:12px 0"><input id="readyToHelp" type="checkbox"><span style="font-size:13px">Готов помочь с организацией и подготовкой матча</span></label><button class="action-btn" type="submit">ПОДАТЬ ЗАЯВКУ</button></form><div id="applicationMessage" class="message"></div><h3>Мои заявки</h3><div id="myApplications" class="muted"></div>
+        <div id="teamSelectWrap"><label class="muted" for="teamSelect">Команда</label><select id="teamSelect" class="field" required><option value="ДЕРЕВЕНСКИЕ">ФК ДЕРЕВЕНСКИЕ</option><option value="ГОРОДСКИЕ">ФК ГОРОДСКИЕ</option></select></div><label class="muted" for="applicationPlayerNumber">Игровой номер</label><input id="applicationPlayerNumber" class="field" type="number" min="0" max="99" step="1" placeholder="Например, 10" required><label class="candidate" style="margin:12px 0"><input id="readyToHelp" type="checkbox"><span style="font-size:13px">Готов помочь с организацией и подготовкой матча</span></label><button class="action-btn" type="submit">ПОДАТЬ ЗАЯВКУ</button></form><div id="applicationMessage" class="message"></div><h3>Мои заявки</h3><div id="myApplications" class="muted"></div>
       </section>
       <button type="button" class="small-btn section-back hidden" id="scheduleBackButton">← На главный экран</button>
       <section id="schedulePanel" class="vote-box hidden">
@@ -540,7 +540,7 @@
       const note=document.createElement('div');note.className='muted';note.style.marginTop='8px';
       note.textContent='Всего пользователей: '+data.length;root.appendChild(note);
     }
-    async function loadMatchOptions(){const sel=$('matchSelect');if(!sel||!sb)return;const {data,error}=await sb.from('matches').select('id,title,match_date,match_time,location,registration_deadline').eq('is_open',true).order('match_date');sel.replaceChildren();if(error||!data?.length){const o=document.createElement('option');o.value='';o.textContent='Пока нет открытых матчей (администратор должен добавить их в таблицу matches)';sel.appendChild(o);return;}data.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=[m.title,m.match_date,m.match_time,m.location].filter(Boolean).join(' · ');sel.appendChild(o);});}
+    async function loadMatchOptions(){const sel=$('matchSelect');if(!sel||!sb)return;const {data,error}=await sb.from('matches').select('id,title,match_date,match_time,location,registration_deadline,tournament').eq('is_open',true).order('match_date');sel.replaceChildren();if(error||!data?.length){const o=document.createElement('option');o.value='';o.textContent='Пока нет открытых матчей (администратор должен добавить их в таблицу matches)';sel.appendChild(o);return;}data.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.dataset.tournament=m.tournament||'';o.textContent=[m.title,m.match_date,m.match_time,m.location].filter(Boolean).join(' · ');sel.appendChild(o);});updateMatchTeamVisibility();}
     async function loadAdminMatches(){
       const root=$('adminMatchesList');
       if(!root||!sb||currentProfile?.role!=='admin')return;
@@ -643,6 +643,7 @@
         const id=get(r,'id'),rawType=get(r,'type').toLowerCase(),type=['match','матч'].includes(rawType)?'match':(['event','мероприятие'].includes(rawType)?'event':'');
         const title=get(r,'title'),date=dateValue(get(r,'date')),time=get(r,'time')||null;
         if(!id||!title||!type)throw new Error('Строка '+(i+2)+': проверь id, type и title.');
+        if(type==='match'&&(!time||!get(r,'location')))throw new Error('Строка '+(i+2)+': для матча обязательно укажи time и location.');
         if(seen.has(id))throw new Error('Повторяется id «'+id+'» в CSV. Каждый id должен быть уникальным.');
         seen.add(id);
         if(time&&!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(time))throw new Error('Строка '+(i+2)+': неверное время «'+time+'».');
@@ -795,9 +796,10 @@
       if(!data?.length){root.textContent='Заявок пока нет.';return;}
       data.forEach(a=>{const d=document.createElement('div');d.style.cssText='padding:9px 0;border-top:1px solid #ffffff22';d.textContent=(a.matches?.title||'Матч')+' · ФК '+a.team+' · '+(a.matches?.match_date||'дата не указана')+' · помощь: '+(a.ready_to_help?'готов':'не указана');root.appendChild(d);});
     }
+    function updateMatchTeamVisibility(){const isDXG=$('matchSelect')?.selectedOptions[0]?.dataset.tournament==='DXG';const wrap=$('teamSelectWrap');if(wrap)wrap.classList.toggle('hidden',!isDXG);if($('teamSelect'))$('teamSelect').required=!!isDXG;}
     async function submitMatchApplication(e){
       e.preventDefault();if(!sb||!currentUser)return;
-      const matchId=$('matchSelect').value,team=$('teamSelect').value;
+      const matchId=$('matchSelect').value,isDXG=$('matchSelect').selectedOptions[0]?.dataset.tournament==='DXG',team=isDXG?$('teamSelect').value:null;
       if(!matchId)return setMessage('applicationMessage','Нет доступного матча для заявки.',true);
       const {data:existing,error:checkError}=await sb.from('match_applications').select('id').eq('match_id',matchId).eq('user_id',currentUser.id).limit(1);
       if(checkError)return setMessage('applicationMessage','Не удалось проверить предыдущую заявку: '+checkError.message,true);
@@ -1124,6 +1126,7 @@
     }
     async function logout(){await sb.auth.signOut();currentUser=null;currentProfile=null;$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('passwordInput').value='';setMessage('loginMessage','Вы вышли из аккаунта.');}
     $('matchApplicationForm').addEventListener('submit',submitMatchApplication);
+    $('matchSelect')?.addEventListener('change',updateMatchTeamVisibility);
     $('createMatchForm')?.addEventListener('submit',createMatch);
     $('refreshAdminMatches')?.addEventListener('click',loadAdminMatches);
     $('refreshAdminMatches')?.addEventListener('click',loadAdminMatches);

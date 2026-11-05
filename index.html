@@ -765,7 +765,7 @@
       const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='schedule-template.csv';a.click();URL.revokeObjectURL(url);
     }
 
-    let playerDirectoryCache = null;    let playerDirectoryCache = null;
+    let playerDirectoryCache = null;
     async function loadPlayerDirectory(){
       if(playerDirectoryCache) return playerDirectoryCache;
       const response=await fetch(GOOGLE_SHEET_URL);

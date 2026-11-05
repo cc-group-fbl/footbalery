@@ -143,6 +143,9 @@
   body.winter-theme .dashboard-icon { background:rgba(0,220,255,.13); border-color:rgba(0,220,255,.36); }
   body.winter-theme .dashboard-arrow, body.winter-theme .message { color:#65efff; }
   body.winter-theme .notice-pill { background:#00bfe8; color:#031b56; }
+  .schedule-item { padding:16px 0; }
+  .schedule-score { font-family:'JetBrains Mono',monospace; font-size:30px; font-weight:900; text-align:center; letter-spacing:3px; margin:12px 0; color:var(--accent-text); }
+  .schedule-application-form { padding:10px; border:1px solid rgba(255,255,255,.12); border-radius:12px; background:rgba(0,0,0,.16); }
   .theme-control { padding:14px; margin:14px 0 18px; border:1px solid rgba(0,195,255,.35); border-radius:14px; background:linear-gradient(135deg,rgba(0,195,255,.10),rgba(13,17,24,.55)); }
   .theme-control-title { font-size:13px; font-weight:900; margin-bottom:6px; }
 
@@ -183,6 +186,7 @@
         <div class="dashboard-grid">
           <button type="button" class="dashboard-card" id="openStatsButton"><span class="dashboard-icon">📊</span><span><span class="dashboard-title">СТАТИСТИКА</span><span class="dashboard-description">Твои показатели, достижения и трансферная стоимость</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openNewsButton"><span class="dashboard-icon">📰</span><span><span class="dashboard-title">НОВОСТИ <span id="newsUnreadBadge" class="notice-pill hidden">НОВОЕ</span></span><span class="dashboard-description">Новости сообщества и информационные сообщения</span></span><span class="dashboard-arrow">›</span></button>
+          <button type="button" class="dashboard-card" id="openScheduleButton"><span class="dashboard-icon">🗓️</span><span><span class="dashboard-title">РАСПИСАНИЕ</span><span class="dashboard-description">Предстоящие матчи и официальные мероприятия</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openMatchesButton"><span class="dashboard-icon">⚽</span><span><span class="dashboard-title">ЗАЯВКА НА МАТЧ</span><span class="dashboard-description">Подать заявку и посмотреть составы</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card hidden" id="openCaptainButton"><span class="dashboard-icon">🧢</span><span><span class="dashboard-title">КАПИТАН</span><span class="dashboard-description">Состав заявленных в твою команду</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openVoteButton"><span class="dashboard-icon">🗳️</span><span><span class="dashboard-title">ГОЛОСОВАНИЕ</span><span class="dashboard-description">Участвуй в активных опросах сообщества</span></span><span class="dashboard-arrow">›</span></button>
@@ -211,6 +215,12 @@
       <section id="matchesPanel" class="vote-box hidden"><h2>ЗАЯВКА НА МАТЧ</h2><div class="muted">Выбери матч и команду. Администратор может изменить команду в заявке.</div>
         <form id="matchApplicationForm" style="margin-top:12px"><label class="muted" for="matchSelect">Матч</label><select id="matchSelect" class="field" required><option value="">Загрузка матчей…</option></select>
         <label class="muted" for="teamSelect">Команда</label><select id="teamSelect" class="field" required><option value="ДЕРЕВЕНСКИЕ">ФК ДЕРЕВЕНСКИЕ</option><option value="ГОРОДСКИЕ">ФК ГОРОДСКИЕ</option></select><label class="muted" for="applicationPlayerNumber">Игровой номер</label><input id="applicationPlayerNumber" class="field" type="number" min="0" max="99" step="1" placeholder="Например, 10" required><label class="candidate" style="margin:12px 0"><input id="readyToHelp" type="checkbox"><span style="font-size:13px">Готов помочь с организацией и подготовкой матча</span></label><button class="action-btn" type="submit">ПОДАТЬ ЗАЯВКУ</button></form><div id="applicationMessage" class="message"></div><h3>Мои заявки</h3><div id="myApplications" class="muted"></div>
+      </section>
+      <button type="button" class="small-btn section-back hidden" id="scheduleBackButton">← На главный экран</button>
+      <section id="schedulePanel" class="vote-box hidden">
+        <h2>РАСПИСАНИЕ</h2>
+        <div class="muted">Предстоящие официальные матчи и мероприятия сообщества</div>
+        <div id="scheduleList" style="margin-top:14px"><div class="muted">Загрузка расписания…</div></div>
       </section>
       <button type="button" class="small-btn section-back hidden" id="captainBackButton">← На главный экран</button>
       <section id="captainPanel" class="vote-box hidden"><h2>КАПИТАН</h2><div class="muted" id="captainTeamLabel"></div><div id="captainApplications" class="muted" style="margin-top:12px"></div></section>
@@ -258,6 +268,19 @@
             <button id="createMatchButton" class="action-btn" type="submit">СОЗДАТЬ МАТЧ</button>
           </form>
           <div id="createMatchMessage" class="message"></div>
+        </details>
+        <details class="admin-section" open>
+          <summary>🗓️ Импорт официального расписания из CSV</summary>
+          <div class="muted" style="text-align:left">Загрузи один CSV со всеми матчами и мероприятиями. Повторная загрузка обновляет записи по столбцу id и не удаляет мероприятия, которых нет в файле. Для матча используй type=match, для другого мероприятия — type=event. Для Д×Г укажи tournament=DXG.</div>
+          <input id="scheduleCsvFile" class="field" type="file" accept=".csv,text/csv">
+          <button type="button" id="importScheduleCsvButton" class="action-btn">ЗАГРУЗИТЬ CSV</button>
+          <button type="button" id="downloadScheduleTemplateButton" class="small-btn" style="width:100%;margin-top:8px">Скачать пример CSV</button>
+          <div id="scheduleImportMessage" class="message" aria-live="polite"></div>
+        </details>
+        <details class="admin-section">
+          <summary>⚽ Результаты матчей расписания</summary>
+          <div class="muted">Введи голы обеих сторон и сохрани. Пока результат не внесён, в расписании отображается пустой счёт.</div>
+          <div id="adminScheduleScores" style="margin-top:10px">Загрузка…</div>
         </details>
         <details class="admin-section">
           <summary>📋 Заявки игроков и перевод между командами</summary>
@@ -363,10 +386,10 @@
     function setMessage(id, msg, bad=false) { $(id).textContent = msg || ''; $(id).style.color = bad ? '#ff7777' : 'var(--accent-text, #ffd21f)'; }
 
     function showSection(sectionId) {
-      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','captainPanel'].forEach(id => {
+      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel'].forEach(id => {
         const panel=$(id); if(panel) panel.classList.toggle('hidden', id !== sectionId);
       });
-      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',captainPanel:'captainBackButton'};
+      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton'};
       Object.entries(backButtons).forEach(([panelId,buttonId])=>{const button=$(buttonId);if(button)button.classList.toggle('hidden',sectionId!==panelId);});
       window.scrollTo({top:0,behavior:'smooth'});
     }
@@ -466,7 +489,7 @@
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       showSection('homeScreen');
-      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); await loadAdminMatchApplications(); }
+      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); await loadAdminMatchApplications(); await loadAdminScheduleScores(); }
     }
     function normalizeHeader(v) {
       return String(v || '').replace(/^\uFEFF/, '').trim().toLowerCase()
@@ -577,7 +600,172 @@
         await loadAdminMatches();await loadMatchOptions();
       }finally{button.disabled=false;}
     }
-    let playerDirectoryCache = null;
+
+    function parseScheduleCSV(source){
+      const firstLine=(source.split(/\r?\n/,1)[0]||'');
+      const counts={',':(firstLine.match(/,/g)||[]).length,';':(firstLine.match(/;/g)||[]).length,'\t':(firstLine.match(/\t/g)||[]).length};
+      const delimiter=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+      const rows=[];let row=[],cell='',quoted=false;
+      for(let i=0;i<source.length;i++){
+        const c=source[i];
+        if(c==='"'&&quoted&&source[i+1]==='"'){cell+='"';i++;}
+        else if(c==='"')quoted=!quoted;
+        else if(c===delimiter&&!quoted){row.push(cell);cell='';}
+        else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&source[i+1]==='\n')i++;row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);row=[];cell='';}
+        else cell+=c;
+      }
+      if(cell.length||row.length){row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);}
+      if(rows.length<2)throw new Error('В CSV нет строк с мероприятиями.');
+      const headers=rows[0].map(normalizeHeader);
+      const index=(...names)=>headers.findIndex(h=>names.map(normalizeHeader).includes(h));
+      const cols={
+        id:index('id','event id','schedule id','ид','идентификатор'),
+        type:index('type','тип'),
+        title:index('title','название','наименование'),
+        date:index('date','дата'),
+        time:index('time','время'),
+        location:index('location','место','место проведения'),
+        description:index('description','описание'),
+        tournament:index('tournament','турнир'),
+        score_home:index('score home','score_home','счет хозяев','счет 1'),
+        score_away:index('score away','score_away','счет гостей','счет 2')
+      };
+      for(const key of ['id','type','title','date'])if(cols[key]<0)throw new Error('В CSV отсутствует обязательный столбец: '+key);
+      const get=(r,k)=>cols[k]<0?'':String(r[cols[k]]??'').trim();
+      const dateValue=value=>{
+        if(/^\d{4}-\d{2}-\d{2}$/.test(value))return value;
+        const m=value.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+        if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+        throw new Error('Неверная дата «'+value+'». Используй ГГГГ-ММ-ДД или ДД.ММ.ГГГГ.');
+      };
+      const seen=new Set();
+      return rows.slice(1).map((r,i)=>{
+        const id=get(r,'id'),rawType=get(r,'type').toLowerCase(),type=['match','матч'].includes(rawType)?'match':(['event','мероприятие'].includes(rawType)?'event':'');
+        const title=get(r,'title'),date=dateValue(get(r,'date')),time=get(r,'time')||null;
+        if(!id||!title||!type)throw new Error('Строка '+(i+2)+': проверь id, type и title.');
+        if(seen.has(id))throw new Error('Повторяется id «'+id+'» в CSV. Каждый id должен быть уникальным.');
+        seen.add(id);
+        if(time&&!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(time))throw new Error('Строка '+(i+2)+': неверное время «'+time+'».');
+        const rawTournament=get(r,'tournament');
+        const tournament=/^(dxg|д×г|дxг|деревенские\s*[×x]\s*городские)$/i.test(rawTournament)?'DXG':(rawTournament||null);
+        const sh=get(r,'score_home'),sa=get(r,'score_away');
+        if((sh&&!/^\d+$/.test(sh))||(sa&&!/^\d+$/.test(sa)))throw new Error('Строка '+(i+2)+': счёт должен быть целым неотрицательным числом.');
+        if((sh&&!sa)||(!sh&&sa))throw new Error('Строка '+(i+2)+': заполни обе части счёта или оставь обе пустыми.');
+        return {id,type,title,event_date:date,event_time:time,location:get(r,'location')||null,description:get(r,'description')||null,tournament,score_home:sh===''?null:Number(sh),score_away:sa===''?null:Number(sa),hasScore:sh!==''&&sa!==''};
+      });
+    }
+    function scheduleDateLabel(value){if(!value)return '';const d=new Date(value+'T00:00:00');return Number.isNaN(d.getTime())?value:d.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'});}
+    async function getScheduleRows(){
+      const {data:events,error}=await sb.from('schedule_events').select('id,type,title,event_date,event_time,location,description,tournament,match_id').order('event_date',{ascending:true}).order('event_time',{ascending:true});
+      if(error)throw error;
+      const matchIds=[...new Set((events||[]).map(x=>x.match_id).filter(Boolean))];
+      let matches=[];
+      if(matchIds.length){const result=await sb.from('matches').select('id,is_open,score_home,score_away,registration_deadline').in('id',matchIds);if(result.error)throw result.error;matches=result.data||[];}
+      const matchMap=Object.fromEntries(matches.map(m=>[m.id,m]));
+      return (events||[]).map(e=>({...e,match:matchMap[e.match_id]||null}));
+    }
+    async function loadSchedule(){
+      const root=$('scheduleList');if(!root||!sb||!currentUser)return;
+      root.textContent='Загружаем расписание…';
+      try{
+        const rows=await getScheduleRows();root.replaceChildren();
+        const upcoming=rows.filter(x=>x.event_date>=new Date().toISOString().slice(0,10));
+        if(!upcoming.length){root.textContent='Предстоящих мероприятий пока нет.';return;}
+        upcoming.forEach(item=>{
+          const card=document.createElement('article');card.className='news-item schedule-item';
+          const tag=document.createElement('div');tag.className='news-meta';tag.textContent=item.type==='match'?'⚽ МАТЧ':'📌 МЕРОПРИЯТИЕ';card.appendChild(tag);
+          const title=document.createElement('div');title.className='news-title';title.textContent=item.title;card.appendChild(title);
+          const meta=document.createElement('div');meta.className='news-meta';meta.textContent=[scheduleDateLabel(item.event_date),item.event_time?item.event_time.slice(0,5):'',item.location].filter(Boolean).join(' · ');card.appendChild(meta);
+          if(item.type==='match'){
+            const score=document.createElement('div');score.className='schedule-score';score.textContent=item.match&&item.match.score_home!==null&&item.match.score_away!==null?item.match.score_home+' : '+item.match.score_away:'— : —';card.appendChild(score);
+            if(item.tournament==='DXG'){const tournament=document.createElement('div');tournament.className='news-meta';tournament.textContent='Турнир ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ';card.appendChild(tournament);}
+            if(item.description){const desc=document.createElement('div');desc.className='news-body';desc.textContent=item.description;card.appendChild(desc);}
+            if(item.match?.is_open){
+              const apply=document.createElement('button');apply.type='button';apply.className='action-btn';apply.textContent='ПОДАТЬ ЗАЯВКУ';apply.addEventListener('click',()=>{
+                if(card.querySelector('.schedule-application-form'))return;
+                const form=document.createElement('form');form.className='schedule-application-form';form.style.marginTop='10px';
+                if(item.tournament==='DXG'){
+                  const teamLabel=document.createElement('label');teamLabel.className='muted';teamLabel.textContent='Команда';
+                  const team=document.createElement('select');team.className='field';team.required=true;[['ДЕРЕВЕНСКИЕ','ФК ДЕРЕВЕНСКИЕ'],['ГОРОДСКИЕ','ФК ГОРОДСКИЕ']].forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;team.appendChild(o);});teamLabel.appendChild(team);form.appendChild(teamLabel);form.dataset.teamRequired='1';form.dataset.teamSelect='1';
+                }
+                const numberLabel=document.createElement('label');numberLabel.className='muted';numberLabel.textContent='Игровой номер (обязательно)';
+                const number=document.createElement('input');number.className='field';number.type='number';number.min='0';number.max='99';number.step='1';number.placeholder='Например, 10';number.required=true;numberLabel.appendChild(number);form.appendChild(numberLabel);
+                const help=document.createElement('label');help.className='candidate';const cb=document.createElement('input');cb.type='checkbox';const helpText=document.createElement('span');helpText.style.fontSize='13px';helpText.textContent='Готов помочь с организацией матча';help.append(cb,helpText);form.appendChild(help);
+                const submit=document.createElement('button');submit.type='submit';submit.className='action-btn';submit.textContent='ОТПРАВИТЬ ЗАЯВКУ';form.appendChild(submit);
+                const message=document.createElement('div');message.className='message';form.appendChild(message);
+                form.addEventListener('submit',async e=>{e.preventDefault();submit.disabled=true;const n=Number(number.value);if(!Number.isInteger(n)||n<0||n>99){message.textContent='Укажите игровой номер от 0 до 99.';submit.disabled=false;return;}
+                  const {data:existing,error:checkError}=await sb.from('match_applications').select('id').eq('match_id',item.match_id).eq('user_id',currentUser.id).limit(1);
+                  if(checkError){message.textContent='Не удалось проверить заявку: '+checkError.message;submit.disabled=false;return;}
+                  if(existing?.length){message.textContent='Вы уже подали заявку на этот матч.';submit.disabled=false;return;}
+                  const payload={match_id:item.match_id,user_id:currentUser.id,team:item.tournament==='DXG'?form.querySelector('select').value:null,player_number:n,ready_to_help:cb.checked};
+                  const {error}=await sb.from('match_applications').insert(payload);
+                  if(error){message.textContent=error.code==='23505'?'Вы уже подали заявку на этот матч.':'Не удалось отправить заявку: '+error.message;submit.disabled=false;return;}
+                  message.textContent='Заявка успешно отправлена.';submit.textContent='ЗАЯВКА ОТПРАВЛЕНА';await loadMyApplications();
+                });
+                card.appendChild(form);apply.remove();
+              });card.appendChild(apply);
+            }else if(item.match?.is_open===false){const closed=document.createElement('div');closed.className='muted';closed.textContent='Регистрация закрыта';card.appendChild(closed);}
+          }else if(item.description){const desc=document.createElement('div');desc.className='news-body';desc.textContent=item.description;card.appendChild(desc);}
+          root.appendChild(card);
+        });
+      }catch(error){root.textContent='Не удалось загрузить расписание. Возможно, ещё не выполнена SQL-миграция: '+error.message;}
+    }
+    async function loadAdminScheduleScores(){
+      const root=$('adminScheduleScores');if(!root||currentProfile?.role!=='admin'||!sb)return;
+      root.textContent='Загрузка…';
+      try{
+        const rows=await getScheduleRows();root.replaceChildren();
+        const matches=rows.filter(x=>x.type==='match');
+        if(!matches.length){root.textContent='В расписании пока нет матчей.';return;}
+        matches.forEach(item=>{
+          const row=document.createElement('div');row.style.cssText='padding:10px 0;border-top:1px solid #ffffff22';
+          const title=document.createElement('strong');title.textContent=item.title;row.appendChild(title);
+          const meta=document.createElement('div');meta.className='muted';meta.textContent=scheduleDateLabel(item.event_date)+' · '+item.event_time?.slice(0,5);row.appendChild(meta);
+          const controls=document.createElement('div');controls.style.cssText='display:flex;gap:8px;align-items:center';
+          const home=document.createElement('input');home.className='field';home.type='number';home.min='0';home.max='99';home.placeholder='—';home.value=item.match?.score_home??'';home.setAttribute('aria-label','Голы первой стороны');home.style.textAlign='center';
+          const sep=document.createElement('strong');sep.textContent=':';
+          const away=document.createElement('input');away.className='field';away.type='number';away.min='0';away.max='99';away.placeholder='—';away.value=item.match?.score_away??'';away.setAttribute('aria-label','Голы второй стороны');away.style.textAlign='center';
+          const save=document.createElement('button');save.type='button';save.className='small-btn';save.textContent='Сохранить';
+          save.addEventListener('click',async()=>{if((home.value===''||away.value==='')&&!(home.value===''&&away.value==='')){setMessage('scheduleImportMessage','Заполни обе части счёта или очисти обе.',true);return;}const payload={score_home:home.value===''?null:Number(home.value),score_away:away.value===''?null:Number(away.value)};save.disabled=true;const {error}=await sb.from('matches').update(payload).eq('id',item.match_id);if(error){setMessage('scheduleImportMessage','Не удалось сохранить счёт: '+error.message,true);save.disabled=false;return;}setMessage('scheduleImportMessage','Счёт сохранён.');await loadSchedule();save.disabled=false;});
+          controls.append(home,sep,away,save);row.appendChild(controls);root.appendChild(row);
+        });
+      }catch(error){root.textContent='Не удалось загрузить матчи: '+error.message;}
+    }
+    async function importScheduleCSV(){
+      if(currentProfile?.role!=='admin')return setMessage('scheduleImportMessage','Импорт доступен только администратору.',true);
+      const file=$('scheduleCsvFile')?.files?.[0];if(!file)return setMessage('scheduleImportMessage','Сначала выбери CSV-файл.',true);
+      const button=$('importScheduleCsvButton');button.disabled=true;setMessage('scheduleImportMessage','Проверяем CSV…');
+      try{
+        const records=parseScheduleCSV(await file.text());
+        if(records.length>500)throw new Error('За один раз можно загрузить не более 500 строк.');
+        for(let i=0;i<records.length;i++){
+          const item=records[i];
+          if(item.type==='match'){
+            const {data:existing,error:findError}=await sb.from('matches').select('id,is_open').eq('schedule_id',item.id).maybeSingle();
+            if(findError)throw new Error('Не удалось найти матч '+item.id+': '+findError.message);
+            const payload={title:item.title,match_date:item.event_date,match_time:item.event_time,location:item.location||'',tournament:item.tournament,description:item.description};
+            if(item.hasScore){payload.score_home=item.score_home;payload.score_away=item.score_away;}
+            let matchId=existing?.id;
+            if(existing){const {error}=await sb.from('matches').update(payload).eq('id',existing.id);if(error)throw new Error('Ошибка обновления матча '+item.id+': '+error.message);}
+            else{const {data,error}=await sb.from('matches').insert({...payload,schedule_id:item.id,is_open:true,registration_deadline:null}).select('id').single();if(error)throw new Error('Ошибка создания матча '+item.id+': '+error.message);matchId=data.id;}
+            const eventRow={id:item.id,type:'match',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,tournament:item.tournament,match_id:matchId};
+            const {error:eventError}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(eventError)throw new Error('Не удалось сохранить запись расписания '+item.id+': '+eventError.message);
+          }else{
+            const eventRow={id:item.id,type:'event',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,tournament:item.tournament,match_id:null};
+            const {error}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(error)throw new Error('Не удалось сохранить мероприятие '+item.id+': '+error.message);
+          }
+        }
+        setMessage('scheduleImportMessage','Готово: обработано мероприятий — '+records.length+'. Записи, которых нет в CSV, сохранены.');
+        $('scheduleCsvFile').value='';await loadSchedule();await loadAdminScheduleScores();await loadAdminMatches();await loadMatchOptions();
+      }catch(error){setMessage('scheduleImportMessage','Импорт остановлен: '+error.message,true);}
+      finally{button.disabled=false;}
+    }
+    function downloadScheduleCSVTemplate(){
+      const csv='id,type,title,date,time,location,description,tournament,score_home,score_away\nM-001,match,ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ,2026-11-15,18:00,Спортивный зал,Официальный матч,DXG,,\nE-001,event,День сообщества,2026-11-20,12:00,Усть-Пинега,Описание мероприятия,,,,\n';
+      const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='schedule-template.csv';a.click();URL.revokeObjectURL(url);
+    }
+
+    let playerDirectoryCache = null;    let playerDirectoryCache = null;
     async function loadPlayerDirectory(){
       if(playerDirectoryCache) return playerDirectoryCache;
       const response=await fetch(GOOGLE_SHEET_URL);
@@ -938,6 +1126,11 @@
     $('matchApplicationForm').addEventListener('submit',submitMatchApplication);
     $('createMatchForm')?.addEventListener('submit',createMatch);
     $('refreshAdminMatches')?.addEventListener('click',loadAdminMatches);
+    $('refreshAdminMatches')?.addEventListener('click',loadAdminMatches);
+    $('openScheduleButton')?.addEventListener('click',async()=>{showSection('schedulePanel');await loadSchedule();});
+    $('scheduleBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
+    $('importScheduleCsvButton')?.addEventListener('click',importScheduleCSV);
+    $('downloadScheduleTemplateButton')?.addEventListener('click',downloadScheduleCSVTemplate);
     $('openMatchesButton').addEventListener('click',async()=>{showSection('matchesPanel');await loadMatchOptions();await loadMyApplications();});
     $('openCaptainButton').addEventListener('click',async()=>{showSection('captainPanel');await loadCaptainApplications();});
     $('matchesBackButton').addEventListener('click',()=>showSection('homeScreen'));$('captainBackButton').addEventListener('click',()=>showSection('homeScreen'));

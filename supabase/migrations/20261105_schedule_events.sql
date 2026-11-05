@@ -46,6 +46,9 @@ create table if not exists public.schedule_events (
 
 alter table public.schedule_events enable row level security;
 
+grant select on public.schedule_events to authenticated;
+grant insert, update, delete on public.schedule_events to authenticated;
+
 drop policy if exists "Authenticated users can read schedule events" on public.schedule_events;
 create policy "Authenticated users can read schedule events"
   on public.schedule_events for select

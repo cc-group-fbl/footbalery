@@ -38,7 +38,7 @@ create table if not exists public.schedule_events (
   location text,
   description text,
   tournament text,
-  match_id uuid references public.matches(id) on delete cascade,
+  match_id bigint references public.matches(id) on delete cascade,
   created_at timestamptz not null default now(),
   constraint schedule_events_match_link_check
     check ((type='match' and match_id is not null) or (type='event' and match_id is null))

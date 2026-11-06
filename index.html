@@ -850,6 +850,43 @@
       const paths=(files||[]).map(x=>x.file_path);
       if(paths.length){const {error:storageError}=await sb.storage.from(MATCH_ATTACHMENT_BUCKET).remove(paths);if(storageError)throw storageError;}
     }
+    let matchPhotoViewer=null;
+    function openMatchPhotoViewer(src,alt=''){
+      if(!matchPhotoViewer){
+        const overlay=document.createElement('div');
+        overlay.id='matchPhotoViewer';
+        overlay.style.cssText='position:fixed;inset:0;z-index:1000000;display:none;align-items:center;justify-content:center;padding:12px;background:rgba(0,0,0,.96);box-sizing:border-box;touch-action:manipulation';
+        const image=document.createElement('img');
+        image.alt='';
+        image.style.cssText='display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;border-radius:4px;box-shadow:0 8px 40px rgba(0,0,0,.5)';
+        const close=document.createElement('button');
+        close.type='button';
+        close.textContent='✕';
+        close.setAttribute('aria-label','Закрыть фотографию');
+        close.style.cssText='position:absolute;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:1;width:44px;height:44px;border:1px solid rgba(255,255,255,.35);border-radius:50%;background:rgba(25,25,25,.8);color:#fff;font-size:25px;line-height:1;cursor:pointer';
+        const closeViewer=()=>{
+          overlay.style.display='none';
+          image.removeAttribute('src');
+          document.body.style.overflow=overlay.dataset.previousOverflow||'';
+          document.removeEventListener('keydown',overlay._escapeHandler);
+        };
+        close.addEventListener('click',closeViewer);
+        overlay.addEventListener('click',event=>{if(event.target===overlay)closeViewer();});
+        image.addEventListener('click',event=>event.stopPropagation());
+        overlay._closeViewer=closeViewer;
+        overlay._escapeHandler=event=>{if(event.key==='Escape'&&overlay.style.display!=='none')closeViewer();};
+        overlay.append(image,close);
+        document.body.appendChild(overlay);
+        matchPhotoViewer=overlay;
+      }
+      const image=matchPhotoViewer.querySelector('img');
+      image.src=src;
+      image.alt=alt||'Фотография матча';
+      matchPhotoViewer.style.display='flex';
+      matchPhotoViewer.dataset.previousOverflow=document.body.style.overflow;
+      document.body.style.overflow='hidden';
+      document.addEventListener('keydown',matchPhotoViewer._escapeHandler);
+    }
     async function renderMatchAttachments(container,eventId,adminMode=false){
       const {data:files,error}=await sb.from('schedule_event_attachments').select('id,file_name,file_path,mime_type').eq('event_id',eventId).order('created_at');
       if(error){const note=document.createElement('div');note.className='muted';note.textContent='Фотографии матча пока недоступны.';container.appendChild(note);return;}
@@ -859,7 +896,7 @@
         const {data:signed,error:signedError}=await sb.storage.from(MATCH_ATTACHMENT_BUCKET).createSignedUrl(file.file_path,3600);
         if(signedError||!signed?.signedUrl)continue;
         const cell=document.createElement('div');cell.style.cssText='min-width:0;display:grid;gap:5px';
-        const img=document.createElement('img');img.src=signed.signedUrl;img.alt=file.file_name;img.loading='lazy';img.style.cssText='width:100%;max-height:260px;object-fit:cover;border-radius:10px;background:rgba(0,0,0,.15)';cell.appendChild(img);
+        const img=document.createElement('img');img.src=signed.signedUrl;img.alt=file.file_name;img.loading='lazy';img.style.cssText='width:100%;max-height:260px;object-fit:cover;border-radius:10px;background:rgba(0,0,0,.15);cursor:zoom-in';img.title='Нажмите, чтобы открыть на весь экран';img.addEventListener('click',()=>openMatchPhotoViewer(img.src,img.alt));cell.appendChild(img);
         if(adminMode){
           const caption=document.createElement('div');caption.className='muted';caption.style.textAlign='left';caption.textContent=file.file_name;cell.appendChild(caption);
           const remove=document.createElement('button');remove.type='button';remove.className='small-btn';remove.textContent='Удалить фото';

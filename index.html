@@ -675,7 +675,7 @@
         const sh=get(r,'score_home').replace(',','.'),sa=get(r,'score_away').replace(',','.');
         if((sh&&!/^\d+(?:[.,]0+)?$/.test(sh))||(sa&&!/^\d+(?:[.,]0+)?$/.test(sa)))throw new Error('Строка '+line+': счёт должен быть целым неотрицательным числом.');
         if((sh&&!sa)||(!sh&&sa))throw new Error('Строка '+line+': заполни обе части счёта или оставь обе пустыми.');
-        const tournament=/^(dxg|д×г|дxг|деревенские\s*[×x]\s*городские)$/i.test(rawTournament)?'DXG':(rawTournament||null);
+        const tournament=/^(?:(?:dxg|д×г|дxг)(?:\s|$)|деревенские\s*[×x]\s*городские)/i.test(rawTournament)?'DXG':(rawTournament||null);
         const identity=[type,date,time||'',rawTournament,title,location||'',home,away].join('|');
         const id=get(r,'id')||makeId(identity);
         if(seen.has(id))throw new Error('Строка '+line+': повторяется идентификатор «'+id+'».');

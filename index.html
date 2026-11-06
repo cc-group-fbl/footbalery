@@ -1730,5 +1730,46 @@
       }
     })();
   </script>
+  <script>
+    // Проверка удалённой версии: веб-обновления применяются без переустановки APK.
+    (() => {
+      const versionKey = 'footbalery_remote_app_version';
+      const checkForRemoteUpdate = async () => {
+        try {
+          const manifestUrl = new URL('version.json', document.baseURI);
+          manifestUrl.searchParams.set('check', String(Date.now()));
+          const response = await fetch(manifestUrl.href, {
+            cache: 'no-store',
+            credentials: 'same-origin'
+          });
+          if (!response.ok) return;
+          const manifest = await response.json();
+          const latestVersion = String(manifest.version || '').trim();
+          if (!latestVersion) return;
+
+          const installedVersion = localStorage.getItem(versionKey);
+          if (!installedVersion) {
+            localStorage.setItem(versionKey, latestVersion);
+            return;
+          }
+          if (installedVersion !== latestVersion) {
+            localStorage.setItem(versionKey, latestVersion);
+            const freshPage = new URL('./', window.location.href);
+            freshPage.searchParams.set('appv', latestVersion);
+            freshPage.searchParams.set('refresh', String(Date.now()));
+            window.location.replace(freshPage.href);
+          }
+        } catch (error) {
+          // При отсутствии интернета продолжаем работу с уже загруженной версией.
+          console.debug('Проверка обновления ФУТБОЛЁРЫ пропущена:', error);
+        }
+      };
+
+      checkForRemoteUpdate();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') checkForRemoteUpdate();
+      });
+    })();
+  </script>
 </body>
 </html>

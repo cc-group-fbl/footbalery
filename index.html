@@ -628,11 +628,11 @@
         location:index('location','место','место проведения'),
         description:index('description','описание','о мероприятии'),
         tournament:index('tournament','турнир'),
-        score_home:index('score home','score_home','счет хозяев','счёт хозяев','счет 1'),
-        score_away:index('score away','score_away','счет гостей','счёт гостей','счет 2'),
+        score_home:index('score home','score_home','счет хозяев','счёт хозяев','хозяева','score 1','счет 1'),
+        score_away:index('score away','score_away','счет гостей','счёт гостей','гости','score 2','счет 2'),
         status:index('status','статус','статус матча/мероприятия'),
-        home:index('хозяева','home','команда хозяев'),
-        away:index('гости','away','команда гостей')
+        home:index('home','команда хозяев','хозяева команда'),
+        away:index('away','команда гостей','гости команда')
       };
       const get=(r,k)=>cols[k]<0?'':String(r[cols[k]]??'').trim();
       const dateValue=value=>{

@@ -275,6 +275,7 @@
           <input id="scheduleCsvFile" class="field" type="file" accept=".csv,text/csv">
           <button type="button" id="importScheduleCsvButton" class="action-btn">ЗАГРУЗИТЬ CSV</button>
           <button type="button" id="downloadScheduleTemplateButton" class="small-btn" style="width:100%;margin-top:8px">Скачать пример CSV</button>
+          <button type="button" id="deleteAllScheduleButton" class="action-btn" style="width:100%;margin-top:10px;background:#a83232">УДАЛИТЬ ВСЁ РАСПИСАНИЕ</button>
           <div id="scheduleImportMessage" class="message" aria-live="polite"></div>
         </details>
         <details class="admin-section">
@@ -870,6 +871,26 @@
       }catch(error){setMessage('scheduleImportMessage','Импорт остановлен: '+error.message,true);}
       finally{button.disabled=false;}
     }
+    async function deleteAllSchedule(){
+      if(currentProfile?.role!=='admin')return setMessage('scheduleImportMessage','Удаление доступно только администратору.',true);
+      const button=$('deleteAllScheduleButton');
+      if(!confirm('Удалить ВСЁ расписание: все мероприятия, матчи расписания и связанные с ними заявки? Обычные матчи, созданные отдельно и не связанные с расписанием, останутся. Это действие нельзя отменить.'))return;
+      if(button)button.disabled=true;
+      setMessage('scheduleImportMessage','Удаляем расписание…');
+      try{
+        const {error:matchesError}=await sb.from('matches').delete().not('schedule_id','is',null);
+        if(matchesError)throw new Error('Не удалось удалить матчи расписания: '+matchesError.message);
+        const {error:eventsError}=await sb.from('schedule_events').delete().not('id','is',null);
+        if(eventsError)throw new Error('Не удалось удалить мероприятия: '+eventsError.message);
+        await loadSchedule();
+        await loadAdminScheduleScores();
+        await loadAdminMatches();
+        await loadMatchOptions();
+        setMessage('scheduleImportMessage','Всё расписание успешно удалено.');
+      }catch(error){
+        setMessage('scheduleImportMessage','Не удалось полностью удалить расписание: '+error.message,true);
+      }finally{if(button)button.disabled=false;}
+    }
     function downloadScheduleCSVTemplate(){
       const csv='id,type,title,date,time,location,description,tournament,score_home,score_away\nM-001,match,ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ,2026-11-15,18:00,Спортивный зал,Официальный матч,DXG,,\nE-001,event,День сообщества,2026-11-20,12:00,Усть-Пинега,Описание мероприятия,,,,\n';
       const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='schedule-template.csv';a.click();URL.revokeObjectURL(url);
@@ -1245,6 +1266,7 @@
     $('scheduleBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
     $('importScheduleCsvButton')?.addEventListener('click',importScheduleCSV);
     $('downloadScheduleTemplateButton')?.addEventListener('click',downloadScheduleCSVTemplate);
+    $('deleteAllScheduleButton')?.addEventListener('click',deleteAllSchedule);
     $('openMatchesButton').addEventListener('click',async()=>{showSection('matchesPanel');await loadMatchOptions();await loadMyApplications();});
     $('openCaptainButton').addEventListener('click',async()=>{showSection('captainPanel');await loadCaptainApplications();});
     $('matchesBackButton').addEventListener('click',()=>showSection('homeScreen'));$('captainBackButton').addEventListener('click',()=>showSection('homeScreen'));

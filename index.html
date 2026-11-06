@@ -602,8 +602,9 @@
     }
 
     function parseScheduleCSV(source){
-      const firstLine=(source.split(/\r?\n/,1)[0]||'');
-      const counts={',':(firstLine.match(/,/g)||[]).length,';':(firstLine.match(/;/g)||[]).length,'\t':(firstLine.match(/\t/g)||[]).length};
+      source=String(source||'').replace(/^\\uFEFF/,'');
+      const firstLine=(source.split(/\\r?\\n/,1)[0]||'');
+      const counts={',':(firstLine.match(/,/g)||[]).length,';':(firstLine.match(/;/g)||[]).length,'\\t':(firstLine.match(/\\t/g)||[]).length};
       const delimiter=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
       const rows=[];let row=[],cell='',quoted=false;
       for(let i=0;i<source.length;i++){
@@ -611,7 +612,7 @@
         if(c==='"'&&quoted&&source[i+1]==='"'){cell+='"';i++;}
         else if(c==='"')quoted=!quoted;
         else if(c===delimiter&&!quoted){row.push(cell);cell='';}
-        else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&source[i+1]==='\n')i++;row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);row=[];cell='';}
+        else if((c==='\\n'||c==='\\r')&&!quoted){if(c==='\\r'&&source[i+1]==='\\n')i++;row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);row=[];cell='';}
         else cell+=c;
       }
       if(cell.length||row.length){row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);}
@@ -620,40 +621,69 @@
       const index=(...names)=>headers.findIndex(h=>names.map(normalizeHeader).includes(h));
       const cols={
         id:index('id','event id','schedule id','ид','идентификатор'),
-        type:index('type','тип'),
-        title:index('title','название','наименование'),
+        type:index('type','тип','мероприятие'),
+        title:index('title','название','наименование','название мероприятия'),
         date:index('date','дата'),
         time:index('time','время'),
         location:index('location','место','место проведения'),
-        description:index('description','описание'),
+        description:index('description','описание','о мероприятии'),
         tournament:index('tournament','турнир'),
-        score_home:index('score home','score_home','счет хозяев','счет 1'),
-        score_away:index('score away','score_away','счет гостей','счет 2')
+        score_home:index('score home','score_home','счет хозяев','счёт хозяев','счет 1'),
+        score_away:index('score away','score_away','счет гостей','счёт гостей','счет 2'),
+        status:index('status','статус','статус матча/мероприятия'),
+        home:index('хозяева','home','команда хозяев'),
+        away:index('гости','away','команда гостей')
       };
-      for(const key of ['id','type','title','date'])if(cols[key]<0)throw new Error('В CSV отсутствует обязательный столбец: '+key);
       const get=(r,k)=>cols[k]<0?'':String(r[cols[k]]??'').trim();
       const dateValue=value=>{
-        if(/^\d{4}-\d{2}-\d{2}$/.test(value))return value;
-        const m=value.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+        if(/^\\d{4}-\\d{2}-\\d{2}$/.test(value))return value;
+        const m=value.match(/^(\\d{1,2})[./-](\\d{1,2})[./-](\\d{4})$/);
         if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
         throw new Error('Неверная дата «'+value+'». Используй ГГГГ-ММ-ДД или ДД.ММ.ГГГГ.');
       };
-      const seen=new Set();
-      return rows.slice(1).map((r,i)=>{
-        const id=get(r,'id'),rawType=get(r,'type').toLowerCase(),type=['match','матч'].includes(rawType)?'match':(['event','мероприятие'].includes(rawType)?'event':'');
-        const title=get(r,'title'),date=dateValue(get(r,'date')),time=get(r,'time')||null;
-        if(!id||!title||!type)throw new Error('Строка '+(i+2)+': проверь id, type и title.');
-        if(type==='match'&&(!time||!get(r,'location')))throw new Error('Строка '+(i+2)+': для матча обязательно укажи time и location.');
-        if(seen.has(id))throw new Error('Повторяется id «'+id+'» в CSV. Каждый id должен быть уникальным.');
+      const makeId=value=>{
+        let hash=2166136261;
+        for(let i=0;i<value.length;i++){hash^=value.charCodeAt(i);hash=Math.imul(hash,16777619);}
+        return 'M-'+(hash>>>0).toString(16).padStart(8,'0');
+      };
+      const seen=new Set(),result=[];
+      rows.slice(1).forEach((r,i)=>{
+        const line=i+2;
+        const rawType=get(r,'type'),rawTournament=get(r,'tournament');
+        const status=get(r,'status');
+        if(/отмен[её]н/i.test(status))return;
+        const home=get(r,'home'),away=get(r,'away');
+        let type='';
+        if(['match','матч','д×г','регулярный матч сезона','турнир 1 на 1'].includes(rawType.toLowerCase()))type='match';
+        else if(['event','мероприятие','мероприятие футболёров','мероприятие футболеров'].includes(rawType.toLowerCase()))type='event';
+        else if(/турнир\\s*1\\s*на\\s*1/i.test(rawTournament)||(/д×г|дxг/i.test(rawTournament))||home||away)type='match';
+        else if(rawType)throw new Error('Строка '+line+': неизвестный тип мероприятия «'+rawType+'».');
+        else return; // Пустые служебные строки Memento пропускаем.
+        const dateRaw=get(r,'date');
+        if(!dateRaw)return;
+        const date=dateValue(dateRaw),timeRaw=get(r,'time').replace(/\\s/g,'');
+        const time=timeRaw?timeRaw.slice(0,5):null;
+        let title=get(r,'title');
+        if(!title&&type==='match'){
+          if(/турнир\\s*1\\s*на\\s*1/i.test(rawType+' '+rawTournament))title=[home,away].filter(Boolean).join(' — ')||'Турнир 1 на 1';
+          else if(/д×г|дxг/i.test(rawType+' '+rawTournament))title='ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ';
+          else title=rawTournament||'Матч сезона';
+        }
+        if(!title&&type==='event')throw new Error('Строка '+line+': у мероприятия не указано название.');
+        if(time&&!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time))throw new Error('Строка '+line+': неверное время «'+timeRaw+'».');
+        const location=get(r,'location')||null;
+        const sh=get(r,'score_home').replace(',','.'),sa=get(r,'score_away').replace(',','.');
+        if((sh&&!/^\\d+$/.test(sh))||(sa&&!/^\\d+$/.test(sa)))throw new Error('Строка '+line+': счёт должен быть целым неотрицательным числом.');
+        if((sh&&!sa)||(!sh&&sa))throw new Error('Строка '+line+': заполни обе части счёта или оставь обе пустыми.');
+        const tournament=/^(dxg|д×г|дxг|деревенские\\s*[×x]\\s*городские)$/i.test(rawTournament)?'DXG':(rawTournament||null);
+        const identity=[type,date,time||'',rawTournament,title,location||'',home,away].join('|');
+        const id=get(r,'id')||makeId(identity);
+        if(seen.has(id))throw new Error('Строка '+line+': повторяется идентификатор «'+id+'».');
         seen.add(id);
-        if(time&&!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(time))throw new Error('Строка '+(i+2)+': неверное время «'+time+'».');
-        const rawTournament=get(r,'tournament');
-        const tournament=/^(dxg|д×г|дxг|деревенские\s*[×x]\s*городские)$/i.test(rawTournament)?'DXG':(rawTournament||null);
-        const sh=get(r,'score_home'),sa=get(r,'score_away');
-        if((sh&&!/^\d+$/.test(sh))||(sa&&!/^\d+$/.test(sa)))throw new Error('Строка '+(i+2)+': счёт должен быть целым неотрицательным числом.');
-        if((sh&&!sa)||(!sh&&sa))throw new Error('Строка '+(i+2)+': заполни обе части счёта или оставь обе пустыми.');
-        return {id,type,title,event_date:date,event_time:time,location:get(r,'location')||null,description:get(r,'description')||null,tournament,score_home:sh===''?null:Number(sh),score_away:sa===''?null:Number(sa),hasScore:sh!==''&&sa!==''};
+        result.push({id,type,title,event_date:date,event_time:time,location,description:get(r,'description')||null,tournament,score_home:sh===''?null:Number(sh),score_away:sa===''?null:Number(sa),hasScore:sh!==''&&sa!=='',status,scheduled:/запланирован/i.test(status),home,away});
       });
+      if(!result.length)throw new Error('Не найдено ни одной записи расписания. Проверь тип мероприятия и даты.');
+      return result;
     }
     function scheduleDateLabel(value){if(!value)return '';const d=new Date(value+'T00:00:00');return Number.isNaN(d.getTime())?value:d.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'});}
     async function getScheduleRows(){
@@ -674,7 +704,7 @@
         if(!upcoming.length){root.textContent='Предстоящих мероприятий пока нет.';return;}
         upcoming.forEach(item=>{
           const card=document.createElement('article');card.className='news-item schedule-item';
-          const tag=document.createElement('div');tag.className='news-meta';tag.textContent=item.type==='match'?'⚽ МАТЧ':'📌 МЕРОПРИЯТИЕ';card.appendChild(tag);
+          const tag=document.createElement('div');tag.className='news-meta';tag.textContent=item.type==='match'?(String(item.tournament||'').toLowerCase().includes('1 на 1')?'⚔️ ТУРНИР 1 НА 1':'⚽ МАТЧ'):'📌 МЕРОПРИЯТИЕ';card.appendChild(tag);
           const title=document.createElement('div');title.className='news-title';title.textContent=item.title;card.appendChild(title);
           const meta=document.createElement('div');meta.className='news-meta';meta.textContent=[scheduleDateLabel(item.event_date),item.event_time?item.event_time.slice(0,5):'',item.location].filter(Boolean).join(' · ');card.appendChild(meta);
           if(item.type==='match'){
@@ -744,11 +774,11 @@
           if(item.type==='match'){
             const {data:existing,error:findError}=await sb.from('matches').select('id,is_open').eq('schedule_id',item.id).maybeSingle();
             if(findError)throw new Error('Не удалось найти матч '+item.id+': '+findError.message);
-            const payload={title:item.title,match_date:item.event_date,match_time:item.event_time,location:item.location||'',tournament:item.tournament,description:item.description};
+            const payload={title:item.title,match_date:item.event_date,match_time:item.event_time,location:item.location||'',tournament:item.tournament,description:item.description,is_open:item.scheduled};
             if(item.hasScore){payload.score_home=item.score_home;payload.score_away=item.score_away;}
             let matchId=existing?.id;
             if(existing){const {error}=await sb.from('matches').update(payload).eq('id',existing.id);if(error)throw new Error('Ошибка обновления матча '+item.id+': '+error.message);}
-            else{const {data,error}=await sb.from('matches').insert({...payload,schedule_id:item.id,is_open:true,registration_deadline:null}).select('id').single();if(error)throw new Error('Ошибка создания матча '+item.id+': '+error.message);matchId=data.id;}
+            else{const {data,error}=await sb.from('matches').insert({...payload,schedule_id:item.id,registration_deadline:null}).select('id').single();if(error)throw new Error('Ошибка создания матча '+item.id+': '+error.message);matchId=data.id;}
             const eventRow={id:item.id,type:'match',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,tournament:item.tournament,match_id:matchId};
             const {error:eventError}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(eventError)throw new Error('Не удалось сохранить запись расписания '+item.id+': '+eventError.message);
           }else{

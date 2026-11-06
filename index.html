@@ -380,7 +380,7 @@
     // не оставляла кнопку входа без подключения к серверу.
     try {
       if (window.supabase && SUPABASE_URL.startsWith('https://') && !SUPABASE_KEY.startsWith('ВСТАВЬТЕ_')) {
-        sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
       }
     } catch (connectionInitError) {
       console.error('Supabase init error:', connectionInitError);
@@ -584,7 +584,7 @@
     async function showAccount() {
       const { data: profile, error } = await sb.from('profiles').select('user_id, username, player_id, role, captain_team').eq('user_id', currentUser.id).maybeSingle();
       if (error || !profile) { await sb.auth.signOut(); $('accountPanel').classList.add('hidden'); $('loginPanel').classList.remove('hidden'); return setMessage('loginMessage','Для аккаунта не назначена карточка игрока. Обратитесь к администратору.',true); }
-      currentProfile = profile; await loadSharedSeasonTheme(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
+      currentProfile = profile; renderStatSettings(); await loadSharedSeasonTheme(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       showSection('homeScreen');

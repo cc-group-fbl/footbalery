@@ -330,6 +330,8 @@
           <label class="muted" for="newsTitle">Заголовок новости</label><input id="newsTitle" class="field" maxlength="180" placeholder="Например: Изменение расписания" required>
           <label class="muted" for="newsBody">Текст сообщения</label><textarea id="newsBody" class="field" rows="5" maxlength="8000" placeholder="Введите текст новости…" required style="resize:vertical"></textarea>
           <label class="muted" for="newsImage">Ссылка на изображение (необязательно)</label><input id="newsImage" class="field" type="url" placeholder="https://…">
+          <label class="muted" for="newsAttachmentFiles">Прикрепить файлы (до 25 МБ каждый)</label><input id="newsAttachmentFiles" class="field" type="file" multiple>
+          <div id="newsEditWrap" class="hidden" style="margin:10px 0;padding:10px;border:1px solid rgba(255,255,255,.14);border-radius:10px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">ТЕКУЩИЕ ВЛОЖЕНИЯ — отметь файлы для удаления</div><div id="newsEditAttachments"></div><button type="button" id="cancelNewsEdit" class="small-btn" style="width:100%;margin-top:8px">ОТМЕНИТЬ РЕДАКТИРОВАНИЕ</button></div>
           <button id="publishNewsButton" class="action-btn" type="submit">ОПУБЛИКОВАТЬ НОВОСТЬ</button>
         </form>
         <div id="createNewsMessage" class="message"></div>
@@ -395,6 +397,36 @@
       window.scrollTo({top:0,behavior:'smooth'});
     }
 
+    let editingNewsId=null, newsAttachmentsToRemove=[];
+    const NEWS_ATTACHMENT_BUCKET='news-attachments';
+    async function uploadNewsAttachments(newsId,files) {
+      const uploaded=[];
+      for(const file of Array.from(files||[])) {
+        if(file.size>25*1024*1024) throw new Error('Файл «'+file.name+'» превышает лимит 25 МБ.');
+        const safeName=file.name.replace(/[^a-zA-Z0-9а-яА-ЯёЁ._ -]/g,'_').replace(/\s+/g,'_').slice(-120)||'file';
+        const path=newsId+'/'+crypto.randomUUID()+'-'+safeName;
+        const {error:uploadError}=await sb.storage.from(NEWS_ATTACHMENT_BUCKET).upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
+        if(uploadError) throw new Error('Не удалось загрузить «'+file.name+'»: '+uploadError.message);
+        const {error:metaError}=await sb.from('news_attachments').insert({news_id:newsId,file_name:file.name,file_path:path,mime_type:file.type||null,file_size:file.size,uploaded_by:currentUser.id});
+        if(metaError) { await sb.storage.from(NEWS_ATTACHMENT_BUCKET).remove([path]); throw new Error('Файл загружен, но запись вложения не сохранена: '+metaError.message); }
+        uploaded.push(file.name);
+      }
+      return uploaded;
+    }
+    async function renderNewsAttachments(container,newsId) {
+      const {data:files,error}=await sb.from('news_attachments').select('id,file_name,file_path,file_size').eq('news_id',newsId).order('created_at');
+      if(error) { const note=document.createElement('div');note.className='muted';note.textContent='Вложения пока недоступны.';container.appendChild(note);return; }
+      if(!files?.length)return;
+      const list=document.createElement('div');list.style.cssText='display:grid;gap:7px;margin-top:12px';
+      for(const file of files) {
+        const {data:signed,error:signedError}=await sb.storage.from(NEWS_ATTACHMENT_BUCKET).createSignedUrl(file.file_path,3600);
+        if(signedError||!signed?.signedUrl)continue;
+        const link=document.createElement('a');link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';link.style.cssText='display:block;padding:9px 11px;border:1px solid rgba(255,255,255,.13);border-radius:9px;color:var(--accent-text);font-size:12px;text-decoration:none;overflow-wrap:anywhere';
+        link.textContent='📎 '+file.file_name+' · '+(file.file_size<1024*1024?Math.max(1,Math.round(file.file_size/1024))+' КБ':(file.file_size/1024/1024).toFixed(1)+' МБ');
+        list.appendChild(link);
+      }
+      if(list.childNodes.length)container.appendChild(list);
+    }
     async function loadNews() {
       const root=$('newsFeed'); if(!root || !sb || !currentUser) return; root.replaceChildren();
       const {data:news,error}=await sb.from('news').select('id,title,body,image_url,author_id,visibility,created_at').order('created_at',{ascending:false}).limit(50);
@@ -403,7 +435,16 @@
       const [{data:profiles},{data:readRows}]=await Promise.all([sb.from('profiles').select('user_id,username'),sb.from('news_reads').select('news_id').eq('user_id',currentUser.id)]);
       const names=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p.username])); const readSet=new Set((readRows||[]).map(x=>x.news_id));
       $('newsUnreadBadge').classList.toggle('hidden',!news.some(n=>!readSet.has(n.id)));
-      for(const n of news) { const item=document.createElement('article'); item.className='news-item'; const title=document.createElement('div');title.className='news-title';title.textContent=n.title;item.appendChild(title);const meta=document.createElement('div');meta.className='news-meta';meta.textContent='От: '+(names[n.author_id]||'ФУТБОЛЁРЫ')+' · '+new Date(n.created_at).toLocaleString('ru-RU')+(readSet.has(n.id)?'':' · НОВОЕ');item.appendChild(meta);if(n.image_url){const img=document.createElement('img');img.className='news-image';img.src=n.image_url;img.alt='Изображение к новости';img.loading='lazy';img.onerror=()=>img.remove();item.appendChild(img);}const body=document.createElement('div');body.className='news-body';body.textContent=n.body;item.appendChild(body);root.appendChild(item);if(!readSet.has(n.id)) await sb.from('news_reads').upsert({user_id:currentUser.id,news_id:n.id},{onConflict:'user_id,news_id'}); }
+      for(const n of news) {
+        const item=document.createElement('article'); item.className='news-item';
+        const title=document.createElement('div');title.className='news-title';title.textContent=n.title;item.appendChild(title);
+        const meta=document.createElement('div');meta.className='news-meta';meta.textContent='От: '+(names[n.author_id]||'ФУТБОЛЁРЫ')+' · '+new Date(n.created_at).toLocaleString('ru-RU')+(readSet.has(n.id)?'':' · НОВОЕ');item.appendChild(meta);
+        if(n.image_url){const img=document.createElement('img');img.className='news-image';img.src=n.image_url;img.alt='Изображение к новости';img.loading='lazy';img.onerror=()=>img.remove();item.appendChild(img);}
+        const body=document.createElement('div');body.className='news-body';body.textContent=n.body;item.appendChild(body);
+        await renderNewsAttachments(item,n.id);
+        root.appendChild(item);
+        if(!readSet.has(n.id)) await sb.from('news_reads').upsert({user_id:currentUser.id,news_id:n.id},{onConflict:'user_id,news_id'});
+      }
       $('newsUnreadBadge').classList.add('hidden');
     }
     async function loadNewsRecipients() {
@@ -413,56 +454,92 @@
       if(error||!data){root.textContent='Не удалось загрузить список участников.';return;}
       data.forEach(p=>{const label=document.createElement('label');label.className='candidate';label.style.margin='6px 0';const cb=document.createElement('input');cb.type='checkbox';cb.name='newsRecipient';cb.value=p.user_id;const span=document.createElement('span');span.style.cssText='font-size:12px;overflow-wrap:anywhere';span.textContent=p.username;label.append(cb,span);root.appendChild(label);});
     }
+    async function startEditNews(newsId) {
+      const {data:n,error}=await sb.from('news').select('id,title,body,image_url,visibility').eq('id',newsId).single();
+      if(error||!n)return setMessage('createNewsMessage','Не удалось открыть новость: '+(error?.message||'нет данных'),true);
+      editingNewsId=n.id;newsAttachmentsToRemove=[];
+      $('newsTitle').value=n.title||'';$('newsBody').value=n.body||'';$('newsImage').value=n.image_url||'';
+      document.querySelectorAll('input[name="newsAudience"]').forEach(x=>x.disabled=true);
+      $('newsRecipientsWrap').classList.add('hidden');
+      $('newsEditAttachments').replaceChildren();
+      const {data:files,error:filesError}=await sb.from('news_attachments').select('id,file_name,file_size').eq('news_id',n.id).order('created_at');
+      if(filesError) { setMessage('createNewsMessage','Не удалось загрузить вложения для редактирования: '+filesError.message,true); }
+      else (files||[]).forEach(file=>{
+        const row=document.createElement('label');row.className='candidate';row.style.margin='6px 0';
+        const cb=document.createElement('input');cb.type='checkbox';cb.checked=false;cb.addEventListener('change',()=>{if(cb.checked){if(!newsAttachmentsToRemove.includes(file.id))newsAttachmentsToRemove.push(file.id);}else newsAttachmentsToRemove=newsAttachmentsToRemove.filter(id=>id!==file.id);});
+        const span=document.createElement('span');span.style.cssText='font-size:12px;overflow-wrap:anywhere';span.textContent='Удалить: '+file.file_name;
+        row.append(cb,span);$('newsEditAttachments').appendChild(row);
+      });
+      $('newsEditWrap').classList.remove('hidden');
+      $('publishNewsButton').textContent='СОХРАНИТЬ ИЗМЕНЕНИЯ';
+      setMessage('createNewsMessage','Редактирование новости. Отметь вложения, которые нужно удалить, или добавь новые файлы.');
+      $('createNewsForm').scrollIntoView({behavior:'smooth',block:'center'});
+    }
+    function resetNewsEditor() {
+      editingNewsId=null;newsAttachmentsToRemove=[];
+      $('createNewsForm').reset();
+      document.querySelectorAll('input[name="newsAudience"]').forEach(x=>x.disabled=false);
+      $('newsRecipientsWrap').classList.add('hidden');$('newsEditWrap').classList.add('hidden');
+      $('newsEditAttachments').replaceChildren();$('newsAttachmentFiles').value='';
+      $('publishNewsButton').textContent='ОПУБЛИКОВАТЬ НОВОСТЬ';
+    }
     async function loadAdminNews() {
       const root=$('adminNewsList'); if(!root)return; root.replaceChildren(); const {data,error}=await sb.from('news').select('id,title,visibility,created_at').order('created_at',{ascending:false}).limit(20);
       if(error){root.textContent='Не удалось загрузить список новостей.';return;} if(!data?.length){root.textContent='Опубликованных новостей пока нет.';return;}
-      data.forEach(n=>{const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid rgba(255,255,255,.1)';const label=document.createElement('span');label.style.cssText='font-size:12px;line-height:1.5;overflow-wrap:anywhere';label.textContent=n.title+' · '+(n.visibility==='selected'?'только выбранным':'всем')+' · '+new Date(n.created_at).toLocaleDateString('ru-RU');const del=document.createElement('button');del.className='small-btn';del.textContent='Удалить';del.addEventListener('click',async()=>{if(!confirm('Удалить новость «'+n.title+'»?'))return;const {error}=await sb.from('news').delete().eq('id',n.id);if(error)alert('Не удалось удалить: '+error.message);else{await loadAdminNews();await loadNews();}});row.append(label,del);root.appendChild(row);});
+      data.forEach(n=>{
+        const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid rgba(255,255,255,.1)';
+        const label=document.createElement('span');label.style.cssText='font-size:12px;line-height:1.5;overflow-wrap:anywhere';label.textContent=n.title+' · '+(n.visibility==='selected'?'только выбранным':'всем')+' · '+new Date(n.created_at).toLocaleDateString('ru-RU');
+        const actions=document.createElement('div');actions.style.cssText='display:flex;gap:6px;flex-shrink:0';
+        const edit=document.createElement('button');edit.className='small-btn';edit.textContent='Изменить';edit.addEventListener('click',()=>startEditNews(n.id));
+        const del=document.createElement('button');del.className='small-btn';del.textContent='Удалить';del.addEventListener('click',async()=>{if(!confirm('Удалить новость «'+n.title+'»?'))return;const {error}=await sb.from('news').delete().eq('id',n.id);if(error)alert('Не удалось удалить: '+error.message);else{await loadAdminNews();await loadNews();}});
+        actions.append(edit,del);row.append(label,actions);root.appendChild(row);
+      });
     }
     async function createNews(e) {
-      e.preventDefault(); if(!currentUser||currentProfile?.role!=='admin')return setMessage('createNewsMessage','Публиковать новости может только администратор.',true);
+      e.preventDefault();
+      if(!currentUser||currentProfile?.role!=='admin')return setMessage('createNewsMessage','Публиковать и редактировать новости может только администратор.',true);
       const title=$('newsTitle')?.value.trim()||'',body=$('newsBody')?.value.trim()||'',image_url=$('newsImage')?.value.trim()||'';
       const visibility=document.querySelector('input[name="newsAudience"]:checked')?.value||'all';
       const recipientIds=[...document.querySelectorAll('input[name="newsRecipient"]:checked')].map(x=>x.value);
+      const files=$('newsAttachmentFiles')?.files||[];
       if(!title||!body)return setMessage('createNewsMessage','Заполните заголовок и текст.',true);
-      if(visibility==='selected'&&!recipientIds.length)return setMessage('createNewsMessage','Выберите хотя бы одного получателя.',true);
+      if(!editingNewsId&&visibility==='selected'&&!recipientIds.length)return setMessage('createNewsMessage','Выберите хотя бы одного получателя.',true);
       if(image_url&&!/^https:\/\//i.test(image_url))return setMessage('createNewsMessage','Ссылка на изображение должна начинаться с https://',true);
-      const btn=$('publishNewsButton');btn.disabled=true;setMessage('createNewsMessage','Публикуем новость…');
+      const btn=$('publishNewsButton');btn.disabled=true;setMessage('createNewsMessage',editingNewsId?'Сохраняем изменения…':'Публикуем новость…');
       try {
-        const newsId=crypto.randomUUID();
+        let newsId=editingNewsId;
+        if(editingNewsId) {
+          const {error:updateError}=await sb.from('news').update({title,body,image_url:image_url||null}).eq('id',editingNewsId);
+          if(updateError)throw updateError;
+          if(newsAttachmentsToRemove.length) {
+            const {data:removeRows,error:removeReadError}=await sb.from('news_attachments').select('id,file_path').in('id',newsAttachmentsToRemove).eq('news_id',editingNewsId);
+            if(removeReadError)throw removeReadError;
+            const paths=(removeRows||[]).map(x=>x.file_path);
+            if(paths.length) { const {error:storageError}=await sb.storage.from(NEWS_ATTACHMENT_BUCKET).remove(paths);if(storageError)throw storageError; }
+            const {error:metaDeleteError}=await sb.from('news_attachments').delete().in('id',newsAttachmentsToRemove).eq('news_id',editingNewsId);
+            if(metaDeleteError)throw metaDeleteError;
+          }
+          const uploaded=await uploadNewsAttachments(newsId,files);
+          const {error:notifyUpdateError}=await sb.from('notifications').update({title,body:body.slice(0,500)}).eq('news_id',newsId);
+          if(notifyUpdateError)console.warn('Не удалось обновить ранее созданные уведомления:',notifyUpdateError.message);
+          setMessage('createNewsMessage','Изменения сохранены.'+(uploaded.length?' Добавлено файлов: '+uploaded.length+'.':''));
+          resetNewsEditor();await loadAdminNews();await loadNews();
+          return;
+        }
+        newsId=crypto.randomUUID();
         const {error:insertError}=await sb.from('news').insert({id:newsId,title,body,image_url:image_url||null,author_id:currentUser.id,created_by:currentUser.id,visibility});
         if(insertError)throw insertError;
-        const news={id:newsId,title,body};
+        const uploaded=await uploadNewsAttachments(newsId,files);
         let targetIds=recipientIds;
         if(visibility==='all') { const {data:profiles,error:profilesError}=await sb.from('profiles').select('user_id');if(profilesError)throw profilesError;targetIds=(profiles||[]).map(p=>p.user_id); }
-        if(visibility==='selected') { const recRows=targetIds.map(user_id=>({news_id:news.id,user_id})); const {error:recError}=await sb.from('news_recipients').insert(recRows);if(recError)throw new Error('Новость создана, но список доступа не сохранён: '+recError.message); }
-        const rows=targetIds.map(user_id=>({user_id,news_id:news.id,title:news.title,body:news.body.slice(0,500)}));
+        if(visibility==='selected') { const recRows=targetIds.map(user_id=>({news_id:newsId,user_id})); const {error:recError}=await sb.from('news_recipients').insert(recRows);if(recError)throw new Error('Новость создана, но список доступа не сохранён: '+recError.message); }
+        const rows=targetIds.map(user_id=>({user_id,news_id:newsId,title,body:body.slice(0,500)}));
         if(rows.length){const {error:notifyError}=await sb.from('notifications').insert(rows);if(notifyError)throw new Error('Новость опубликована, но уведомления внутри сайта не создались: '+notifyError.message);}
-        setMessage('createNewsMessage','Новость опубликована, уведомления внутри сайта созданы.');
-        $('createNewsForm')?.reset();$('newsRecipientsWrap')?.classList.add('hidden');await loadAdminNews();await loadNews();
-      } catch(err){
-        let diagnostic=''; 
-        try {
-          const {data:{user:authUser},error:authError}=await sb.auth.getUser();
-          const authId=authUser?.id||'не получен';
-          const {data:authProfile,error:profileError}=authUser
-            ? await sb.from('profiles').select('user_id,role').eq('user_id',authUser.id).maybeSingle()
-            : {data:null,error:null};
-          const {data:policyCheck,error:policyError}=await sb.rpc('debug_news_insert_access',{p_created_by:currentUser?.id||null,p_visibility:visibility});
-          const {data:insertAttempt,error:attemptCallError}=await sb.rpc('debug_news_insert_attempt',{p_created_by:currentUser?.id||null,p_visibility:visibility});
-          diagnostic='\\nДиагностика: auth.uid='+authId+
-            '; currentUser.id='+(currentUser?.id||'нет')+
-            '; совпадают='+(!!authUser&&authUser.id===currentUser?.id?'да':'НЕТ')+
-            '; роль в памяти='+(currentProfile?.role||'нет')+
-            '; роль из БД='+(authProfile?.role||'профиль не найден')+
-            '; проверка RLS из сайта='+(policyCheck?JSON.stringify(policyCheck):'не получена')+
-            '; тестовый INSERT='+(insertAttempt?JSON.stringify(insertAttempt):'не получен')+
-            (attemptCallError?'; ошибка вызова тестового INSERT='+attemptCallError.message:'')+
-            (authError?'; auth error='+authError.message:'')+
-            (profileError?'; profile error='+profileError.message:'')+
-            (policyError?'; policy error='+policyError.message:'');
-        } catch(diagError){diagnostic='\\nДиагностику получить не удалось: '+(diagError.message||diagError);}
-        setMessage('createNewsMessage','Ошибка публикации: '+(err.message||'проверьте SQL и права администратора')+diagnostic,true);
-      } finally{btn.disabled=false;}
+        setMessage('createNewsMessage','Новость опубликована. Добавлено файлов: '+uploaded.length+'. Уведомления внутри сайта созданы.');
+        resetNewsEditor();await loadAdminNews();await loadNews();
+      } catch(err) {
+        setMessage('createNewsMessage','Ошибка: '+(err.message||'не удалось сохранить новость')+'. Если ошибка связана с таблицей или хранилищем, сначала выполните SQL-файл миграции.',true);
+      } finally {btn.disabled=false;}
     }
     async function signIn() {
       const button=$('loginButton');
@@ -1346,7 +1423,7 @@
     $('createPollForm')?.addEventListener('submit',createPoll);
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('loginButton').addEventListener('click',signIn);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
-    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',()=>{if(currentProfile&&currentProfile.role==='admin')showSection('adminPanel');});
+    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',()=>{if(currentProfile&&currentProfile.role==='admin')showSection('adminPanel');});
     $('statsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('newsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('voteBackButton').addEventListener('click',()=>showSection('homeScreen'));$('adminBackButton').addEventListener('click',()=>showSection('homeScreen'));
     $('saveStatsCategorySettings')?.addEventListener('click', saveStatSettings);
     initStatSettings();

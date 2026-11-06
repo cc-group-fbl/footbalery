@@ -673,7 +673,7 @@
         if(time&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(time))throw new Error('Строка '+line+': неверное время «'+timeRaw+'».');
         const location=get(r,'location')||null;
         const sh=get(r,'score_home').replace(',','.'),sa=get(r,'score_away').replace(',','.');
-        if((sh&&!/^\d+$/.test(sh))||(sa&&!/^\d+$/.test(sa)))throw new Error('Строка '+line+': счёт должен быть целым неотрицательным числом.');
+        if((sh&&!/^\d+(?:[.,]0+)?$/.test(sh))||(sa&&!/^\d+(?:[.,]0+)?$/.test(sa)))throw new Error('Строка '+line+': счёт должен быть целым неотрицательным числом.');
         if((sh&&!sa)||(!sh&&sa))throw new Error('Строка '+line+': заполни обе части счёта или оставь обе пустыми.');
         const tournament=/^(dxg|д×г|дxг|деревенские\s*[×x]\s*городские)$/i.test(rawTournament)?'DXG':(rawTournament||null);
         const identity=[type,date,time||'',rawTournament,title,location||'',home,away].join('|');

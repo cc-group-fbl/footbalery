@@ -602,9 +602,9 @@
     }
 
     function parseScheduleCSV(source){
-      source=String(source||'').replace(/^\\uFEFF/,'');
-      const firstLine=(source.split(/\\r?\\n/,1)[0]||'');
-      const counts={',':(firstLine.match(/,/g)||[]).length,';':(firstLine.match(/;/g)||[]).length,'\\t':(firstLine.match(/\\t/g)||[]).length};
+      source=String(source||'').replace(/^\uFEFF/,'');
+      const firstLine=(source.split(/\r?\n/,1)[0]||'');
+      const counts={',':(firstLine.match(/,/g)||[]).length,';':(firstLine.match(/;/g)||[]).length,'\t':(firstLine.match(/\t/g)||[]).length};
       const delimiter=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
       const rows=[];let row=[],cell='',quoted=false;
       for(let i=0;i<source.length;i++){
@@ -612,7 +612,7 @@
         if(c==='"'&&quoted&&source[i+1]==='"'){cell+='"';i++;}
         else if(c==='"')quoted=!quoted;
         else if(c===delimiter&&!quoted){row.push(cell);cell='';}
-        else if((c==='\\n'||c==='\\r')&&!quoted){if(c==='\\r'&&source[i+1]==='\\n')i++;row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);row=[];cell='';}
+        else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&source[i+1]==='\n')i++;row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);row=[];cell='';}
         else cell+=c;
       }
       if(cell.length||row.length){row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);}
@@ -636,8 +636,8 @@
       };
       const get=(r,k)=>cols[k]<0?'':String(r[cols[k]]??'').trim();
       const dateValue=value=>{
-        if(/^\\d{4}-\\d{2}-\\d{2}$/.test(value))return value;
-        const m=value.match(/^(\\d{1,2})[./-](\\d{1,2})[./-](\\d{4})$/);
+        if(/^\d{4}-\d{2}-\d{2}$/.test(value))return value;
+        const m=value.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
         if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
         throw new Error('Неверная дата «'+value+'». Используй ГГГГ-ММ-ДД или ДД.ММ.ГГГГ.');
       };
@@ -656,26 +656,26 @@
         let type='';
         if(['match','матч','д×г','регулярный матч сезона','турнир 1 на 1'].includes(rawType.toLowerCase()))type='match';
         else if(['event','мероприятие','мероприятие футболёров','мероприятие футболеров'].includes(rawType.toLowerCase()))type='event';
-        else if(/турнир\\s*1\\s*на\\s*1/i.test(rawTournament)||(/д×г|дxг/i.test(rawTournament))||home||away)type='match';
+        else if(/турнир\s*1\s*на\s*1/i.test(rawTournament)||(/д×г|дxг/i.test(rawTournament))||home||away)type='match';
         else if(rawType)throw new Error('Строка '+line+': неизвестный тип мероприятия «'+rawType+'».');
         else return; // Пустые служебные строки Memento пропускаем.
         const dateRaw=get(r,'date');
         if(!dateRaw)return;
-        const date=dateValue(dateRaw),timeRaw=get(r,'time').replace(/\\s/g,'');
+        const date=dateValue(dateRaw),timeRaw=get(r,'time').replace(/\s/g,'');
         const time=timeRaw?timeRaw.slice(0,5):null;
         let title=get(r,'title');
         if(!title&&type==='match'){
-          if(/турнир\\s*1\\s*на\\s*1/i.test(rawType+' '+rawTournament))title=[home,away].filter(Boolean).join(' — ')||'Турнир 1 на 1';
+          if(/турнир\s*1\s*на\s*1/i.test(rawType+' '+rawTournament))title=[home,away].filter(Boolean).join(' — ')||'Турнир 1 на 1';
           else if(/д×г|дxг/i.test(rawType+' '+rawTournament))title='ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ';
           else title=rawTournament||'Матч сезона';
         }
         if(!title&&type==='event')throw new Error('Строка '+line+': у мероприятия не указано название.');
-        if(time&&!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time))throw new Error('Строка '+line+': неверное время «'+timeRaw+'».');
+        if(time&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(time))throw new Error('Строка '+line+': неверное время «'+timeRaw+'».');
         const location=get(r,'location')||null;
         const sh=get(r,'score_home').replace(',','.'),sa=get(r,'score_away').replace(',','.');
-        if((sh&&!/^\\d+$/.test(sh))||(sa&&!/^\\d+$/.test(sa)))throw new Error('Строка '+line+': счёт должен быть целым неотрицательным числом.');
+        if((sh&&!/^\d+$/.test(sh))||(sa&&!/^\d+$/.test(sa)))throw new Error('Строка '+line+': счёт должен быть целым неотрицательным числом.');
         if((sh&&!sa)||(!sh&&sa))throw new Error('Строка '+line+': заполни обе части счёта или оставь обе пустыми.');
-        const tournament=/^(dxg|д×г|дxг|деревенские\\s*[×x]\\s*городские)$/i.test(rawTournament)?'DXG':(rawTournament||null);
+        const tournament=/^(dxg|д×г|дxг|деревенские\s*[×x]\s*городские)$/i.test(rawTournament)?'DXG':(rawTournament||null);
         const identity=[type,date,time||'',rawTournament,title,location||'',home,away].join('|');
         const id=get(r,'id')||makeId(identity);
         if(seen.has(id))throw new Error('Строка '+line+': повторяется идентификатор «'+id+'».');

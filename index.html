@@ -704,8 +704,10 @@
       root.textContent='Загружаем расписание…';
       try{
         const rows=await getScheduleRows();root.replaceChildren();
-        const upcoming=rows.filter(x=>x.event_date>=new Date().toISOString().slice(0,10));
-        if(!upcoming.length){root.textContent='Предстоящих мероприятий пока нет.';return;}
+        const today=new Date().toISOString().slice(0,10);
+        const upcoming=rows.filter(x=>x.event_date>=today);
+        const pastMatches=rows.filter(x=>x.type==='match'&&x.event_date<today).sort((a,b)=>b.event_date.localeCompare(a.event_date)||(b.event_time||'').localeCompare(a.event_time||''));
+        if(!upcoming.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Предстоящих мероприятий пока нет.';root.appendChild(empty);}
         upcoming.forEach(item=>{
           const card=document.createElement('article');card.className='news-item schedule-item';
           const tag=document.createElement('div');tag.className='news-meta';tag.textContent=item.type==='match'?(String(item.tournament||'').toLowerCase().includes('1 на 1')?'⚔️ ТУРНИР 1 НА 1':'⚽ МАТЧ'):'📌 МЕРОПРИЯТИЕ';card.appendChild(tag);
@@ -743,6 +745,27 @@
           }else if(item.description){const desc=document.createElement('div');desc.className='news-body';desc.textContent=item.description;card.appendChild(desc);}
           root.appendChild(card);
         });
+        if(pastMatches.length){
+          const pastSection=document.createElement('details');
+          pastSection.className='admin-section';
+          pastSection.style.marginTop='18px';
+          const summary=document.createElement('summary');
+          summary.textContent='⚽ ПРОШЕДШИЕ МАТЧИ ('+pastMatches.length+')';
+          pastSection.appendChild(summary);
+          const pastList=document.createElement('div');
+          pastMatches.forEach(item=>{
+            const card=document.createElement('article');card.className='news-item schedule-item';
+            const tag=document.createElement('div');tag.className='news-meta';tag.textContent=String(item.tournament||'').toLowerCase().includes('1 на 1')?'⚔️ ТУРНИР 1 НА 1':'⚽ МАТЧ';card.appendChild(tag);
+            const title=document.createElement('div');title.className='news-title';title.textContent=item.title;card.appendChild(title);
+            const meta=document.createElement('div');meta.className='news-meta';meta.textContent=[scheduleDateLabel(item.event_date),item.event_time?item.event_time.slice(0,5):'',item.location].filter(Boolean).join(' · ');card.appendChild(meta);
+            const score=document.createElement('div');score.className='schedule-score';score.textContent=item.match&&item.match.score_home!==null&&item.match.score_away!==null?item.match.score_home+' : '+item.match.score_away:'— : —';card.appendChild(score);
+            if(item.tournament==='DXG'){const tournament=document.createElement('div');tournament.className='news-meta';tournament.textContent='Турнир ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ';card.appendChild(tournament);}
+            if(item.description){const desc=document.createElement('div');desc.className='news-body';desc.textContent=item.description;card.appendChild(desc);}
+            pastList.appendChild(card);
+          });
+          pastSection.appendChild(pastList);
+          root.appendChild(pastSection);
+        }
       }catch(error){root.textContent='Не удалось загрузить расписание. Возможно, ещё не выполнена SQL-миграция: '+error.message;}
     }
     async function loadAdminScheduleScores(){

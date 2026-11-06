@@ -628,13 +628,14 @@
         location:index('location','место','место проведения'),
         description:index('description','описание','о мероприятии'),
         tournament:index('tournament','турнир'),
-        score_home:index('score home','score_home','счет хозяев','счёт хозяев','счёт хозяева','счет хозяева','счет хозяев','счет 1','score 1'),
+        score_home:index('score home','score_home','счет хозяев','счёт хозяев','счёт хозяева','счет хозяева','счет 1','score 1'),
         score_away:index('score away','score_away','счет гостей','счёт гостей','счёт гости','счет гости','счет 2','score 2'),
         status:index('status','статус','статус матча/мероприятия'),
-        home:index('home','команда хозяев','хозяева команда','хозяева'),
-        away:index('away','команда гостей','гости команда','гости')
+        home:index('home','хозяева','команда хозяев','хозяева команда','состав хозяев'),
+        away:index('away','гости','команда гостей','гости команда','состав гостей')
       };
       const get=(r,k)=>cols[k]<0?'':String(r[cols[k]]??'').trim();
+      const parsePlayers=value=>String(value||'').split(',').map(name=>name.trim()).filter(Boolean);
       const dateValue=value=>{
         if(/^\d{4}-\d{2}-\d{2}$/.test(value))return value;
         const m=value.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
@@ -684,18 +685,31 @@
         const id=get(r,'id')||makeId(occurrence===0?identity:identity+'|occurrence:'+occurrence);
         if(seen.has(id))throw new Error('Строка '+line+': повторяется идентификатор «'+id+'».');
         seen.add(id);
-        result.push({id,type,title,event_date:date,event_time:time,location,description:get(r,'description')||null,tournament,score_home:sh===''?null:Number(sh),score_away:sa===''?null:Number(sa),hasScore:sh!==''&&sa!=='',status,scheduled:/запланирован/i.test(status),home,away});
+        result.push({id,type,title,event_date:date,event_time:time,location,description:get(r,'description')||null,tournament,score_home:sh===''?null:Number(sh),score_away:sa===''?null:Number(sa),hasScore:sh!==''&&sa!=='',status,scheduled:/запланирован/i.test(status),home,away,home_players:parsePlayers(home),away_players:parsePlayers(away)});
       });
       if(!result.length)throw new Error('Не найдено ни одной записи расписания. Проверь тип мероприятия и даты.');
       return result;
     }
     function scheduleDateLabel(value){if(!value)return '';const d=new Date(value+'T00:00:00');return Number.isNaN(d.getTime())?value:d.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'});}
+    function renderScheduleLineups(item,card){
+      const home=Array.isArray(item.match?.home_players)?item.match.home_players:[];
+      const away=Array.isArray(item.match?.away_players)?item.match.away_players:[];
+      if(!home.length&&!away.length)return;
+      const details=document.createElement('details');details.className='admin-section';details.style.marginTop='10px';
+      const summary=document.createElement('summary');summary.textContent='СОСТАВЫ МАТЧА';details.appendChild(summary);
+      const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:12px';
+      [[home,'ХОЗЯЕВА'],[away,'ГОСТИ']].forEach(([players,label])=>{
+        const side=document.createElement('div');const heading=document.createElement('div');heading.className='news-meta';heading.style.fontWeight='900';heading.textContent=label;side.appendChild(heading);
+        const list=document.createElement('div');list.className='news-body';list.style.fontSize='12px';list.textContent=players.length?players.join('\n'):'Состав не указан';side.appendChild(list);grid.appendChild(side);
+      });
+      details.appendChild(grid);card.appendChild(details);
+    }
     async function getScheduleRows(){
       const {data:events,error}=await sb.from('schedule_events').select('id,type,title,event_date,event_time,location,description,tournament,match_id').order('event_date',{ascending:true}).order('event_time',{ascending:true});
       if(error)throw error;
       const matchIds=[...new Set((events||[]).map(x=>x.match_id).filter(Boolean))];
       let matches=[];
-      if(matchIds.length){const result=await sb.from('matches').select('id,is_open,score_home,score_away,registration_deadline').in('id',matchIds);if(result.error)throw result.error;matches=result.data||[];}
+      if(matchIds.length){const result=await sb.from('matches').select('id,is_open,score_home,score_away,home_players,away_players,registration_deadline').in('id',matchIds);if(result.error)throw result.error;matches=result.data||[];}
       const matchMap=Object.fromEntries(matches.map(m=>[m.id,m]));
       return (events||[]).map(e=>({...e,match:matchMap[e.match_id]||null}));
     }
@@ -717,6 +731,7 @@
             const score=document.createElement('div');score.className='schedule-score';score.textContent=item.match&&item.match.score_home!==null&&item.match.score_away!==null?item.match.score_home+' : '+item.match.score_away:'— : —';card.appendChild(score);
             if(item.tournament==='DXG'){const tournament=document.createElement('div');tournament.className='news-meta';tournament.textContent='Турнир ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ';card.appendChild(tournament);}
             if(item.description){const desc=document.createElement('div');desc.className='news-body';desc.textContent=item.description;card.appendChild(desc);}
+            renderScheduleLineups(item,card);
             if(item.match?.is_open){
               const apply=document.createElement('button');apply.type='button';apply.className='action-btn';apply.textContent='ПОДАТЬ ЗАЯВКУ';apply.addEventListener('click',()=>{
                 if(card.querySelector('.schedule-application-form'))return;
@@ -761,6 +776,7 @@
             const score=document.createElement('div');score.className='schedule-score';score.textContent=item.match&&item.match.score_home!==null&&item.match.score_away!==null?item.match.score_home+' : '+item.match.score_away:'— : —';card.appendChild(score);
             if(item.tournament==='DXG'){const tournament=document.createElement('div');tournament.className='news-meta';tournament.textContent='Турнир ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ';card.appendChild(tournament);}
             if(item.description){const desc=document.createElement('div');desc.className='news-body';desc.textContent=item.description;card.appendChild(desc);}
+            renderScheduleLineups(item,card);
             pastList.appendChild(card);
           });
           pastSection.appendChild(pastList);
@@ -801,7 +817,7 @@
           if(item.type==='match'){
             const {data:existing,error:findError}=await sb.from('matches').select('id,is_open').eq('schedule_id',item.id).maybeSingle();
             if(findError)throw new Error('Не удалось найти матч '+item.id+': '+findError.message);
-            const payload={title:item.title,match_date:item.event_date,match_time:item.event_time,location:item.location||'',tournament:item.tournament,description:item.description,is_open:item.scheduled};
+            const payload={title:item.title,match_date:item.event_date,match_time:item.event_time,location:item.location||'',tournament:item.tournament,description:item.description,is_open:item.scheduled,home_players:item.home_players,away_players:item.away_players};
             if(item.hasScore){payload.score_home=item.score_home;payload.score_away=item.score_away;}
             let matchId=existing?.id;
             if(existing){const {error}=await sb.from('matches').update(payload).eq('id',existing.id);if(error)throw new Error('Ошибка обновления матча '+item.id+': '+error.message);}

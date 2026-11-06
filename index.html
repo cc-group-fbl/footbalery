@@ -173,6 +173,10 @@
       <h2>ВХОД В ЛИЧНЫЙ КАБИНЕТ</h2>
       <input id="usernameInput" class="field" autocomplete="username" placeholder="Логин игрока" />
       <input id="passwordInput" class="field" type="password" autocomplete="current-password" placeholder="Пароль" />
+      <label for="rememberMeCheckbox" style="display:flex;align-items:center;gap:9px;margin:10px 2px 14px;color:#d9e2ec;font-size:13px;cursor:pointer">
+        <input id="rememberMeCheckbox" type="checkbox" checked style="width:17px;height:17px;accent-color:#f5c518" />
+        Запомнить меня на этом устройстве
+      </label>
       <button id="loginButton" class="action-btn" type="button">ВОЙТИ</button>
       <div class="muted">Вход по логину и паролю. Учётные записи выдаёт администратор.</div>
       <div id="loginMessage" class="message"></div>
@@ -573,6 +577,7 @@
         setMessage('loginMessage','Проверяем данные…');
         const { data, error } = await sb.auth.signInWithPassword({ email: usernameEmail(username), password });
         if (error) throw error;
+        try { localStorage.setItem('futbolery_remember_session', $('rememberMeCheckbox')?.checked ? 'true' : 'false'); } catch (_) {}
         currentUser = data.user;
         await showAccount();
       } catch(err) {
@@ -1455,8 +1460,20 @@
     } else if (!sb) {
       setMessage('loginMessage','Не удалось запустить подключение к Supabase. Обновите страницу.',true);
     } else {
-      sb.auth.getSession().then(async ({data})=>{if(data.session){currentUser=data.session.user;await showAccount();}})
-        .catch(err=>setMessage('loginMessage','Ошибка связи с сервером: '+(err?.message||'не удалось проверить сессию'),true));
+      sb.auth.getSession().then(async ({data})=>{
+        let rememberSession = true;
+        try { rememberSession = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
+        if (data.session && rememberSession) {
+          if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = true;
+          currentUser = data.session.user;
+          await showAccount();
+        } else if (data.session && !rememberSession) {
+          await sb.auth.signOut();
+          if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = false;
+        } else if ($('rememberMeCheckbox')) {
+          try { $('rememberMeCheckbox').checked = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
+        }
+      }).catch(err=>setMessage('loginMessage','Ошибка связи с сервером: '+(err?.message||'не удалось проверить сессию'),true));
     }
       // Резервная навигация: вкладки работают даже если отдельный обработчик
     // одной из необязательных форм не удалось подключить.

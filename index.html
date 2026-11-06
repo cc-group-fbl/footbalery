@@ -398,6 +398,18 @@
     function usernameEmail(username) { const value = username.trim().toLowerCase(); return value.includes('@') ? value : value.replace(/[^a-z0-9._-]/g, '-') + '@members.futbolery.local'; }
     function setMessage(id, msg, bad=false) { $(id).textContent = msg || ''; $(id).style.color = bad ? '#ff7777' : 'var(--accent-text, #ffd21f)'; }
 
+    // Сохранение FCM-токена устройства для системных push-уведомлений.
+    window.footbalerySavePushToken = async function(token, userId) {
+      if (!sb || !token || !userId) return;
+      const { error } = await sb.from('push_tokens').upsert({
+        token,
+        user_id: userId,
+        platform: 'android',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'token' });
+      if (error) console.error('Не удалось сохранить push-токен:', error.message);
+    };
+
     function showSection(sectionId) {
       ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel'].forEach(id => {
         const panel=$(id); if(panel) panel.classList.toggle('hidden', id !== sectionId);
@@ -595,7 +607,7 @@
     async function showAccount() {
       const { data: profile, error } = await sb.from('profiles').select('user_id, username, player_id, role, captain_team').eq('user_id', currentUser.id).maybeSingle();
       if (error || !profile) { await sb.auth.signOut(); $('accountPanel').classList.add('hidden'); $('loginPanel').classList.remove('hidden'); return setMessage('loginMessage','Для аккаунта не назначена карточка игрока. Обратитесь к администратору.',true); }
-      currentProfile = profile; renderStatSettings(); await loadSharedSeasonTheme(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
+      currentProfile = profile; window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); await loadSharedSeasonTheme(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       showSection('homeScreen');
@@ -1522,5 +1534,67 @@
     });
     document.getElementById('refreshAdminUsers')?.addEventListener('click', loadAdminUsers);
 </script>
+  <script type="module">
+    // Загружаем Capacitor Push Notifications для Android-приложения.
+    (async () => {
+      try {
+        const { PushNotifications } = await import('https://esm.sh/@capacitor/push-notifications@7.0.2?bundle');
+        if (!window.Capacitor?.isNativePlatform?.()) return;
+
+        let registrationStarted = false;
+        let deviceToken = null;
+
+        const saveTokenForCurrentUser = async () => {
+          const userId = window.footbaleryCurrentUserId;
+          if (deviceToken && userId && window.footbalerySavePushToken) {
+            await window.footbalerySavePushToken(deviceToken, userId);
+          }
+        };
+
+        await PushNotifications.addListener('registration', async token => {
+          deviceToken = token.value;
+          await saveTokenForCurrentUser();
+        });
+
+        await PushNotifications.addListener('registrationError', error => {
+          console.error('Ошибка регистрации push-уведомлений:', error);
+          registrationStarted = false;
+        });
+
+        const startRegistration = async () => {
+          if (!window.footbaleryCurrentUserId) return;
+          await saveTokenForCurrentUser();
+          if (registrationStarted) return;
+          registrationStarted = true;
+          try {
+            let permission = await PushNotifications.checkPermissions();
+            if (permission.receive !== 'granted') {
+              permission = await PushNotifications.requestPermissions();
+            }
+            if (permission.receive !== 'granted') {
+              registrationStarted = false;
+              console.warn('Пользователь не разрешил push-уведомления.');
+              return;
+            }
+            await PushNotifications.createChannel({
+              id: 'default',
+              name: 'Уведомления ФУТБОЛЁРЫ',
+              importance: 5
+            });
+            await PushNotifications.register();
+          } catch (error) {
+            registrationStarted = false;
+            console.error('Не удалось включить push-уведомления:', error);
+          }
+        };
+
+        window.addEventListener('footbalery-user-ready', startRegistration);
+        window.footbaleryStartPushRegistration = startRegistration;
+        if (window.footbaleryCurrentUserId) await startRegistration();
+      } catch (error) {
+        console.error('Не удалось загрузить модуль push-уведомлений:', error);
+      }
+    })();
+  </script>
 </body>
 </html>

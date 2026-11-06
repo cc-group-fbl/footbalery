@@ -425,7 +425,7 @@
         const name=(file.file_name||'').toLowerCase();
         const sizeLabel=file.file_size<1024*1024?Math.max(1,Math.round(file.file_size/1024))+' КБ':(file.file_size/1024/1024).toFixed(1)+' МБ';
         const preview=document.createElement('div');preview.style.cssText='display:grid;gap:6px;min-width:0';
-        const caption=document.createElement('div');caption.style.cssText='font-size:12px;color:var(--muted);overflow-wrap:anywhere';caption.textContent='📎 '+file.file_name+' · '+sizeLabel;preview.appendChild(caption);
+        const isImage=type.startsWith('image/')||/\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(name);const caption=document.createElement('div');caption.style.cssText='font-size:12px;color:var(--muted);overflow-wrap:anywhere';caption.textContent=(isImage?'':'📎 ')+file.file_name+' · '+sizeLabel;preview.appendChild(caption);
         if(type.startsWith('image/')||/\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(name)) {
           const img=document.createElement('img');img.src=signed.signedUrl;img.alt=file.file_name;img.loading='lazy';img.style.cssText='display:block;width:100%;max-height:520px;object-fit:contain;border-radius:10px;background:rgba(0,0,0,.12)';preview.appendChild(img);
         } else if(type==='application/pdf'||name.endsWith('.pdf')) {
@@ -437,7 +437,12 @@
         } else if(type.startsWith('text/')) {
           const frame=document.createElement('iframe');frame.src=signed.signedUrl;frame.title=file.file_name;frame.loading='lazy';frame.style.cssText='display:block;width:100%;height:260px;border:1px solid rgba(255,255,255,.13);border-radius:10px';preview.appendChild(frame);
         } else {
-          const link=document.createElement('a');link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';link.style.cssText='display:block;padding:9px 11px;border:1px solid rgba(255,255,255,.13);border-radius:9px;color:var(--accent-text);font-size:12px;text-decoration:none;overflow-wrap:anywhere';link.textContent='Открыть файл: '+file.file_name;preview.appendChild(link);
+          // Fallback: некоторые мобильные файловые менеджеры не передают MIME и расширение.
+          // Пробуем показать файл как изображение; если браузер не сможет его декодировать,
+          // заменяем предпросмотр обычной ссылкой.
+          const img=document.createElement('img');img.src=signed.signedUrl;img.alt=file.file_name;img.loading='lazy';img.style.cssText='display:block;width:100%;max-height:520px;object-fit:contain;border-radius:10px;background:rgba(0,0,0,.12)';
+          img.onerror=()=>{img.remove();const link=document.createElement('a');link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';link.style.cssText='display:block;padding:9px 11px;border:1px solid rgba(255,255,255,.13);border-radius:9px;color:var(--accent-text);font-size:12px;text-decoration:none;overflow-wrap:anywhere';link.textContent='Открыть файл: '+file.file_name;preview.appendChild(link);};
+          preview.appendChild(img);
         }
         list.appendChild(preview);
       }

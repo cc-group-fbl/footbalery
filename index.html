@@ -956,15 +956,46 @@
       button.addEventListener('click',()=>deleteScheduleItem(item,button));
       card.appendChild(button);
     }
+    let scheduleFilters={tournament:'',from:'',to:''};
     async function loadSchedule(){
       const root=$('scheduleList');if(!root||!sb||!currentUser)return;
       root.textContent='Загружаем расписание…';
       try{
         const rows=await getScheduleRows();root.replaceChildren();
+        const filters=document.createElement('div');
+        filters.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px;margin:0 0 14px;padding:12px;border:1px solid rgba(255,255,255,.14);border-radius:12px;text-align:left';
+        const tournamentLabel=document.createElement('label');tournamentLabel.className='muted';tournamentLabel.textContent='Турнир';
+        const tournamentSelect=document.createElement('select');tournamentSelect.className='field';tournamentSelect.style.marginTop='5px';
+        const allOption=document.createElement('option');allOption.value='';allOption.textContent='Все турниры';tournamentSelect.appendChild(allOption);
+        const tournaments=[...new Set(rows.map(x=>String(x.tournament||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+        tournaments.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=value==='DXG'?'ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ':value;tournamentSelect.appendChild(option);});
+        const noTournament=document.createElement('option');noTournament.value='__none__';noTournament.textContent='Без турнира';tournamentSelect.appendChild(noTournament);
+        tournamentSelect.value=scheduleFilters.tournament;tournamentLabel.appendChild(tournamentSelect);
+        const fromLabel=document.createElement('label');fromLabel.className='muted';fromLabel.textContent='Дата с';
+        const fromInput=document.createElement('input');fromInput.type='date';fromInput.className='field';fromInput.style.marginTop='5px';fromInput.value=scheduleFilters.from;fromLabel.appendChild(fromInput);
+        const toLabel=document.createElement('label');toLabel.className='muted';toLabel.textContent='Дата по';
+        const toInput=document.createElement('input');toInput.type='date';toInput.className='field';toInput.style.marginTop='5px';toInput.value=scheduleFilters.to;toLabel.appendChild(toInput);
+        const actions=document.createElement('div');actions.style.cssText='display:flex;align-items:end;gap:8px;flex-wrap:wrap';
+        const reset=document.createElement('button');reset.type='button';reset.className='small-btn';reset.textContent='Сбросить фильтры';actions.appendChild(reset);
+        filters.append(tournamentLabel,fromLabel,toLabel,actions);root.appendChild(filters);
+        const applyFilters=()=>{scheduleFilters={tournament:tournamentSelect.value,from:fromInput.value,to:toInput.value};loadSchedule();};
+        tournamentSelect.addEventListener('change',applyFilters);
+        fromInput.addEventListener('change',applyFilters);
+        toInput.addEventListener('change',applyFilters);
+        reset.addEventListener('click',()=>{scheduleFilters={tournament:'',from:'',to:''};loadSchedule();});
+        const matchesFilters=item=>{
+          const tournament=String(item.tournament||'').trim();
+          if(scheduleFilters.tournament==='__none__'&&tournament)return false;
+          if(scheduleFilters.tournament&&scheduleFilters.tournament!=='__none__'&&tournament!==scheduleFilters.tournament)return false;
+          if(scheduleFilters.from&&item.event_date<scheduleFilters.from)return false;
+          if(scheduleFilters.to&&item.event_date>scheduleFilters.to)return false;
+          return true;
+        };
         const today=new Date().toISOString().slice(0,10);
-        const upcoming=rows.filter(x=>x.event_date>=today);
-        const pastMatches=rows.filter(x=>x.type==='match'&&x.event_date<today).sort((a,b)=>b.event_date.localeCompare(a.event_date)||(b.event_time||'').localeCompare(a.event_time||''));
-        if(!upcoming.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Предстоящих мероприятий пока нет.';root.appendChild(empty);}
+        const filteredRows=rows.filter(matchesFilters);
+        const upcoming=filteredRows.filter(x=>x.event_date>=today);
+        const pastMatches=filteredRows.filter(x=>x.type==='match'&&x.event_date<today).sort((a,b)=>b.event_date.localeCompare(a.event_date)||(b.event_time||'').localeCompare(a.event_time||''));
+        if(!upcoming.length&&!pastMatches.length){const empty=document.createElement('div');empty.className='muted';empty.style.padding='12px 0';empty.textContent='По выбранным фильтрам записей не найдено.';root.appendChild(empty);}
         upcoming.forEach(item=>{
           const card=document.createElement('article');card.className='news-item schedule-item';
           const tag=document.createElement('div');tag.className='news-meta';tag.textContent=item.type==='match'?(String(item.tournament||'').toLowerCase().includes('1 на 1')?'⚔️ ТУРНИР 1 НА 1':'⚽ МАТЧ'):'📌 МЕРОПРИЯТИЕ';card.appendChild(tag);
@@ -1006,6 +1037,7 @@
           appendScheduleDeleteButton(item,card);
           root.appendChild(card);
         });
+        if(!upcoming.length&&pastMatches.length){const empty=document.createElement('div');empty.className='muted';empty.style.padding='12px 0';empty.textContent='Предстоящих записей по выбранным фильтрам нет.';root.appendChild(empty);}
         if(pastMatches.length){
           const pastSection=document.createElement('details');
           pastSection.className='admin-section';

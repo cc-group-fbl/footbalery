@@ -253,229 +253,6 @@
         <div class="muted" style="padding:10px;border:1px solid rgba(255,210,31,.35);border-radius:10px;margin:10px 0">
         Важно: срок голосования должен проверяться на стороне Supabase. Проверка только в браузере не защищает от изменения часов устройства; для полной защиты нужна серверная проверка срока и уникальности голоса.
         </div>
-        <div class="theme-control">
-          <div class="theme-control-title">🎨 РАСПИСАНИЕ СЕЗОННОГО ОФОРМЛЕНИЯ</div>
-          <div class="muted" style="text-align:left;margin:0 0 10px">Укажи дату и время начала каждого сезона. Оформление будет переключаться автоматически для всех посетителей сайта.</div>
-          <label class="muted" style="display:block;text-align:left">🌸 Начало весны<input id="seasonSpringStart" class="field" type="datetime-local"></label>
-          <label class="muted" style="display:block;text-align:left">☀️ Начало лета<input id="seasonSummerStart" class="field" type="datetime-local"></label>
-          <label class="muted" style="display:block;text-align:left">🍂 Начало осени<input id="seasonAutumnStart" class="field" type="datetime-local"></label>
-          <label class="muted" style="display:block;text-align:left">❄️ Начало зимы<input id="seasonWinterStart" class="field" type="datetime-local"></label>
-          <button type="button" id="saveSeasonSchedule" class="action-btn">СОХРАНИТЬ РАСПИСАНИЕ</button>
-          <div id="seasonThemeStatus" class="message" aria-live="polite"></div>
-        </div>
-        <details class="admin-section" open>
-          <summary>⚽ Создание матча</summary>
-          <div class="muted">Создай новый матч и настрой регистрацию участников.</div>
-          <form id="createMatchForm" style="margin-top:12px">
-            <label class="muted" for="newMatchTitle">Название матча</label>
-            <input id="newMatchTitle" class="field" maxlength="160" placeholder="Например: ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ" required />
-            <label class="muted" for="newMatchDate">Дата матча</label>
-            <input id="newMatchDate" class="field" type="date" required />
-            <label class="muted" for="newMatchTime">Время матча</label>
-            <input id="newMatchTime" class="field" type="time" required />
-            <label class="muted" for="newMatchLocation">Место проведения</label>
-            <input id="newMatchLocation" class="field" maxlength="200" placeholder="Спортивный зал" required />
-            <label class="muted" for="newMatchDeadline">Дедлайн регистрации (необязательно)</label>
-            <input id="newMatchDeadline" class="field" type="datetime-local" />
-            <label class="candidate"><input id="newMatchOpen" type="checkbox" checked><span style="font-size:13px">Сразу открыть регистрацию</span></label>
-            <button id="createMatchButton" class="action-btn" type="submit">СОЗДАТЬ МАТЧ</button>
-          </form>
-          <div id="createMatchMessage" class="message"></div>
-        </details>
-        <details class="admin-section" open>
-          <summary>🗓️ Импорт официального расписания из CSV</summary>
-          <div class="muted" style="text-align:left">Загрузи один CSV со всеми матчами и мероприятиями. Повторная загрузка обновляет записи по столбцу id и не удаляет мероприятия, которых нет в файле. Для матча используй type=match, для другого мероприятия — type=event. Для Д×Г укажи tournament=DXG.</div>
-          <input id="scheduleCsvFile" class="field" type="file" accept=".csv,text/csv">
-          <button type="button" id="importScheduleCsvButton" class="action-btn">ЗАГРУЗИТЬ CSV</button>
-          <button type="button" id="downloadScheduleTemplateButton" class="small-btn" style="width:100%;margin-top:8px">Скачать пример CSV</button>
-          <button type="button" id="deleteAllScheduleButton" class="action-btn" style="width:100%;margin-top:10px;background:#a83232">УДАЛИТЬ ВСЁ РАСПИСАНИЕ</button>
-          <div id="scheduleImportMessage" class="message" aria-live="polite"></div>
-        </details>
-        <details class="admin-section">
-          <summary>⚽ Результаты матчей расписания</summary>
-          <div class="muted">Введи голы обеих сторон и сохрани. Пока результат не внесён, в расписании отображается пустой счёт.</div>
-          <div id="adminScheduleScores" style="margin-top:10px">Загрузка…</div>
-        </details>
-        <details class="admin-section">
-          <summary>📋 Заявки игроков и перевод между командами</summary>
-          <div class="muted">Здесь отображаются заявки на матчи. Перевод меняет команду только в выбранной заявке, не затрагивая профиль игрока и Google Таблицу.</div>
-          <div id="adminMatchApplications" style="margin-top:10px"></div>
-        </details>
-        <details class="admin-section">
-          <summary>🗓️ Матчи и регистрация</summary>
-          <div class="muted">Список созданных матчей и управление регистрацией.</div>
-          <button type="button" id="refreshAdminMatches" class="small-btn">Обновить список</button>
-          <div id="adminMatchesList" style="margin-top:10px"></div>
-        </details>
-        <details class="admin-section" open>
-          <summary>📊 Настройка категорий статистики</summary>
-          <p class="muted">По умолчанию доступны все статистические столбцы Google Таблицы. Отметь галочками то, что нужно показывать в карточке игрока.</p>
-          <label class="candidate"><input type="checkbox" id="statNameEnabled" checked><span style="font-size:13px">Показывать имя игрока</span></label>
-          <div id="statsCategorySettings" style="display:grid;gap:10px;margin-top:12px">
-            <div class="muted">Загрузка заголовков Google Таблицы…</div>
-          </div>
-          <button type="button" id="saveStatsCategorySettings" class="action-btn" style="margin-top:12px">СОХРАНИТЬ КАТЕГОРИИ</button>
-          <div id="statsSettingsMessage" class="message"></div>
-        </details>
-        <details class="admin-section" open>
-        <summary>🗳️ Управление опросами</summary>
-        <div class="muted">Создавайте опросы здесь. Для каждого кандидата укажите ID игрока и имя через вертикальную черту: FTB-001 | Иван Петров. ID должен совпадать с ID игрока в статистике.</div>
-        <form id="createPollForm" style="margin-top:12px">
-          <label class="muted" for="pollTitle">Название опроса</label>
-          <input id="pollTitle" class="field" maxlength="160" placeholder="Например: Лучший игрок месяца" required />
-          <label class="muted" for="pollEndsAt">Дата и время окончания</label>
-          <input id="pollEndsAt" class="field" type="datetime-local" required />
-          <label class="muted" for="pollCandidatesInput">Кандидаты — один на строку</label>
-          <textarea id="pollCandidatesInput" class="field" rows="5" placeholder="FTB-001 | Иван Петров&#10;FTB-002 | Сергей Иванов" required style="resize:vertical"></textarea>
-          <button id="createPollButton" class="action-btn" type="submit">СОЗДАТЬ ОПРОС</button>
-        </form>
-        <div id="createPollMessage" class="message"></div>
-        </details>
-        <details class="admin-section" open>
-        <summary>📰 Новости и информационные сообщения</summary>
-        <h3 style="font-size:14px;margin:18px 0 8px">Новости и информационные сообщения</h3>
-        <div class="muted">Настройте, кому будет видна новость. При публикации уведомления внутри сайта отправятся только выбранной аудитории.</div>
-        <form id="createNewsForm" style="margin-top:12px">
-          <label class="muted" style="display:block;text-align:left;margin-top:12px">Кому будет видна новость?</label>
-          <label class="candidate"><input type="radio" name="newsAudience" value="all" checked><span style="font-size:13px">Всем участникам сообщества</span></label>
-          <label class="candidate"><input type="radio" name="newsAudience" value="selected"><span style="font-size:13px">Только выбранным пользователям</span></label>
-          <div id="newsRecipientsWrap" class="hidden" style="margin:10px 0;padding:10px;border:1px solid rgba(255,255,255,.12);border-radius:10px"><div style="display:flex;gap:8px;margin-bottom:8px"><button type="button" id="selectAllNewsRecipients" class="small-btn">Выбрать всех</button><button type="button" id="clearNewsRecipients" class="small-btn">Снять выбор</button></div><div id="newsRecipientsList" class="muted" style="text-align:left">Загрузка пользователей…</div></div>
-          <label class="muted" for="newsTitle">Заголовок новости</label><input id="newsTitle" class="field" maxlength="180" placeholder="Например: Изменение расписания" required>
-          <label class="muted" for="newsBody">Текст сообщения</label><textarea id="newsBody" class="field" rows="5" maxlength="8000" placeholder="Введите текст новости…" required style="resize:vertical"></textarea>
-          <label class="muted" for="newsImage">Ссылка на изображение (необязательно)</label><input id="newsImage" class="field" type="url" placeholder="https://…">
-          <label class="muted" for="newsAttachmentFiles">Прикрепить файлы (до 25 МБ каждый)</label><input id="newsAttachmentFiles" class="field" type="file" multiple>
-          <div id="newsEditWrap" class="hidden" style="margin:10px 0;padding:10px;border:1px solid rgba(255,255,255,.14);border-radius:10px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">ТЕКУЩИЕ ВЛОЖЕНИЯ — отметь файлы для удаления</div><div id="newsEditAttachments"></div><button type="button" id="cancelNewsEdit" class="small-btn" style="width:100%;margin-top:8px">ОТМЕНИТЬ РЕДАКТИРОВАНИЕ</button></div>
-          <button id="publishNewsButton" class="action-btn" type="submit">ОПУБЛИКОВАТЬ НОВОСТЬ</button>
-        </form>
-        <div id="createNewsMessage" class="message"></div>
-        <div id="adminNewsList" style="margin-top:12px"></div>
-        </details>
-        <details class="admin-section">
-          <summary>👤 Добавление и управление игроками</summary>
-          <h3 style="font-size:14px;margin:18px 0 8px">Создать участника</h3>
-          <div class="muted">Создавайте аккаунты участников. Логин и временный пароль передайте игроку лично. Пароль не сохраняется в списке и не отображается повторно.</div>
-          <form id="createMemberForm" style="margin-top:12px">
-            <label class="muted" for="memberUsername">Логин (латиница, цифры, _ или -)</label>
-            <input id="memberUsername" class="field" minlength="3" maxlength="30" pattern="[A-Za-z0-9_-]{3,30}" autocomplete="off" placeholder="Например: player02" required />
-            <label class="muted" for="memberPlayerId">ID игрока</label>
-            <input id="memberPlayerId" class="field" maxlength="50" placeholder="Например: FTB-002" required />
-            <label class="muted" for="memberPassword">Временный пароль (минимум 8 символов)</label>
-            <input id="memberPassword" class="field" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Задайте временный пароль" required />
-            <button id="createMemberButton" class="action-btn" type="submit">СОЗДАТЬ УЧАСТНИКА</button>
-          </form>
-          <div id="createMemberMessage" class="message"></div>
-          <h3 style="font-size:14px;margin:18px 0 8px">Все зарегистрированные пользователи</h3>
-          <button type="button" id="refreshAdminUsers" class="small-btn">Обновить список</button>
-          <div id="adminUsersList" style="margin-top:10px"></div>
-        </details>
-        <details class="admin-section">
-          <summary>🗳️ Отслеживание голосов и результаты</summary>
-          <h3 style="font-size:14px;margin:18px 0 8px">Опросы и результаты</h3>
-          <div id="adminResults"></div>
-          <hr style="border:0;border-top:1px solid rgba(255,255,255,.14);margin:22px 0">
-          <h3 style="font-size:14px;margin:18px 0 8px">Устройства участников</h3>
-          <div class="muted">Здесь отображаются устройства и браузеры для голосов, отправленных после обновления сайта. Старые голоса не содержат этих данных.</div>
-          <div id="adminVoteDetails"></div>
-        </details>
-      </section>
-    </section>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    // Заполните эти два значения в настройках проекта Supabase (Project URL и publishable/anon key).
-    const SUPABASE_URL = 'https://qyarjovuxthzxfaksapp.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_p5db1Dw-6yLoqXmB-1UoEg_hKHniYW5';
-    const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1EBqurekL2MJH4OItnBRY_cF-Le8Q6BHyie7Q3bPMW4Q/export?format=csv';
-    let sb = null, currentUser = null, currentProfile = null, activePoll = null;
-    const $ = id => document.getElementById(id);
-    // Инициализируем Supabase в самом начале, чтобы более поздняя ошибка интерфейса
-    // не оставляла кнопку входа без подключения к серверу.
-    try {
-      if (window.supabase && SUPABASE_URL.startsWith('https://') && !SUPABASE_KEY.startsWith('ВСТАВЬТЕ_')) {
-        sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
-      }
-    } catch (connectionInitError) {
-      console.error('Supabase init error:', connectionInitError);
-    }
-    function usernameEmail(username) { const value = username.trim().toLowerCase(); return value.includes('@') ? value : value.replace(/[^a-z0-9._-]/g, '-') + '@members.futbolery.local'; }
-    function setMessage(id, msg, bad=false) { $(id).textContent = msg || ''; $(id).style.color = bad ? '#ff7777' : 'var(--accent-text, #ffd21f)'; }
-
-    function showSection(sectionId) {
-      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel'].forEach(id => {
-        const panel=$(id); if(panel) panel.classList.toggle('hidden', id !== sectionId);
-      });
-      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton'};
-      Object.entries(backButtons).forEach(([panelId,buttonId])=>{const button=$(buttonId);if(button)button.classList.toggle('hidden',sectionId!==panelId);});
-      window.scrollTo({top:0,behavior:'smooth'});
-    }
-
-    let editingNewsId=null, newsAttachmentsToRemove=[];
-    const NEWS_ATTACHMENT_BUCKET='news-attachments';
-    async function uploadNewsAttachments(newsId,files) {
-      const uploaded=[];
-      for(const file of Array.from(files||[])) {
-        if(file.size>25*1024*1024) throw new Error('Файл «'+file.name+'» превышает лимит 25 МБ.');
-        const safeName=file.name.replace(/[^a-zA-Z0-9а-яА-ЯёЁ._ -]/g,'_').replace(/\s+/g,'_').slice(-120)||'file';
-        const path=newsId+'/'+crypto.randomUUID()+'-'+safeName;
-        const {error:uploadError}=await sb.storage.from(NEWS_ATTACHMENT_BUCKET).upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
-        if(uploadError) throw new Error('Не удалось загрузить «'+file.name+'»: '+uploadError.message);
-        const {error:metaError}=await sb.from('news_attachments').insert({news_id:newsId,file_name:file.name,file_path:path,mime_type:file.type||null,file_size:file.size,uploaded_by:currentUser.id});
-        if(metaError) { await sb.storage.from(NEWS_ATTACHMENT_BUCKET).remove([path]); throw new Error('Файл загружен, но запись вложения не сохранена: '+metaError.message); }
-        uploaded.push(file.name);
-      }
-      return uploaded;
-    }
-    async function renderNewsAttachments(container,newsId) {
-      const {data:files,error}=await sb.from('news_attachments').select('id,file_name,file_path,file_size,mime_type').eq('news_id',newsId).order('created_at');
-      if(error) { const note=document.createElement('div');note.className='muted';note.textContent='Вложения пока недоступны.';container.appendChild(note);return; }
-      if(!files?.length)return;
-      const list=document.createElement('div');list.style.cssText='display:grid;gap:12px;margin-top:14px';
-      for(const file of files) {
-        const {data:signed,error:signedError}=await sb.storage.from(NEWS_ATTACHMENT_BUCKET).createSignedUrl(file.file_path,3600);
-        if(signedError||!signed?.signedUrl)continue;
-        const type=(file.mime_type||'').toLowerCase();
-        const name=(file.file_name||'').toLowerCase();
-        const sizeLabel=file.file_size<1024*1024?Math.max(1,Math.round(file.file_size/1024))+' КБ':(file.file_size/1024/1024).toFixed(1)+' МБ';
-        const preview=document.createElement('div');preview.style.cssText='display:grid;gap:6px;min-width:0';
-        const isImage=type.startsWith('image/')||/\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(name);const caption=document.createElement('div');caption.style.cssText='font-size:12px;color:var(--muted);overflow-wrap:anywhere';caption.textContent=(isImage?'':'📎 ')+file.file_name+' · '+sizeLabel;preview.appendChild(caption);
-        if(type.startsWith('image/')||/\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(name)) {
-          const img=document.createElement('img');img.src=signed.signedUrl;img.alt=file.file_name;img.loading='lazy';img.style.cssText='display:block;width:100%;max-height:520px;object-fit:contain;border-radius:10px;background:rgba(0,0,0,.12)';preview.appendChild(img);
-        } else if(type==='application/pdf'||name.endsWith('.pdf')) {
-          const frame=document.createElement('iframe');frame.src=signed.signedUrl;frame.title=file.file_name;frame.loading='lazy';frame.style.cssText='display:block;width:100%;height:min(70vh,650px);min-height:320px;border:0;border-radius:10px;background:#fff';preview.appendChild(frame);
-        } else if(type.startsWith('video/')) {
-          const video=document.createElement('video');video.src=signed.signedUrl;video.controls=true;video.preload='metadata';video.style.cssText='display:block;width:100%;max-height:520px;border-radius:10px';preview.appendChild(video);
-        } else if(type.startsWith('audio/')) {
-          const audio=document.createElement('audio');audio.src=signed.signedUrl;audio.controls=true;audio.preload='metadata';audio.style.width='100%';preview.appendChild(audio);
-        } else if(type.startsWith('text/')) {
-          const frame=document.createElement('iframe');frame.src=signed.signedUrl;frame.title=file.file_name;frame.loading='lazy';frame.style.cssText='display:block;width:100%;height:260px;border:1px solid rgba(255,255,255,.13);border-radius:10px';preview.appendChild(frame);
-        } else {
-          // Fallback: некоторые мобильные файловые менеджеры не передают MIME и расширение.
-          // Пробуем показать файл как изображение; если браузер не сможет его декодировать,
-          // заменяем предпросмотр обычной ссылкой.
-          const img=document.createElement('img');img.src=signed.signedUrl;img.alt=file.file_name;img.loading='lazy';img.style.cssText='display:block;width:100%;max-height:520px;object-fit:contain;border-radius:10px;background:rgba(0,0,0,.12)';
-          img.onerror=()=>{img.remove();const link=document.createElement('a');link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';link.style.cssText='display:block;padding:9px 11px;border:1px solid rgba(255,255,255,.13);border-radius:9px;color:var(--accent-text);font-size:12px;text-decoration:none;overflow-wrap:anywhere';link.textContent='Открыть файл: '+file.file_name;preview.appendChild(link);};
-          preview.appendChild(img);
-        }
-        list.appendChild(preview);
-      }
-      if(list.childNodes.length)container.appendChild(list);
-    }
-    async function loadNews() {
-      const root=$('newsFeed'); if(!root || !sb || !currentUser) return; root.replaceChildren();
-      const {data:news,error}=await sb.from('news').select('id,title,body,image_url,author_id,visibility,created_at').order('created_at',{ascending:false}).limit(50);
-      if(error) { root.textContent='Новости пока не настроены. Администратору нужно выполнить SQL из архива.'; $('newsUnreadBadge').classList.add('hidden'); return; }
-      if(!news || !news.length) { root.textContent='Новостей пока нет.'; $('newsUnreadBadge').classList.add('hidden'); return; }
-      const [{data:profiles},{data:readRows}]=await Promise.all([sb.from('profiles').select('user_id,username'),sb.from('news_reads').select('news_id').eq('user_id',currentUser.id)]);
-      const names=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p.username])); const readSet=new Set((readRows||[]).map(x=>x.news_id));
-      $('newsUnreadBadge').classList.toggle('hidden',!news.some(n=>!readSet.has(n.id)));
-      for(const n of news) {
-        const item=document.createElement('article'); item.className='news-item';
-        const title=document.createElement('div');title.className='news-title';title.textContent=n.title;item.appendChild(title);
-        const meta=document.createElement('div');meta.className='news-meta';meta.textContent='От: '+(names[n.author_id]||'ФУТБОЛЁРЫ')+' · '+new Date(n.created_at).toLocaleString('ru-RU')+(readSet.has(n.id)?'':' · НОВОЕ');item.appendChild(meta);
-        if(n.image_url){const img=document.createElement('img');img.cl<div class="muted" style="padding:10px;border:1px solid rgba(255,210,31,.35);border-radius:10px;margin:10px 0">
-        Важно: срок голосования должен проверяться на стороне Supabase. Проверка только в браузере не защищает от изменения часов устройства; для полной защиты нужна серверная проверка срока и уникальности голоса.
-        </div>
         <div class="admin-tabs" role="tablist" aria-label="Разделы настроек администратора">
           <button type="button" class="admin-tab active" data-admin-tab="matches" role="tab" aria-selected="true">⚽ Матчи</button>
           <button type="button" class="admin-tab" data-admin-tab="stats" role="tab" aria-selected="false">📊 Статистика</button>
@@ -483,7 +260,7 @@
           <button type="button" class="admin-tab" data-admin-tab="news" role="tab" aria-selected="false">📰 Новости</button>
           <button type="button" class="admin-tab" data-admin-tab="users" role="tab" aria-selected="false">👤 Участники</button>
           <button type="button" class="admin-tab" data-admin-tab="design" role="tab" aria-selected="false">🎨 Оформление</button>
-        </div><div class="admin-tab-panel active" data-admin-panel="matches" ><details class="admin-section" open>
+        </div><div class="admin-tab-panel" data-admin-panel="matches"><details class="admin-section" open>
           <summary>⚽ Создание матча</summary>
           <div class="muted">Создай новый матч и настрой регистрацию участников.</div>
           <form id="createMatchForm" style="margin-top:12px">
@@ -501,8 +278,7 @@
             <button id="createMatchButton" class="action-btn" type="submit">СОЗДАТЬ МАТЧ</button>
           </form>
           <div id="createMatchMessage" class="message"></div>
-        </details>
-<details class="admin-section" open>
+        </details><details class="admin-section" open>
           <summary>🗓️ Импорт официального расписания из CSV</summary>
           <div class="muted" style="text-align:left">Загрузи один CSV со всеми матчами и мероприятиями. Повторная загрузка обновляет записи по столбцу id и не удаляет мероприятия, которых нет в файле. Для матча используй type=match, для другого мероприятия — type=event. Для Д×Г укажи tournament=DXG.</div>
           <input id="scheduleCsvFile" class="field" type="file" accept=".csv,text/csv">
@@ -510,18 +286,15 @@
           <button type="button" id="downloadScheduleTemplateButton" class="small-btn" style="width:100%;margin-top:8px">Скачать пример CSV</button>
           <button type="button" id="deleteAllScheduleButton" class="action-btn" style="width:100%;margin-top:10px;background:#a83232">УДАЛИТЬ ВСЁ РАСПИСАНИЕ</button>
           <div id="scheduleImportMessage" class="message" aria-live="polite"></div>
-        </details>
-<details class="admin-section">
+        </details><details class="admin-section">
           <summary>⚽ Результаты матчей расписания</summary>
           <div class="muted">Введи голы обеих сторон и сохрани. Пока результат не внесён, в расписании отображается пустой счёт.</div>
           <div id="adminScheduleScores" style="margin-top:10px">Загрузка…</div>
-        </details>
-<details class="admin-section">
+        </details><details class="admin-section">
           <summary>📋 Заявки игроков и перевод между командами</summary>
           <div class="muted">Здесь отображаются заявки на матчи. Перевод меняет команду только в выбранной заявке, не затрагивая профиль игрока и Google Таблицу.</div>
           <div id="adminMatchApplications" style="margin-top:10px"></div>
-        </details>
-<details class="admin-section">
+        </details><details class="admin-section">
           <summary>🗓️ Матчи и регистрация</summary>
           <div class="muted">Список созданных матчей и управление регистрацией.</div>
           <button type="button" id="refreshAdminMatches" class="small-btn">Обновить список</button>
@@ -548,8 +321,7 @@
           <button id="createPollButton" class="action-btn" type="submit">СОЗДАТЬ ОПРОС</button>
         </form>
         <div id="createPollMessage" class="message"></div>
-        </details>
-<details class="admin-section">
+        </details><details class="admin-section">
           <summary>🗳️ Отслеживание голосов и результаты</summary>
           <h3 style="font-size:14px;margin:18px 0 8px">Опросы и результаты</h3>
           <div id="adminResults"></div>
@@ -606,6 +378,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
   <script>
     // Заполните эти два значения в настройках проекта Supabase (Project URL и publishable/anon key).
     const SUPABASE_URL = 'https://qyarjovuxthzxfaksapp.supabase.co';

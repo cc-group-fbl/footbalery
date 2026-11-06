@@ -826,8 +826,52 @@
       });
       details.appendChild(grid);card.appendChild(details);
     }
+    const MATCH_ATTACHMENT_BUCKET='schedule-attachments';
+    async function uploadMatchAttachments(eventId,files){
+      const selected=Array.from(files||[]);
+      if(selected.length>10)throw new Error('За один раз можно прикрепить не более 10 фотографий.');
+      const uploaded=[];
+      for(const file of selected){
+        if(!file.type||!file.type.startsWith('image/'))throw new Error('Файл «'+file.name+'» не является изображением.');
+        if(file.size>25*1024*1024)throw new Error('Фото «'+file.name+'» превышает лимит 25 МБ.');
+        const safeName=file.name.replace(/[^a-zA-Z0-9а-яА-ЯёЁ._ -]/g,'_').replace(/\s+/g,'_').slice(-120)||'photo';
+        const path=eventId+'/'+crypto.randomUUID()+'-'+safeName;
+        const {error:uploadError}=await sb.storage.from(MATCH_ATTACHMENT_BUCKET).upload(path,file,{upsert:false,contentType:file.type});
+        if(uploadError)throw new Error('Не удалось загрузить «'+file.name+'»: '+uploadError.message);
+        const {error:metaError}=await sb.from('schedule_event_attachments').insert({event_id:eventId,file_name:file.name,file_path:path,mime_type:file.type,file_size:file.size,uploaded_by:currentUser.id});
+        if(metaError){await sb.storage.from(MATCH_ATTACHMENT_BUCKET).remove([path]);throw new Error('Фото загружено, но запись не сохранена: '+metaError.message);}
+        uploaded.push(file.name);
+      }
+      return uploaded;
+    }
+    async function deleteScheduleAttachments(eventId){
+      const {data:files,error}=await sb.from('schedule_event_attachments').select('file_path').eq('event_id',eventId);
+      if(error)throw error;
+      const paths=(files||[]).map(x=>x.file_path);
+      if(paths.length){const {error:storageError}=await sb.storage.from(MATCH_ATTACHMENT_BUCKET).remove(paths);if(storageError)throw storageError;}
+    }
+    async function renderMatchAttachments(container,eventId,adminMode=false){
+      const {data:files,error}=await sb.from('schedule_event_attachments').select('id,file_name,file_path,mime_type').eq('event_id',eventId).order('created_at');
+      if(error){const note=document.createElement('div');note.className='muted';note.textContent='Фотографии матча пока недоступны.';container.appendChild(note);return;}
+      if(!files?.length){if(adminMode){const note=document.createElement('div');note.className='muted';note.textContent='Фотографии пока не добавлены.';container.appendChild(note);}return;}
+      const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px';
+      for(const file of files){
+        const {data:signed,error:signedError}=await sb.storage.from(MATCH_ATTACHMENT_BUCKET).createSignedUrl(file.file_path,3600);
+        if(signedError||!signed?.signedUrl)continue;
+        const cell=document.createElement('div');cell.style.cssText='min-width:0;display:grid;gap:5px';
+        const img=document.createElement('img');img.src=signed.signedUrl;img.alt=file.file_name;img.loading='lazy';img.style.cssText='width:100%;max-height:260px;object-fit:cover;border-radius:10px;background:rgba(0,0,0,.15)';cell.appendChild(img);
+        if(adminMode){
+          const caption=document.createElement('div');caption.className='muted';caption.style.textAlign='left';caption.textContent=file.file_name;cell.appendChild(caption);
+          const remove=document.createElement('button');remove.type='button';remove.className='small-btn';remove.textContent='Удалить фото';
+          remove.addEventListener('click',async()=>{if(!confirm('Удалить фотографию «'+file.file_name+'»?'))return;remove.disabled=true;const {error:storageError}=await sb.storage.from(MATCH_ATTACHMENT_BUCKET).remove([file.file_path]);if(storageError){alert('Не удалось удалить фото: '+storageError.message);remove.disabled=false;return;}const {error:rowError}=await sb.from('schedule_event_attachments').delete().eq('id',file.id);if(rowError){alert('Файл удалён, но запись не удалена: '+rowError.message);return;}await loadSchedule();await loadAdminScheduleScores();});
+          cell.appendChild(remove);
+        }
+        grid.appendChild(cell);
+      }
+      if(grid.childNodes.length)container.appendChild(grid);
+    }
     async function getScheduleRows(){
-      const {data:events,error}=await sb.from('schedule_events').select('id,type,title,event_date,event_time,location,description,tournament,match_id').order('event_date',{ascending:true}).order('event_time',{ascending:true});
+      const {data:events,error}=await sb.from('schedule_events').select('id,type,title,event_date,event_time,location,description,details,tournament,match_id').order('event_date',{ascending:true}).order('event_time',{ascending:true});
       if(error)throw error;
       const matchIds=[...new Set((events||[]).map(x=>x.match_id).filter(Boolean))];
       let matches=[];
@@ -844,6 +888,7 @@
       if(!confirm(warning))return;
       if(button)button.disabled=true;
       try{
+        await deleteScheduleAttachments(item.id);
         if(isMatch&&item.match_id){
           const {error}=await sb.from('matches').delete().eq('id',item.match_id);
           if(error)throw error;
@@ -887,6 +932,8 @@
             const score=document.createElement('div');score.className='schedule-score';score.textContent=item.match&&item.match.score_home!==null&&item.match.score_away!==null?item.match.score_home+' : '+item.match.score_away:'— : —';card.appendChild(score);
             if(item.tournament==='DXG'){const tournament=document.createElement('div');tournament.className='news-meta';tournament.textContent='Турнир ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ';card.appendChild(tournament);}
             if(item.description){const desc=document.createElement('div');desc.className='news-body';desc.textContent=item.description;card.appendChild(desc);}
+            if(item.details){const details=document.createElement('div');details.className='news-body';details.style.marginTop='8px';details.textContent=item.details;card.appendChild(details);}
+            renderMatchAttachments(card,item.id,false);
             renderScheduleLineups(item,card);
             if(item.match?.is_open){
               const apply=document.createElement('button');apply.type='button';apply.className='action-btn';apply.textContent='ПОДАТЬ ЗАЯВКУ';apply.addEventListener('click',()=>{
@@ -933,6 +980,8 @@
             const score=document.createElement('div');score.className='schedule-score';score.textContent=item.match&&item.match.score_home!==null&&item.match.score_away!==null?item.match.score_home+' : '+item.match.score_away:'— : —';card.appendChild(score);
             if(item.tournament==='DXG'){const tournament=document.createElement('div');tournament.className='news-meta';tournament.textContent='Турнир ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ';card.appendChild(tournament);}
             if(item.description){const desc=document.createElement('div');desc.className='news-body';desc.textContent=item.description;card.appendChild(desc);}
+            if(item.details){const details=document.createElement('div');details.className='news-body';details.style.marginTop='8px';details.textContent=item.details;card.appendChild(details);}
+            renderMatchAttachments(card,item.id,false);
             renderScheduleLineups(item,card);
             appendScheduleDeleteButton(item,card);
             pastList.appendChild(card);
@@ -959,7 +1008,17 @@
           const away=document.createElement('input');away.className='field';away.type='number';away.min='0';away.max='99';away.placeholder='—';away.value=item.match?.score_away??'';away.setAttribute('aria-label','Голы второй стороны');away.style.textAlign='center';
           const save=document.createElement('button');save.type='button';save.className='small-btn';save.textContent='Сохранить';
           save.addEventListener('click',async()=>{if((home.value===''||away.value==='')&&!(home.value===''&&away.value==='')){setMessage('scheduleImportMessage','Заполни обе части счёта или очисти обе.',true);return;}const payload={score_home:home.value===''?null:Number(home.value),score_away:away.value===''?null:Number(away.value)};save.disabled=true;const {error}=await sb.from('matches').update(payload).eq('id',item.match_id);if(error){setMessage('scheduleImportMessage','Не удалось сохранить счёт: '+error.message,true);save.disabled=false;return;}setMessage('scheduleImportMessage','Счёт сохранён.');await loadSchedule();save.disabled=false;});
-          controls.append(home,sep,away,save);row.appendChild(controls);root.appendChild(row);
+          controls.append(home,sep,away,save);row.appendChild(controls);
+          const editor=document.createElement('details');editor.className='admin-section';editor.style.marginTop='10px';
+          const summary=document.createElement('summary');summary.textContent='📝 Подробные сведения и фотографии';editor.appendChild(summary);
+          const detailsLabel=document.createElement('label');detailsLabel.className='muted';detailsLabel.style.textAlign='left';detailsLabel.textContent='Подробное описание матча';
+          const detailsInput=document.createElement('textarea');detailsInput.className='field';detailsInput.rows=4;detailsInput.maxLength=8000;detailsInput.placeholder='Например: участники, формат игры, важные сведения…';detailsInput.value=item.details||'';detailsInput.style.resize='vertical';detailsLabel.appendChild(detailsInput);editor.appendChild(detailsLabel);
+          const photoLabel=document.createElement('label');photoLabel.className='muted';photoLabel.style.textAlign='left';photoLabel.textContent='Прикрепить фотографии (до 10 за раз, не более 25 МБ каждая)';
+          const photoInput=document.createElement('input');photoInput.className='field';photoInput.type='file';photoInput.accept='image/*';photoInput.multiple=true;photoLabel.appendChild(photoInput);editor.appendChild(photoLabel);
+          const currentPhotos=document.createElement('div');currentPhotos.style.marginTop='8px';editor.appendChild(currentPhotos);renderMatchAttachments(currentPhotos,item.id,true);
+          const saveDetails=document.createElement('button');saveDetails.type='button';saveDetails.className='action-btn';saveDetails.textContent='СОХРАНИТЬ СВЕДЕНИЯ И ФОТО';
+          saveDetails.addEventListener('click',async()=>{saveDetails.disabled=true;try{const {error:detailsError}=await sb.from('schedule_events').update({details:detailsInput.value.trim()||null}).eq('id',item.id);if(detailsError)throw detailsError;const uploaded=await uploadMatchAttachments(item.id,photoInput.files);setMessage('scheduleImportMessage','Сведения сохранены. Добавлено фотографий: '+uploaded.length+'.');await loadSchedule();await loadAdminScheduleScores();}catch(error){setMessage('scheduleImportMessage','Не удалось полностью сохранить сведения: '+error.message,true);saveDetails.disabled=false;}});
+          editor.appendChild(saveDetails);row.appendChild(editor);root.appendChild(row);
         });
       }catch(error){root.textContent='Не удалось загрузить матчи: '+error.message;}
     }
@@ -999,6 +1058,7 @@
       if(button)button.disabled=true;
       setMessage('scheduleImportMessage','Удаляем расписание…');
       try{
+        const {data:attachmentRows,error:attachmentReadError}=await sb.from('schedule_event_attachments').select('file_path');if(attachmentReadError)throw attachmentReadError;const attachmentPaths=(attachmentRows||[]).map(x=>x.file_path);if(attachmentPaths.length){const {error:attachmentDeleteError}=await sb.storage.from(MATCH_ATTACHMENT_BUCKET).remove(attachmentPaths);if(attachmentDeleteError)throw attachmentDeleteError;}
         const {error:matchesError}=await sb.from('matches').delete().not('schedule_id','is',null);
         if(matchesError)throw new Error('Не удалось удалить матчи расписания: '+matchesError.message);
         const {error:eventsError}=await sb.from('schedule_events').delete().not('id','is',null);

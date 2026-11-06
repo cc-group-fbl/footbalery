@@ -1,0 +1,13 @@
+{
+  "appId": "ru.footbalery.app",
+  "appName": "ФУТБОЛЁРЫ",
+  "webDir": "www",
+  "server": {
+    "url": "https://cc-group-fbl.github.io/footbalery/",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

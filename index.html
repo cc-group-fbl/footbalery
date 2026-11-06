@@ -870,6 +870,11 @@
       }
       if(grid.childNodes.length)container.appendChild(grid);
     }
+    async function getExistingScheduleDetails(eventId){
+      const {data,error}=await sb.from('schedule_events').select('details').eq('id',eventId).maybeSingle();
+      if(error)throw error;
+      return data?.details||null;
+    }
     async function getScheduleRows(){
       const {data:events,error}=await sb.from('schedule_events').select('id,type,title,event_date,event_time,location,description,details,tournament,match_id').order('event_date',{ascending:true}).order('event_time',{ascending:true});
       if(error)throw error;
@@ -1039,10 +1044,10 @@
             let matchId=existing?.id;
             if(existing){const {error}=await sb.from('matches').update(payload).eq('id',existing.id);if(error)throw new Error('Ошибка обновления матча '+item.id+': '+error.message);}
             else{const {data,error}=await sb.from('matches').insert({...payload,schedule_id:item.id,registration_deadline:null}).select('id').single();if(error)throw new Error('Ошибка создания матча '+item.id+': '+error.message);matchId=data.id;}
-            const eventRow={id:item.id,type:'match',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,tournament:item.tournament,match_id:matchId};
+            const eventRow={id:item.id,type:'match',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,details:await getExistingScheduleDetails(item.id),tournament:item.tournament,match_id:matchId};
             const {error:eventError}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(eventError)throw new Error('Не удалось сохранить запись расписания '+item.id+': '+eventError.message);
           }else{
-            const eventRow={id:item.id,type:'event',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,tournament:item.tournament,match_id:null};
+            const eventRow={id:item.id,type:'event',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,details:await getExistingScheduleDetails(item.id),tournament:item.tournament,match_id:null};
             const {error}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(error)throw new Error('Не удалось сохранить мероприятие '+item.id+': '+error.message);
           }
         }

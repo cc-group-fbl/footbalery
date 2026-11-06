@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "824700772295",
+    "project_id": "footbalery",
+    "storage_bucket": "footbalery.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:824700772295:android:938db1e29949a41d4a83e2",
+        "android_client_info": {
+          "package_name": "ru.footbalery.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwR3v3tF0iZIzy2oLG2cCEfEyZJC--yPE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

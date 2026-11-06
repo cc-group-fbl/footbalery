@@ -1,0 +1,17 @@
+{
+  "name": "footbalery-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Android wrapper for the ФУТБОЛЁРЫ website",
+  "scripts": {
+    "android:sync": "cap sync android",
+    "android:open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.3"
+  }
+}

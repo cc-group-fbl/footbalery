@@ -713,6 +713,40 @@
       const matchMap=Object.fromEntries(matches.map(m=>[m.id,m]));
       return (events||[]).map(e=>({...e,match:matchMap[e.match_id]||null}));
     }
+    async function deleteScheduleItem(item,button){
+      if(currentProfile?.role!=='admin')return;
+      const isMatch=item.type==='match';
+      const warning=isMatch
+        ?'Удалить матч «'+item.title+'» из расписания? Связанный матч и его заявки также будут удалены. Это действие нельзя отменить.'
+        :'Удалить мероприятие «'+item.title+'» из расписания? Это действие нельзя отменить.';
+      if(!confirm(warning))return;
+      if(button)button.disabled=true;
+      try{
+        if(isMatch&&item.match_id){
+          const {error}=await sb.from('matches').delete().eq('id',item.match_id);
+          if(error)throw error;
+        }else{
+          const {error}=await sb.from('schedule_events').delete().eq('id',item.id);
+          if(error)throw error;
+        }
+        await loadSchedule();
+        await loadAdminScheduleScores();
+        await loadAdminMatches();
+        await loadMatchOptions();
+        setMessage('scheduleImportMessage','Запись расписания удалена.');
+      }catch(error){
+        alert('Не удалось удалить запись расписания: '+error.message);
+        if(button)button.disabled=false;
+      }
+    }
+    function appendScheduleDeleteButton(item,card){
+      if(currentProfile?.role!=='admin')return;
+      const button=document.createElement('button');
+      button.type='button';button.className='small-btn';button.textContent='Удалить из расписания';
+      button.style.marginTop='10px';
+      button.addEventListener('click',()=>deleteScheduleItem(item,button));
+      card.appendChild(button);
+    }
     async function loadSchedule(){
       const root=$('scheduleList');if(!root||!sb||!currentUser)return;
       root.textContent='Загружаем расписание…';
@@ -758,6 +792,7 @@
               });card.appendChild(apply);
             }else if(item.match?.is_open===false){const closed=document.createElement('div');closed.className='muted';closed.textContent='Регистрация закрыта';card.appendChild(closed);}
           }else if(item.description){const desc=document.createElement('div');desc.className='news-body';desc.textContent=item.description;card.appendChild(desc);}
+          appendScheduleDeleteButton(item,card);
           root.appendChild(card);
         });
         if(pastMatches.length){
@@ -777,6 +812,7 @@
             if(item.tournament==='DXG'){const tournament=document.createElement('div');tournament.className='news-meta';tournament.textContent='Турнир ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ';card.appendChild(tournament);}
             if(item.description){const desc=document.createElement('div');desc.className='news-body';desc.textContent=item.description;card.appendChild(desc);}
             renderScheduleLineups(item,card);
+            appendScheduleDeleteButton(item,card);
             pastList.appendChild(card);
           });
           pastSection.appendChild(pastList);

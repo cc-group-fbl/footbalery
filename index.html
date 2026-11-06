@@ -646,7 +646,7 @@
         for(let i=0;i<value.length;i++){hash^=value.charCodeAt(i);hash=Math.imul(hash,16777619);}
         return 'M-'+(hash>>>0).toString(16).padStart(8,'0');
       };
-      const seen=new Set(),result=[];
+      const seen=new Set(),identityCounts=new Map(),result=[];
       rows.slice(1).forEach((r,i)=>{
         const line=i+2;
         const rawType=get(r,'type'),rawTournament=get(r,'tournament');
@@ -677,7 +677,11 @@
         if((sh&&!sa)||(!sh&&sa))throw new Error('Строка '+line+': заполни обе части счёта или оставь обе пустыми.');
         const tournament=/^(?:(?:dxg|д×г|дxг)(?:\s|$)|деревенские\s*[×x]\s*городские)/i.test(rawTournament)?'DXG':(rawTournament||null);
         const identity=[type,date,time||'',rawTournament,title,location||'',home,away].join('|');
-        const id=get(r,'id')||makeId(identity);
+        const occurrence=identityCounts.get(identity)||0;
+        identityCounts.set(identity,occurrence+1);
+        // В Memento могут быть несколько одинаковых записей в один день.
+        // Для повторов создаём стабильный отдельный ID по порядку в CSV.
+        const id=get(r,'id')||makeId(occurrence===0?identity:identity+'|occurrence:'+occurrence);
         if(seen.has(id))throw new Error('Строка '+line+': повторяется идентификатор «'+id+'».');
         seen.add(id);
         result.push({id,type,title,event_date:date,event_time:time,location,description:get(r,'description')||null,tournament,score_home:sh===''?null:Number(sh),score_away:sa===''?null:Number(sa),hasScore:sh!==''&&sa!=='',status,scheduled:/запланирован/i.test(status),home,away});

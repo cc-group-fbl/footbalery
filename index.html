@@ -414,16 +414,32 @@
       return uploaded;
     }
     async function renderNewsAttachments(container,newsId) {
-      const {data:files,error}=await sb.from('news_attachments').select('id,file_name,file_path,file_size').eq('news_id',newsId).order('created_at');
+      const {data:files,error}=await sb.from('news_attachments').select('id,file_name,file_path,file_size,mime_type').eq('news_id',newsId).order('created_at');
       if(error) { const note=document.createElement('div');note.className='muted';note.textContent='Вложения пока недоступны.';container.appendChild(note);return; }
       if(!files?.length)return;
-      const list=document.createElement('div');list.style.cssText='display:grid;gap:7px;margin-top:12px';
+      const list=document.createElement('div');list.style.cssText='display:grid;gap:12px;margin-top:14px';
       for(const file of files) {
         const {data:signed,error:signedError}=await sb.storage.from(NEWS_ATTACHMENT_BUCKET).createSignedUrl(file.file_path,3600);
         if(signedError||!signed?.signedUrl)continue;
-        const link=document.createElement('a');link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';link.style.cssText='display:block;padding:9px 11px;border:1px solid rgba(255,255,255,.13);border-radius:9px;color:var(--accent-text);font-size:12px;text-decoration:none;overflow-wrap:anywhere';
-        link.textContent='📎 '+file.file_name+' · '+(file.file_size<1024*1024?Math.max(1,Math.round(file.file_size/1024))+' КБ':(file.file_size/1024/1024).toFixed(1)+' МБ');
-        list.appendChild(link);
+        const type=(file.mime_type||'').toLowerCase();
+        const name=(file.file_name||'').toLowerCase();
+        const sizeLabel=file.file_size<1024*1024?Math.max(1,Math.round(file.file_size/1024))+' КБ':(file.file_size/1024/1024).toFixed(1)+' МБ';
+        const preview=document.createElement('div');preview.style.cssText='display:grid;gap:6px;min-width:0';
+        const caption=document.createElement('div');caption.style.cssText='font-size:12px;color:var(--muted);overflow-wrap:anywhere';caption.textContent='📎 '+file.file_name+' · '+sizeLabel;preview.appendChild(caption);
+        if(type.startsWith('image/')||/\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(name)) {
+          const img=document.createElement('img');img.src=signed.signedUrl;img.alt=file.file_name;img.loading='lazy';img.style.cssText='display:block;width:100%;max-height:520px;object-fit:contain;border-radius:10px;background:rgba(0,0,0,.12)';preview.appendChild(img);
+        } else if(type==='application/pdf'||name.endsWith('.pdf')) {
+          const frame=document.createElement('iframe');frame.src=signed.signedUrl;frame.title=file.file_name;frame.loading='lazy';frame.style.cssText='display:block;width:100%;height:min(70vh,650px);min-height:320px;border:0;border-radius:10px;background:#fff';preview.appendChild(frame);
+        } else if(type.startsWith('video/')) {
+          const video=document.createElement('video');video.src=signed.signedUrl;video.controls=true;video.preload='metadata';video.style.cssText='display:block;width:100%;max-height:520px;border-radius:10px';preview.appendChild(video);
+        } else if(type.startsWith('audio/')) {
+          const audio=document.createElement('audio');audio.src=signed.signedUrl;audio.controls=true;audio.preload='metadata';audio.style.width='100%';preview.appendChild(audio);
+        } else if(type.startsWith('text/')) {
+          const frame=document.createElement('iframe');frame.src=signed.signedUrl;frame.title=file.file_name;frame.loading='lazy';frame.style.cssText='display:block;width:100%;height:260px;border:1px solid rgba(255,255,255,.13);border-radius:10px';preview.appendChild(frame);
+        } else {
+          const link=document.createElement('a');link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';link.style.cssText='display:block;padding:9px 11px;border:1px solid rgba(255,255,255,.13);border-radius:9px;color:var(--accent-text);font-size:12px;text-decoration:none;overflow-wrap:anywhere';link.textContent='Открыть файл: '+file.file_name;preview.appendChild(link);
+        }
+        list.appendChild(preview);
       }
       if(list.childNodes.length)container.appendChild(list);
     }

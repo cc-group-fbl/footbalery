@@ -6,6 +6,7 @@ on:
     paths:
       - "package.json"
       - "capacitor.config.json"
+      - "google-services.json"
       - "www/**"
       - ".github/workflows/build-android.yml"
   workflow_dispatch:
@@ -36,6 +37,29 @@ jobs:
 
       - name: Generate Android project
         run: npx cap add android
+
+      - name: Configure Firebase for Android
+        run: |
+          cp google-services.json android/app/google-services.json
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("android/build.gradle")
+          text = root.read_text()
+          marker = "dependencies {"
+          if "com.google.gms:google-services" not in text:
+              if marker not in text:
+                  raise SystemExit("Could not find dependencies block in android/build.gradle")
+              text = text.replace(marker, marker + "\n        classpath 'com.google.gms:google-services:4.4.2'", 1)
+              root.write_text(text)
+
+          app = Path("android/app/build.gradle")
+          text = app.read_text()
+          plugin = "apply plugin: 'com.google.gms.google-services'"
+          if plugin not in text:
+              text += "\n" + plugin + "\n"
+              app.write_text(text)
+          PY
 
       - name: Sync Capacitor
         run: npx cap sync android

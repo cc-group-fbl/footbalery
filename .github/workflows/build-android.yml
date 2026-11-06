@@ -6,6 +6,7 @@ on:
     paths:
       - "package.json"
       - "capacitor.config.json"
+      - "www/**"
       - ".github/workflows/build-android.yml"
   workflow_dispatch:
 

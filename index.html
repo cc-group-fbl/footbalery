@@ -177,7 +177,8 @@
   #accountPanel.chat-thread-open #newChatButton,
   #accountPanel.chat-thread-open #chatSearchInput,
   #accountPanel.chat-thread-open #chatCreateBox{display:none!important}
-  .account-logout-row{display:flex;justify-content:center;margin:22px 0 8px}
+  .account-logout-row{display:none;justify-content:center;margin:22px 0 8px}
+  #accountPanel.main-menu-open .account-logout-row{display:flex}
   .account-logout-row .small-btn{padding:11px 22px}
   .chat-image{display:block;max-width:100%;max-height:280px;object-fit:contain;border-radius:10px;margin-top:7px;cursor:zoom-in}
   .chat-photo-viewer{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.94);backdrop-filter:blur(8px)}
@@ -468,6 +469,7 @@
     };
 
     function showSection(sectionId) {
+      $('accountPanel')?.classList.toggle('main-menu-open',sectionId==='homeScreen');
       ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel','chatsPanel'].forEach(id => {
         const panel=$(id); if(panel) panel.classList.toggle('hidden', id !== sectionId);
       });

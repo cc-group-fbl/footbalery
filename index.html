@@ -1067,6 +1067,7 @@
         if(metaError){await sb.storage.from(MATCH_ATTACHMENT_BUCKET).remove([path]);throw new Error('Фото загружено, но запись не сохранена: '+metaError.message);}
         uploaded.push(file.name);
       }
+      scheduleAttachmentFilesCache?.delete(eventId);
       return uploaded;
     }
     async function deleteScheduleAttachments(eventId){

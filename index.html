@@ -730,7 +730,7 @@
       $('chatThreadTitle').textContent=conversation.type==='group'?(conversation.title||'Групповой чат'):(peers[0]||'Личный чат');
       $('chatThreadMembers').textContent=conversation.type==='group'?'Участники: '+peers.concat([chatDisplayName(currentProfile)||'Вы']).join(', '):'Личная переписка';
       const box=$('chatMessages');box.replaceChildren();
-      (messages||[]).forEach(m=>{
+      for(const m of (messages||[])){
         const item=document.createElement('div');item.className='chat-message'+(m.sender_id===currentUser.id?' mine':'');
         if(m.body){const body=document.createElement('div');body.textContent=m.body;item.append(body);}
         for(const file of (attachmentsByMessage.get(m.id)||[])){
@@ -747,7 +747,7 @@
         }
         const meta=document.createElement('div');meta.className='chat-message-meta';meta.textContent=(m.sender_id===currentUser.id?'Вы':names.get(m.sender_id)||'Участник')+' · '+chatTime(m.created_at);
         item.append(meta);box.append(item);
-      });
+      }
       if(!messages?.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Это начало переписки. Отправь первое сообщение!';box.append(empty);}
       box.scrollTop=box.scrollHeight;
       await sb.from('chat_members').update({last_read_at:new Date().toISOString()}).eq('conversation_id',chatId).eq('user_id',currentUser.id);

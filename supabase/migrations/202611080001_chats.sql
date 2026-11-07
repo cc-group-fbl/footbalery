@@ -33,15 +33,31 @@ alter table public.chat_conversations enable row level security;
 alter table public.chat_members enable row level security;
 alter table public.chat_messages enable row level security;
 
+-- SECURITY DEFINER helper prevents recursive RLS checks on chat_members.
+create or replace function public.is_chat_member(p_conversation_id uuid, p_user_id uuid default auth.uid())
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $
+  select exists (
+    select 1 from public.chat_members m
+    where m.conversation_id=p_conversation_id and m.user_id=p_user_id
+  );
+$;
+revoke all on function public.is_chat_member(uuid,uuid) from public;
+grant execute on function public.is_chat_member(uuid,uuid) to authenticated;
+
 drop policy if exists "Chat members can view their conversations" on public.chat_conversations;
 create policy "Chat members can view their conversations"
 on public.chat_conversations for select to authenticated
-using (exists (select 1 from public.chat_members m where m.conversation_id=id and m.user_id=auth.uid()));
+using (public.is_chat_member(id,auth.uid()));
 
 drop policy if exists "Members can view chat membership" on public.chat_members;
 create policy "Members can view chat membership"
 on public.chat_members for select to authenticated
-using (exists (select 1 from public.chat_members mine where mine.conversation_id=chat_members.conversation_id and mine.user_id=auth.uid()));
+using (public.is_chat_member(chat_members.conversation_id,auth.uid()));
 
 drop policy if exists "Users update own chat read marker" on public.chat_members;
 create policy "Users update own chat read marker"
@@ -52,14 +68,14 @@ with check (user_id=auth.uid());
 drop policy if exists "Chat members can read messages" on public.chat_messages;
 create policy "Chat members can read messages"
 on public.chat_messages for select to authenticated
-using (exists (select 1 from public.chat_members m where m.conversation_id=chat_messages.conversation_id and m.user_id=auth.uid()));
+using (public.is_chat_member(chat_messages.conversation_id,auth.uid()));
 
 drop policy if exists "Chat members can send messages as themselves" on public.chat_messages;
 create policy "Chat members can send messages as themselves"
 on public.chat_messages for insert to authenticated
 with check (
   sender_id=auth.uid()
-  and exists (select 1 from public.chat_members m where m.conversation_id=chat_messages.conversation_id and m.user_id=auth.uid())
+  and public.is_chat_member(chat_messages.conversation_id,auth.uid())
 );
 
 grant select on public.chat_conversations, public.chat_members, public.chat_messages to authenticated;
@@ -106,6 +122,20 @@ $$;
 
 revoke all on function public.create_chat(text,uuid[],text) from public;
 grant execute on function public.create_chat(text,uuid[],text) to authenticated;
+
+-- Обновляем сортировку списка чатов при появлении нового сообщения.
+create or replace function public.touch_chat_updated_at()
+returns trigger language plpgsql security definer set search_path=public
+as $
+begin
+  update public.chat_conversations set updated_at=new.created_at where id=new.conversation_id;
+  return new;
+end;
+$;
+drop trigger if exists chat_message_touch_conversation on public.chat_messages;
+create trigger chat_message_touch_conversation
+after insert on public.chat_messages
+for each row execute function public.touch_chat_updated_at();
 
 -- Разрешаем Supabase Realtime передавать новые сообщения подписчикам чата.
 do $$

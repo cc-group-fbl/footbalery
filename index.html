@@ -462,6 +462,21 @@
       window.scrollTo({top:0,behavior:'smooth'});
     }
 
+    let adminPanelLoaded=false, adminPanelLoading=false;
+    async function loadAdminPanelData(){
+      if(currentProfile?.role!=='admin'||adminPanelLoaded||adminPanelLoading)return;
+      adminPanelLoading=true;
+      const jobs=[
+        loadAdminResults(),loadAdminVoteDetails(),loadNewsRecipients(),loadAdminNews(),
+        loadAdminUsers(),loadAdminMatches(),loadAdminMatchApplications(),loadAdminScheduleScores()
+      ];
+      const results=await Promise.allSettled(jobs);
+      const failures=results.filter(x=>x.status==='rejected');
+      if(failures.length) failures.forEach(x=>console.warn('Ошибка загрузки панели администратора:',x.reason));
+      adminPanelLoaded=failures.length===0;
+      adminPanelLoading=false;
+    }
+
     let editingNewsId=null, newsAttachmentsToRemove=[];
     const NEWS_ATTACHMENT_BUCKET='news-attachments';
     async function uploadNewsAttachments(newsId,files) {
@@ -804,11 +819,19 @@
     async function showAccount() {
       const { data: profile, error } = await sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team').eq('user_id', currentUser.id).maybeSingle();
       if (error || !profile) { await sb.auth.signOut(); $('accountPanel').classList.add('hidden'); $('loginPanel').classList.remove('hidden'); return setMessage('loginMessage','Для аккаунта не назначена карточка игрока. Обратитесь к администратору.',true); }
-      currentProfile = profile; window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); await loadSharedSeasonTheme(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
+      currentProfile = profile; window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       showSection('homeScreen');
-      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); try { await loadChats(); if(chatInboxChannel) await sb.removeChannel(chatInboxChannel); chatInboxChannel=sb.channel('chat-inbox-'+currentUser.id).on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages'},()=>loadChats().catch(console.error)).subscribe(); } catch(chatError) { console.warn('Чаты пока не настроены:',chatError.message); } if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); await loadAdminMatchApplications(); await loadAdminScheduleScores(); }
+      // При входе загружаем только то, что действительно отображается на главной.
+      // Остальные тяжёлые разделы подгружаются при первом открытии.
+      const homeLoads = await Promise.allSettled([
+        loadPlayerCard(profile.player_id),
+        loadMatchOptions(),
+        loadMyApplications(),
+        loadPoll()
+      ]);
+      homeLoads.filter(x=>x.status==='rejected').forEach(x=>console.warn('Ошибка загрузки главной:',x.reason));
     }
     function normalizeHeader(v) {
       return String(v || '').replace(/^\uFEFF/, '').trim().toLowerCase()
@@ -1808,7 +1831,7 @@
     $('createPollForm')?.addEventListener('submit',createPoll);
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('loginButton').addEventListener('click',signIn);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
-    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',()=>{if(currentProfile&&currentProfile.role==='admin')showSection('adminPanel');});
+    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();});
     $('statsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('newsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('voteBackButton').addEventListener('click',()=>showSection('homeScreen'));$('adminBackButton').addEventListener('click',()=>showSection('homeScreen'));
     $('saveStatsCategorySettings')?.addEventListener('click', saveStatSettings);
     initStatSettings();
@@ -1865,8 +1888,7 @@
       if(routes[button.id]) {
         if(button.id==='openCaptainButton' && currentProfile?.role!=='captain') return;
         showSection(routes[button.id]);
-        if(button.id==='openMatchesButton') { await loadMatchOptions(); await loadMyApplications(); }
-        if(button.id==='openCaptainButton') await loadCaptainApplications();
+        // Загрузка этих разделов выполняется их основными обработчиками; здесь только навигация.
       } else if(button.id==='openAdminButton' && currentProfile?.role==='admin') {
         showSection('adminPanel');
       } else if(button.classList.contains('section-back')) {

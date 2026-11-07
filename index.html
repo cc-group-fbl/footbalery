@@ -656,7 +656,7 @@
     }
     async function loadChatUsers() {
       const root=$('chatUsersList'); root.replaceChildren();
-      const {data,error}=await sb.from('profiles').select('user_id,username').order('username');
+      const {data,error}=await sb.from('profiles').select('user_id,username,first_name,last_name').order('last_name');
       if(error) throw error;
       (data||[]).filter(p=>p.user_id!==currentUser.id).forEach(p=>{
         const label=document.createElement('label'); label.className='chat-user-choice';

@@ -507,7 +507,7 @@
         const preview=document.createElement('div');preview.style.cssText='display:grid;gap:6px;min-width:0';
         const isImage=type.startsWith('image/')||/\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(name);const caption=document.createElement('div');caption.style.cssText='font-size:12px;color:var(--muted);overflow-wrap:anywhere';caption.textContent=(isImage?'':'📎 ')+file.file_name+' · '+sizeLabel;preview.appendChild(caption);
         if(type.startsWith('image/')||/\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(name)) {
-          const img=document.createElement('img');img.src=signed.signedUrl;img.alt=file.file_name;img.loading='lazy';img.style.cssText='display:block;width:100%;max-height:520px;object-fit:contain;border-radius:10px;background:rgba(0,0,0,.12)';preview.appendChild(img);
+          const img=document.createElement('img');img.src=file.signedUrl;img.alt=file.file_name;img.loading='lazy';img.style.cssText='display:block;width:100%;max-height:520px;object-fit:contain;border-radius:10px;background:rgba(0,0,0,.12)';preview.appendChild(img);
         } else if(type==='application/pdf'||name.endsWith('.pdf')) {
           const frame=document.createElement('iframe');frame.src=signed.signedUrl;frame.title=file.file_name;frame.loading='lazy';frame.style.cssText='display:block;width:100%;height:min(70vh,650px);min-height:320px;border:0;border-radius:10px;background:#fff';preview.appendChild(frame);
         } else if(type.startsWith('video/')) {
@@ -1112,20 +1112,26 @@
       document.body.style.overflow='hidden';
       document.addEventListener('keydown',matchPhotoViewer._escapeHandler);
     }
+    let scheduleAttachmentFilesCache=new Map(),scheduleAttachmentCacheAt=0;
     async function renderMatchAttachments(container,eventId,adminMode=false){
-      const {data:files,error}=await sb.from('schedule_event_attachments').select('id,file_name,file_path,mime_type').eq('event_id',eventId).order('created_at');
-      if(error){const note=document.createElement('div');note.className='muted';note.textContent='Фотографии матча пока недоступны.';container.appendChild(note);return;}
-      if(!files?.length){if(adminMode){const note=document.createElement('div');note.className='muted';note.textContent='Фотографии пока не добавлены.';container.appendChild(note);}return;}
+      let files;
+      if(scheduleAttachmentFilesCache.has(eventId)) files=scheduleAttachmentFilesCache.get(eventId);
+      else {
+        const {data,error}=await sb.from('schedule_event_attachments').select('id,file_name,file_path,mime_type').eq('event_id',eventId).order('created_at');
+        if(error){const note=document.createElement('div');note.className='muted';note.textContent='Фотографии матча пока недоступны.';container.appendChild(note);return;}
+        files=data||[];scheduleAttachmentFilesCache.set(eventId,files);
+      }
+      if(!files.length){if(adminMode){const note=document.createElement('div');note.className='muted';note.textContent='Фотографии пока не добавлены.';container.appendChild(note);}return;}
       const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px';
-      for(const file of files){
-        const {data:signed,error:signedError}=await sb.storage.from(MATCH_ATTACHMENT_BUCKET).createSignedUrl(file.file_path,3600);
-        if(signedError||!signed?.signedUrl)continue;
+      const signedFiles=await Promise.all(files.map(async file=>{const {data,error}=await sb.storage.from(MATCH_ATTACHMENT_BUCKET).createSignedUrl(file.file_path,3600);return {...file,signedUrl:error?null:data?.signedUrl};}));
+      for(const file of signedFiles){
+        if(!file.signedUrl)continue;
         const cell=document.createElement('div');cell.style.cssText='min-width:0;display:grid;gap:5px';
         const img=document.createElement('img');img.src=signed.signedUrl;img.alt=file.file_name;img.loading='lazy';img.style.cssText='width:100%;max-height:260px;object-fit:cover;border-radius:10px;background:rgba(0,0,0,.15);cursor:zoom-in';img.title='Нажмите, чтобы открыть на весь экран';img.addEventListener('click',()=>openMatchPhotoViewer(img.src,img.alt));cell.appendChild(img);
         if(adminMode){
           const caption=document.createElement('div');caption.className='muted';caption.style.textAlign='left';caption.textContent=file.file_name;cell.appendChild(caption);
           const remove=document.createElement('button');remove.type='button';remove.className='small-btn';remove.textContent='Удалить фото';
-          remove.addEventListener('click',async()=>{if(!confirm('Удалить фотографию «'+file.file_name+'»?'))return;remove.disabled=true;const {error:storageError}=await sb.storage.from(MATCH_ATTACHMENT_BUCKET).remove([file.file_path]);if(storageError){alert('Не удалось удалить фото: '+storageError.message);remove.disabled=false;return;}const {error:rowError}=await sb.from('schedule_event_attachments').delete().eq('id',file.id);if(rowError){alert('Файл удалён, но запись не удалена: '+rowError.message);return;}await loadSchedule();await loadAdminScheduleScores();});
+          remove.addEventListener('click',async()=>{if(!confirm('Удалить фотографию «'+file.file_name+'»?'))return;remove.disabled=true;const {error:storageError}=await sb.storage.from(MATCH_ATTACHMENT_BUCKET).remove([file.file_path]);if(storageError){alert('Не удалось удалить фото: '+storageError.message);remove.disabled=false;return;}const {error:rowError}=await sb.from('schedule_event_attachments').delete().eq('id',file.id);if(rowError){alert('Файл удалён, но запись не удалена: '+rowError.message);return;}scheduleAttachmentFilesCache.delete(eventId);await loadSchedule();await loadAdminScheduleScores();});
           cell.appendChild(remove);
         }
         grid.appendChild(cell);
@@ -1186,7 +1192,18 @@
       const root=$('scheduleList');if(!root||!sb||!currentUser)return;
       root.textContent='Загружаем расписание…';
       try{
-        const rows=await getScheduleRows();root.replaceChildren();
+        const rows=await getScheduleRows();
+        // Получаем вложения всех событий одним запросом вместо отдельного запроса на каждую карточку.
+        if(Date.now()-scheduleAttachmentCacheAt>30000){scheduleAttachmentFilesCache.clear();scheduleAttachmentCacheAt=Date.now();}
+        const missingAttachmentIds=rows.map(x=>x.id).filter(id=>!scheduleAttachmentFilesCache.has(id));
+        if(missingAttachmentIds.length){
+          const {data:attachmentRows,error:attachmentError}=await sb.from('schedule_event_attachments').select('id,event_id,file_name,file_path,mime_type').in('event_id',missingAttachmentIds).order('created_at');
+          if(attachmentError)throw attachmentError;
+          const grouped=new Map();
+          (attachmentRows||[]).forEach(file=>{if(!grouped.has(file.event_id))grouped.set(file.event_id,[]);grouped.get(file.event_id).push(file);});
+          missingAttachmentIds.forEach(id=>scheduleAttachmentFilesCache.set(id,grouped.get(id)||[]));
+        }
+        root.replaceChildren();
         const filters=document.createElement('div');
         filters.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px;margin:0 0 14px;padding:12px;border:1px solid rgba(255,255,255,.14);border-radius:12px;text-align:left';
         const tournamentLabel=document.createElement('label');tournamentLabel.className='muted';tournamentLabel.textContent='Турнир';

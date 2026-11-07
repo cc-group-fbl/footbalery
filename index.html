@@ -173,6 +173,12 @@
   .chat-message-actions{display:none;gap:6px;flex-wrap:wrap;margin-top:6px}
   .chat-message.show-actions .chat-message-actions{display:flex}
   .chat-search{margin-top:12px;width:100%}
+  #accountPanel.chat-thread-open .section-back,
+  #accountPanel.chat-thread-open #newChatButton,
+  #accountPanel.chat-thread-open #chatSearchInput,
+  #accountPanel.chat-thread-open #chatCreateBox{display:none!important}
+  .account-logout-row{display:flex;justify-content:center;margin:22px 0 8px}
+  .account-logout-row .small-btn{padding:11px 22px}
   .chat-image{display:block;max-width:100%;max-height:280px;object-fit:contain;border-radius:10px;margin-top:7px;cursor:zoom-in}
   .chat-photo-viewer{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.94);backdrop-filter:blur(8px)}
   .chat-photo-viewer img{display:block;max-width:100%;max-height:calc(100dvh - 36px);object-fit:contain;border-radius:8px}
@@ -210,7 +216,7 @@
     </section>
 
     <section id="accountPanel" class="hidden">
-      <div class="topline"><span id="welcomeText" style="font-size:12px;color:#f5c518;font-weight:800"></span><button id="logoutButton" class="small-btn">Выйти</button></div>
+      <div class="topline"><span id="welcomeText" style="font-size:12px;color:#f5c518;font-weight:800"></span></div>
       <section id="homeScreen" class="vote-box">
         <h2>ГЛАВНОЕ МЕНЮ</h2>
         <div class="home-intro">Выбери нужный раздел личного кабинета</div>
@@ -424,6 +430,7 @@
           <div id="chatSendMessage" class="message"></div>
         </div>
       </section>
+      <div class="account-logout-row"><button id="logoutButton" type="button" class="small-btn">Выйти из аккаунта</button></div>
     </section>
   </div>
 
@@ -774,7 +781,7 @@
       }
       if(!messages.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Это начало переписки. Отправь первое сообщение!';box.append(empty);}box.scrollTop=box.scrollHeight;
       await sb.from('chat_members').update({last_read_at:new Date().toISOString()}).eq('conversation_id',chatId).eq('user_id',currentUser.id);
-      $('chatList').classList.add('hidden');$('chatCreateBox').classList.add('hidden');$('chatThread').classList.remove('hidden');
+      $('chatList').classList.add('hidden');$('chatCreateBox').classList.add('hidden');$('chatThread').classList.remove('hidden');$('accountPanel').classList.add('chat-thread-open');
       if(chatRealtimeChannel)await sb.removeChannel(chatRealtimeChannel);let refreshPending=false;
       const refreshThread=()=>{if(refreshPending)return;refreshPending=true;setTimeout(()=>{refreshPending=false;if(activeChatId===chatId)openChat(chatId).catch(console.error);loadChats().catch(console.error);},350);};
       chatRealtimeChannel=sb.channel('chat-'+chatId).on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+chatId},refreshThread)
@@ -1755,14 +1762,14 @@
         setMessage('createMemberMessage','Не удалось создать участника: '+(err.message||'ошибка')+'. Проверьте, что функция create-member опубликована и вы вошли как admin.',true);
       } finally { button.disabled=false; }
     }
-    async function logout(){await sb.auth.signOut();currentUser=null;currentProfile=null;$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('passwordInput').value='';setMessage('loginMessage','Вы вышли из аккаунта.');}
+    async function logout(){if(!confirm('Вы действительно хотите выйти из своего аккаунта?'))return;const {error}=await sb.auth.signOut();if(error){alert('Не удалось выйти из аккаунта: '+error.message);return;}if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');currentUser=null;currentProfile=null;$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('passwordInput').value='';setMessage('loginMessage','Вы вышли из аккаунта.');}
 
     $('openChatsButton')?.addEventListener('click',async()=>{showSection('chatsPanel');$('chatThread').classList.add('hidden');$('chatList').classList.remove('hidden');try{await loadChats();}catch(e){$('chatList').textContent='Не удалось загрузить чаты. Сначала необходимо выполнить SQL-настройку чатов в Supabase.';console.error(e);}});
-    $('chatsBackButton')?.addEventListener('click',async()=>{if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;showSection('homeScreen');});
+    $('chatsBackButton')?.addEventListener('click',async()=>{if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');$('chatThread').classList.add('hidden');showSection('homeScreen');});
     $('newChatButton')?.addEventListener('click',async()=>{ $('chatCreateBox').classList.toggle('hidden');try{await loadChatUsers();}catch(e){setMessage('chatCreateMessage',e.message,true);}});
     $('cancelChatCreate')?.addEventListener('click',()=>$('chatCreateBox').classList.add('hidden'));
     $('createChatConfirm')?.addEventListener('click',createChatFromSelection);
-    $('backToChatList')?.addEventListener('click',async()=>{if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('chatThread').classList.add('hidden');$('chatList').classList.remove('hidden');await loadChats();});
+    $('backToChatList')?.addEventListener('click',async()=>{if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');$('chatThread').classList.add('hidden');$('chatList').classList.remove('hidden');await loadChats();});
     $('chatSendForm')?.addEventListener('submit',sendChatMessage);
     $('chatAttachmentInput')?.addEventListener('change',()=>{$('chatSelectedFiles').textContent=[...$('chatAttachmentInput').files].map(f=>f.name).join(' · ');});
 

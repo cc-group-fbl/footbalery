@@ -96,8 +96,8 @@ begin
   if auth.uid() is null then raise exception 'Необходима авторизация'; end if;
   if p_type not in ('direct','group') then raise exception 'Неизвестный тип чата'; end if;
 
-  select array_agg(distinct x) into v_members
-  from unnest(coalesce(p_member_ids,'{}'::uuid[]) || array[auth.uid()]) as x;
+  select array_agg(distinct u.member_id) into v_members
+  from unnest(coalesce(p_member_ids,'{}'::uuid[]) || array[auth.uid()]) as u(member_id);
 
   v_count := coalesce(array_length(v_members,1),0);
   if p_type='direct' and v_count<>2 then raise exception 'Для личного чата нужен один собеседник'; end if;

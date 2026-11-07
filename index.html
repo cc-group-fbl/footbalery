@@ -164,6 +164,16 @@
   @keyframes adminTabIn{from{opacity:.65;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
   @media(max-width:360px){.admin-tabs{gap:5px;padding:6px}.admin-tab{font-size:10px;padding:10px 2px}}
 
+
+  .chat-list-item{display:flex;align-items:center;gap:12px;width:100%;padding:13px;margin:8px 0;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,.045);color:#f0f4fc;text-align:left;cursor:pointer}
+  .chat-avatar{width:42px;height:42px;flex:0 0 42px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#123a58,#087eae);font-weight:900}
+  .chat-message{max-width:86%;padding:10px 12px;margin:7px 0;border-radius:13px;background:rgba(255,255,255,.09);overflow-wrap:anywhere}
+  .chat-message.mine{margin-left:auto;background:rgba(0,160,220,.24);border:1px solid rgba(0,195,255,.2)}
+  .chat-message-meta{font-size:10px;opacity:.65;margin-top:5px}
+  .chat-messages{height:min(48vh,430px);overflow-y:auto;padding:10px;border:1px solid var(--border-color);border-radius:14px;background:rgba(0,0,0,.16);display:flex;flex-direction:column}
+  .chat-user-choice{display:flex;align-items:center;gap:10px;padding:9px;border-bottom:1px solid rgba(255,255,255,.07);text-align:left}
+  .chat-user-choice input{width:18px;height:18px;accent-color:var(--cyan)}
+
 </style>
 </head>
 <body class="theme-loading">
@@ -198,6 +208,7 @@
         <div class="home-intro">Выбери нужный раздел личного кабинета</div>
         <div class="dashboard-grid">
           <button type="button" class="dashboard-card" id="openStatsButton"><span class="dashboard-icon">📊</span><span><span class="dashboard-title">СТАТИСТИКА</span><span class="dashboard-description">Твои показатели, достижения и трансферная стоимость</span></span><span class="dashboard-arrow">›</span></button>
+          <button type="button" class="dashboard-card" id="openChatsButton"><span class="dashboard-icon">💬</span><span><span class="dashboard-title">ЧАТЫ</span><span class="dashboard-description">Личные сообщения и групповые переписки</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openNewsButton"><span class="dashboard-icon">📰</span><span><span class="dashboard-title">НОВОСТИ <span id="newsUnreadBadge" class="notice-pill hidden">НОВОЕ</span></span><span class="dashboard-description">Новости сообщества и информационные сообщения</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openScheduleButton"><span class="dashboard-icon">🗓️</span><span><span class="dashboard-title">РАСПИСАНИЕ</span><span class="dashboard-description">Предстоящие матчи и официальные мероприятия</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openMatchesButton"><span class="dashboard-icon">⚽</span><span><span class="dashboard-title">ЗАЯВКА НА МАТЧ</span><span class="dashboard-description">Подать заявку и посмотреть составы</span></span><span class="dashboard-arrow">›</span></button>
@@ -374,6 +385,33 @@
           <button type="button" id="saveSeasonSchedule" class="action-btn">СОХРАНИТЬ РАСПИСАНИЕ</button>
           <div id="seasonThemeStatus" class="message" aria-live="polite"></div>
         </div></div></section>
+
+      <button type="button" class="small-btn section-back hidden" id="chatsBackButton">← На главный экран</button>
+      <section id="chatsPanel" class="vote-box hidden">
+        <h2>ЧАТЫ</h2>
+        <div class="muted">Личные переписки и групповые чаты участников сообщества</div>
+        <button type="button" class="action-btn" id="newChatButton" style="margin-top:12px">＋ СОЗДАТЬ ЧАТ</button>
+        <div id="chatCreateBox" class="hidden" style="margin-top:14px;padding:12px;border:1px solid var(--border-color);border-radius:14px">
+          <label class="muted" style="display:block;text-align:left">Название группы (необязательно)<input id="newChatTitle" class="field" maxlength="60" placeholder="Например, Организаторы"></label>
+          <div class="muted" style="text-align:left;margin:10px 0 6px">Выбери одного участника для личного чата или нескольких для группового:</div>
+          <div id="chatUsersList"></div>
+          <button type="button" class="action-btn" id="createChatConfirm">СОЗДАТЬ</button>
+          <button type="button" class="small-btn" id="cancelChatCreate">Отмена</button>
+          <div id="chatCreateMessage" class="message"></div>
+        </div>
+        <div id="chatList" style="margin-top:14px"><div class="muted">Загрузка чатов…</div></div>
+        <div id="chatThread" class="hidden" style="margin-top:16px">
+          <button type="button" class="small-btn" id="backToChatList">← К списку чатов</button>
+          <h3 id="chatThreadTitle" style="margin:12px 0"></h3>
+          <div id="chatThreadMembers" class="muted" style="margin-bottom:8px"></div>
+          <div id="chatMessages" class="chat-messages"></div>
+          <form id="chatSendForm" style="display:flex;gap:8px;margin-top:10px">
+            <input id="chatMessageInput" class="field" maxlength="5000" placeholder="Написать сообщение…" autocomplete="off" required style="min-width:0">
+            <button type="submit" class="action-btn" style="width:auto;min-width:74px;padding:10px">➤</button>
+          </form>
+          <div id="chatSendMessage" class="message"></div>
+        </div>
+      </section>
     </section>
   </div>
 
@@ -411,10 +449,10 @@
     };
 
     function showSection(sectionId) {
-      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel'].forEach(id => {
+      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel','chatsPanel'].forEach(id => {
         const panel=$(id); if(panel) panel.classList.toggle('hidden', id !== sectionId);
       });
-      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton'};
+      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton',chatsPanel:'chatsBackButton'};
       Object.entries(backButtons).forEach(([panelId,buttonId])=>{const button=$(buttonId);if(button)button.classList.toggle('hidden',sectionId!==panelId);});
       window.scrollTo({top:0,behavior:'smooth'});
     }
@@ -604,6 +642,114 @@
         if(button) button.disabled = false;
       }
     }
+
+    // Чаты: список, создание личных/групповых переписок и сообщения в реальном времени.
+    let activeChatId = null, chatRealtimeChannel = null;
+    const chatNameMap = new Map();
+    function chatTime(value) {
+      try { return new Date(value).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+      catch (_) { return ''; }
+    }
+    async function loadChatUsers() {
+      const root=$('chatUsersList'); root.replaceChildren();
+      const {data,error}=await sb.from('profiles').select('user_id,username').order('username');
+      if(error) throw error;
+      (data||[]).filter(p=>p.user_id!==currentUser.id).forEach(p=>{
+        const label=document.createElement('label'); label.className='chat-user-choice';
+        const input=document.createElement('input'); input.type='checkbox'; input.value=p.user_id;
+        const name=document.createElement('span'); name.textContent=p.username||'Участник';
+        label.append(input,name); root.append(label);
+      });
+      if(!root.children.length) root.textContent='Пока нет других пользователей.';
+    }
+    async function loadChats() {
+      const root=$('chatList'); if(!root||!sb||!currentUser)return;
+      root.textContent='Загрузка…';
+      const {data:mine,error}=await sb.from('chat_members').select('conversation_id,last_read_at').eq('user_id',currentUser.id);
+      if(error) throw error;
+      const ids=(mine||[]).map(x=>x.conversation_id);
+      if(!ids.length){root.textContent='У тебя пока нет чатов. Нажми «Создать чат», чтобы начать переписку.';return;}
+      const [{data:conversations,error:convError},{data:members,error:memberError},{data:messages,error:messageError},{data:profiles,error:profileError}]=await Promise.all([
+        sb.from('chat_conversations').select('id,type,title,updated_at').in('id',ids).order('updated_at',{ascending:false}),
+        sb.from('chat_members').select('conversation_id,user_id').in('conversation_id',ids),
+        sb.from('chat_messages').select('conversation_id,body,sender_id,created_at').in('conversation_id',ids).order('created_at',{ascending:false}),
+        sb.from('profiles').select('user_id,username')
+      ]);
+      const err=convError||memberError||messageError||profileError;if(err)throw err;
+      chatNameMap.clear();(profiles||[]).forEach(p=>chatNameMap.set(p.user_id,p.username||'Участник'));
+      root.replaceChildren();
+      (conversations||[]).forEach(c=>{
+        const peers=(members||[]).filter(m=>m.conversation_id===c.id&&m.user_id!==currentUser.id);
+        const title=c.type==='group'?(c.title||'Групповой чат'):((chatNameMap.get(peers[0]?.user_id))||'Личный чат');
+        const last=(messages||[]).find(m=>m.conversation_id===c.id);
+        const button=document.createElement('button');button.type='button';button.className='chat-list-item';
+        const avatar=document.createElement('span');avatar.className='chat-avatar';avatar.textContent=(title.trim()[0]||'Ч').toUpperCase();
+        const info=document.createElement('span');info.style.flex='1';info.style.minWidth='0';
+        const name=document.createElement('strong');name.textContent=title;
+        const preview=document.createElement('div');preview.className='muted';preview.style.cssText='font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px';
+        preview.textContent=last?((last.sender_id===currentUser.id?'Вы: ':'')+last.body):'Пока нет сообщений';
+        const date=document.createElement('span');date.className='muted';date.style.fontSize='10px';date.textContent=last?chatTime(last.created_at):'';
+        info.append(name,preview);button.append(avatar,info,date);button.addEventListener('click',()=>openChat(c.id));root.append(button);
+      });
+    }
+    async function openChat(chatId) {
+      activeChatId=chatId;
+      const {data:members,error:memberError}=await sb.from('chat_members').select('user_id').eq('conversation_id',chatId);
+      if(memberError)throw memberError;
+      const ids=(members||[]).map(x=>x.user_id);
+      const [{data:conversation,error:convError},{data:profiles,error:profileError},{data:messages,error:messageError}]=await Promise.all([
+        sb.from('chat_conversations').select('id,type,title').eq('id',chatId).single(),
+        sb.from('profiles').select('user_id,username').in('user_id',ids),
+        sb.from('chat_messages').select('id,sender_id,body,created_at').eq('conversation_id',chatId).order('created_at',{ascending:true}).limit(100)
+      ]);
+      const err=convError||profileError||messageError;if(err)throw err;
+      const names=new Map((profiles||[]).map(p=>[p.user_id,p.username||'Участник']));
+      const peers=ids.filter(id=>id!==currentUser.id).map(id=>names.get(id)||'Участник');
+      $('chatThreadTitle').textContent=conversation.type==='group'?(conversation.title||'Групповой чат'):(peers[0]||'Личный чат');
+      $('chatThreadMembers').textContent=conversation.type==='group'?'Участники: '+peers.concat([currentProfile?.username||'Вы']).join(', '):'Личная переписка';
+      const box=$('chatMessages');box.replaceChildren();
+      (messages||[]).forEach(m=>{
+        const item=document.createElement('div');item.className='chat-message'+(m.sender_id===currentUser.id?' mine':'');
+        const body=document.createElement('div');body.textContent=m.body;
+        const meta=document.createElement('div');meta.className='chat-message-meta';meta.textContent=(m.sender_id===currentUser.id?'Вы':names.get(m.sender_id)||'Участник')+' · '+chatTime(m.created_at);
+        item.append(body,meta);box.append(item);
+      });
+      if(!messages?.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Это начало переписки. Отправь первое сообщение!';box.append(empty);}
+      box.scrollTop=box.scrollHeight;
+      await sb.from('chat_members').update({last_read_at:new Date().toISOString()}).eq('conversation_id',chatId).eq('user_id',currentUser.id);
+      $('chatList').classList.add('hidden');$('chatCreateBox').classList.add('hidden');$('chatThread').classList.remove('hidden');
+      if(chatRealtimeChannel) await sb.removeChannel(chatRealtimeChannel);
+      chatRealtimeChannel=sb.channel('chat-'+chatId).on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+chatId},payload=>{
+        if(payload.new?.sender_id!==currentUser.id) openChat(chatId).catch(console.error);
+        loadChats().catch(console.error);
+      }).subscribe();
+    }
+    async function createChatFromSelection() {
+      const selected=[...$('chatUsersList').querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);
+      if(!selected.length){setMessage('chatCreateMessage','Выбери хотя бы одного участника.',true);return;}
+      const type=selected.length===1?'direct':'group';
+      const title=$('newChatTitle').value.trim();
+      const button=$('createChatConfirm');button.disabled=true;
+      try{
+        const {data,error}=await sb.rpc('create_chat',{p_title:title,p_member_ids:selected,p_type:type});
+        if(error)throw error;
+        $('newChatTitle').value='';$('chatCreateBox').classList.add('hidden');
+        await loadChats();await openChat(data);
+      }catch(err){setMessage('chatCreateMessage','Не удалось создать чат: '+(err.message||'ошибка'),true);}
+      finally{button.disabled=false;}
+    }
+    async function sendChatMessage(event) {
+      event.preventDefault();
+      const input=$('chatMessageInput'),body=input.value.trim();if(!body||!activeChatId)return;
+      const button=$('chatSendForm').querySelector('button[type="submit"]');button.disabled=true;
+      try{
+        const {error}=await sb.from('chat_messages').insert({conversation_id:activeChatId,sender_id:currentUser.id,body});
+        if(error)throw error;
+        input.value='';await openChat(activeChatId);await loadChats();
+      }catch(err){setMessage('chatSendMessage','Не удалось отправить сообщение: '+(err.message||'ошибка'),true);}
+      finally{button.disabled=false;}
+    }
+
     async function showAccount() {
       const { data: profile, error } = await sb.from('profiles').select('user_id, username, player_id, role, captain_team').eq('user_id', currentUser.id).maybeSingle();
       if (error || !profile) { await sb.auth.signOut(); $('accountPanel').classList.add('hidden'); $('loginPanel').classList.remove('hidden'); return setMessage('loginMessage','Для аккаунта не назначена карточка игрока. Обратитесь к администратору.',true); }
@@ -611,7 +757,7 @@
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       showSection('homeScreen');
-      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); await loadAdminMatchApplications(); await loadAdminScheduleScores(); }
+      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); try { await loadChats(); } catch(chatError) { console.warn('Чаты пока не настроены:',chatError.message); } if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); await loadAdminMatchApplications(); await loadAdminScheduleScores(); }
     }
     function normalizeHeader(v) {
       return String(v || '').replace(/^\uFEFF/, '').trim().toLowerCase()
@@ -1512,6 +1658,15 @@
       } finally { button.disabled=false; }
     }
     async function logout(){await sb.auth.signOut();currentUser=null;currentProfile=null;$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('passwordInput').value='';setMessage('loginMessage','Вы вышли из аккаунта.');}
+
+    $('openChatsButton')?.addEventListener('click',async()=>{showSection('chatsPanel');$('chatThread').classList.add('hidden');$('chatList').classList.remove('hidden');try{await loadChats();}catch(e){$('chatList').textContent='Не удалось загрузить чаты. Сначала необходимо выполнить SQL-настройку чатов в Supabase.';console.error(e);}});
+    $('chatsBackButton')?.addEventListener('click',async()=>{if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;showSection('homeScreen');});
+    $('newChatButton')?.addEventListener('click',async()=>{ $('chatCreateBox').classList.toggle('hidden');try{await loadChatUsers();}catch(e){setMessage('chatCreateMessage',e.message,true);}});
+    $('cancelChatCreate')?.addEventListener('click',()=>$('chatCreateBox').classList.add('hidden'));
+    $('createChatConfirm')?.addEventListener('click',createChatFromSelection);
+    $('backToChatList')?.addEventListener('click',async()=>{if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('chatThread').classList.add('hidden');$('chatList').classList.remove('hidden');await loadChats();});
+    $('chatSendForm')?.addEventListener('submit',sendChatMessage);
+
     $('matchApplicationForm').addEventListener('submit',submitMatchApplication);
     $('matchSelect')?.addEventListener('change',updateMatchTeamVisibility);
     $('createMatchForm')?.addEventListener('submit',createMatch);

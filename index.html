@@ -832,6 +832,11 @@
         loadPoll()
       ]);
       homeLoads.filter(x=>x.status==='rejected').forEach(x=>console.warn('Ошибка загрузки главной:',x.reason));
+      // Подписываемся на новые сообщения, но не загружаем всю историю чатов при входе.
+      if(chatInboxChannel) await sb.removeChannel(chatInboxChannel);
+      chatInboxChannel=sb.channel('chat-inbox-'+currentUser.id)
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages'},()=>loadChats().catch(console.error))
+        .subscribe();
     }
     function normalizeHeader(v) {
       return String(v || '').replace(/^\uFEFF/, '').trim().toLowerCase()

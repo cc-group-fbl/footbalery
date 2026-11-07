@@ -210,7 +210,7 @@
         <div class="home-intro">Выбери нужный раздел личного кабинета</div>
         <div class="dashboard-grid">
           <button type="button" class="dashboard-card" id="openStatsButton"><span class="dashboard-icon">📊</span><span><span class="dashboard-title">СТАТИСТИКА</span><span class="dashboard-description">Твои показатели, достижения и трансферная стоимость</span></span><span class="dashboard-arrow">›</span></button>
-          <button type="button" class="dashboard-card" id="openChatsButton"><span class="dashboard-icon">💬</span><span><span class="dashboard-title">ЧАТЫ</span><span class="dashboard-description">Личные сообщения и групповые переписки</span></span><span class="dashboard-arrow">›</span></button>
+          <button type="button" class="dashboard-card" id="openChatsButton"><span class="dashboard-icon">💬</span><span><span class="dashboard-title">ЧАТЫ <span id="chatUnreadBadge" class="notice-pill hidden">0</span></span><span class="dashboard-description">Личные сообщения и групповые переписки</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openNewsButton"><span class="dashboard-icon">📰</span><span><span class="dashboard-title">НОВОСТИ <span id="newsUnreadBadge" class="notice-pill hidden">НОВОЕ</span></span><span class="dashboard-description">Новости сообщества и информационные сообщения</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openScheduleButton"><span class="dashboard-icon">🗓️</span><span><span class="dashboard-title">РАСПИСАНИЕ</span><span class="dashboard-description">Предстоящие матчи и официальные мероприятия</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openMatchesButton"><span class="dashboard-icon">⚽</span><span><span class="dashboard-title">ЗАЯВКА НА МАТЧ</span><span class="dashboard-description">Подать заявку и посмотреть составы</span></span><span class="dashboard-arrow">›</span></button>
@@ -649,7 +649,7 @@
     }
 
     // Чаты: список, создание личных/групповых переписок и сообщения в реальном времени.
-    let activeChatId = null, chatRealtimeChannel = null;
+    let activeChatId = null, chatRealtimeChannel = null, chatInboxChannel = null;
     const chatNameMap = new Map();
     function chatTime(value) {
       try { return new Date(value).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }
@@ -677,7 +677,7 @@
       const {data:mine,error}=await sb.from('chat_members').select('conversation_id,last_read_at').eq('user_id',currentUser.id);
       if(error) throw error;
       const ids=(mine||[]).map(x=>x.conversation_id);
-      if(!ids.length){root.textContent='У тебя пока нет чатов. Нажми «Создать чат», чтобы начать переписку.';return;}
+      if(!ids.length){$('chatUnreadBadge')?.classList.add('hidden');root.textContent='У тебя пока нет чатов. Нажми «Создать чат», чтобы начать переписку.';return;}
       const [{data:conversations,error:convError},{data:members,error:memberError},{data:messages,error:messageError},{data:profiles,error:profileError}]=await Promise.all([
         sb.from('chat_conversations').select('id,type,title,updated_at').in('id',ids).order('updated_at',{ascending:false}),
         sb.from('chat_members').select('conversation_id,user_id').in('conversation_id',ids),
@@ -685,6 +685,9 @@
         sb.from('profiles').select('user_id,username,first_name,last_name')
       ]);
       const err=convError||memberError||messageError||profileError;if(err)throw err;
+      const readAt=new Map((mine||[]).map(x=>[x.conversation_id,x.last_read_at?new Date(x.last_read_at).getTime():0]));
+      const unreadCount=(messages||[]).filter(m=>m.sender_id!==currentUser.id&&new Date(m.created_at).getTime()>(readAt.get(m.conversation_id)||0)).length;
+      const unreadBadge=$('chatUnreadBadge');if(unreadBadge){unreadBadge.textContent=unreadCount>99?'99+':String(unreadCount);unreadBadge.classList.toggle('hidden',unreadCount===0);}
       chatNameMap.clear();(profiles||[]).forEach(p=>chatNameMap.set(p.user_id,chatDisplayName(p)));
       root.replaceChildren();
       (conversations||[]).forEach(c=>{
@@ -805,7 +808,7 @@
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       showSection('homeScreen');
-      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); try { await loadChats(); } catch(chatError) { console.warn('Чаты пока не настроены:',chatError.message); } if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); await loadAdminMatchApplications(); await loadAdminScheduleScores(); }
+      await loadPlayerCard(profile.player_id); await loadMatchOptions(); await loadMyApplications(); await loadPoll(); await loadNews(); try { await loadChats(); if(chatInboxChannel) await sb.removeChannel(chatInboxChannel); chatInboxChannel=sb.channel('chat-inbox-'+currentUser.id).on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages'},()=>loadChats().catch(console.error)).subscribe(); } catch(chatError) { console.warn('Чаты пока не настроены:',chatError.message); } if (profile.role === 'captain') await loadCaptainApplications(); if (profile.role === 'admin') { await loadAdminResults(); await loadAdminVoteDetails(); await loadNewsRecipients(); await loadAdminNews(); await loadAdminUsers(); await loadAdminMatches(); await loadAdminMatchApplications(); await loadAdminScheduleScores(); }
     }
     function normalizeHeader(v) {
       return String(v || '').replace(/^\uFEFF/, '').trim().toLowerCase()

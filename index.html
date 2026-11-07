@@ -690,147 +690,118 @@
     }
     async function loadChatUsers() {
       const root=$('chatUsersList'); root.replaceChildren();
-      const {data,error}=await sb.from('profiles').select('user_id,username,first_name,last_name').order('last_name');
-      if(error) throw error;
-      (data||[]).filter(p=>p.user_id!==currentUser.id).forEach(p=>{
-        const label=document.createElement('label'); label.className='chat-user-choice';
-        const input=document.createElement('input'); input.type='checkbox'; input.value=p.user_id;
-        const name=document.createElement('span'); name.textContent=chatDisplayName(p);
-        label.append(input,name); root.append(label);
+      const [{data:profiles,error:profileError},{data:mine,error:mineError}]=await Promise.all([
+        sb.from('profiles').select('user_id,username,first_name,last_name').order('last_name'),
+        sb.from('chat_members').select('conversation_id').eq('user_id',currentUser.id)
+      ]);
+      if(profileError)throw profileError;if(mineError)throw mineError;
+      const chatIds=(mine||[]).map(x=>x.conversation_id);let existingDirectPeers=new Set();
+      if(chatIds.length){
+        const {data:directs,error:directError}=await sb.from('chat_conversations').select('id').in('id',chatIds).eq('type','direct');
+        if(directError)throw directError;const directIds=(directs||[]).map(x=>x.id);
+        if(directIds.length){const {data:members,error:membersError}=await sb.from('chat_members').select('conversation_id,user_id').in('conversation_id',directIds);if(membersError)throw membersError;existingDirectPeers=new Set((members||[]).filter(x=>x.user_id!==currentUser.id).map(x=>x.user_id));}
+      }
+      (profiles||[]).filter(p=>p.user_id!==currentUser.id).forEach(p=>{
+        const label=document.createElement('label');label.className='chat-user-choice';const input=document.createElement('input');input.type='checkbox';input.value=p.user_id;
+        const exists=existingDirectPeers.has(p.user_id);const name=document.createElement('span');name.textContent=chatDisplayName(p)+(exists?' · уже есть чат':'');
+        if(exists){input.disabled=true;label.style.opacity='.48';}label.append(input,name);root.append(label);
       });
-      if(!root.children.length) root.textContent='Пока нет других пользователей.';
+      if(!root.children.length)root.textContent='Пока нет других пользователей.';
     }
     async function loadChats() {
-      const root=$('chatList'); if(!root||!sb||!currentUser)return;
-      root.textContent='Загрузка…';
-      const {data:mine,error}=await sb.from('chat_members').select('conversation_id,last_read_at').eq('user_id',currentUser.id);
-      if(error) throw error;
+      const root=$('chatList');if(!root||!sb||!currentUser)return;root.textContent='Загрузка…';
+      const {data:mine,error}=await sb.from('chat_members').select('conversation_id,last_read_at').eq('user_id',currentUser.id);if(error)throw error;
       const ids=(mine||[]).map(x=>x.conversation_id);
       if(!ids.length){$('chatUnreadBadge')?.classList.add('hidden');root.textContent='У тебя пока нет чатов. Нажми «Создать чат», чтобы начать переписку.';return;}
       const [{data:conversations,error:convError},{data:members,error:memberError},{data:messages,error:messageError}]=await Promise.all([
         sb.from('chat_conversations').select('id,type,title,updated_at').in('id',ids).order('updated_at',{ascending:false}),
         sb.from('chat_members').select('conversation_id,user_id').in('conversation_id',ids),
-        sb.from('chat_messages').select('conversation_id,body,sender_id,created_at').in('conversation_id',ids).order('created_at',{ascending:false})
+        sb.from('chat_messages').select('conversation_id,body,sender_id,created_at').in('conversation_id',ids).order('created_at',{ascending:false}).limit(250)
       ]);
       const err=convError||memberError||messageError;if(err)throw err;
-      const profileUserIds=[...new Set((members||[]).map(m=>m.user_id))];
-      const {data:profiles,error:profileError}=await sb.rpc('get_chat_profiles',{p_user_ids:profileUserIds});
-      if(profileError)throw profileError;
+      const profileUserIds=[...new Set((members||[]).map(m=>m.user_id))];const {data:profiles,error:profileError}=await sb.rpc('get_chat_profiles',{p_user_ids:profileUserIds});if(profileError)throw profileError;
       const readAt=new Map((mine||[]).map(x=>[x.conversation_id,x.last_read_at?new Date(x.last_read_at).getTime():0]));
       const unreadCount=(messages||[]).filter(m=>m.sender_id!==currentUser.id&&new Date(m.created_at).getTime()>(readAt.get(m.conversation_id)||0)).length;
       const unreadBadge=$('chatUnreadBadge');if(unreadBadge){unreadBadge.textContent=unreadCount>99?'99+':String(unreadCount);unreadBadge.classList.toggle('hidden',unreadCount===0);}
       chatNameMap.clear();(profiles||[]).forEach(p=>chatNameMap.set(p.user_id,chatDisplayName(p)));
+      const latestByChat=new Map();for(const message of(messages||[]))if(!latestByChat.has(message.conversation_id))latestByChat.set(message.conversation_id,message);
+      const membersByChat=new Map();for(const member of(members||[])){if(!membersByChat.has(member.conversation_id))membersByChat.set(member.conversation_id,[]);membersByChat.get(member.conversation_id).push(member);}
       root.replaceChildren();
-      (conversations||[]).forEach(c=>{
-        const peers=(members||[]).filter(m=>m.conversation_id===c.id&&m.user_id!==currentUser.id);
-        const title=c.type==='group'?(c.title||'Групповой чат'):((chatNameMap.get(peers[0]?.user_id))||'Личный чат');
-        const last=(messages||[]).find(m=>m.conversation_id===c.id);
-        const button=document.createElement('button');button.type='button';button.className='chat-list-item';
-        const avatar=document.createElement('span');avatar.className='chat-avatar';avatar.textContent=(title.trim()[0]||'Ч').toUpperCase();
-        const info=document.createElement('span');info.style.flex='1';info.style.minWidth='0';
-        const name=document.createElement('strong');name.textContent=title;
-        const preview=document.createElement('div');preview.className='muted';preview.style.cssText='font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px';
-        preview.textContent=last?((last.sender_id===currentUser.id?'Вы: ':'')+last.body):'Пока нет сообщений';
-        const date=document.createElement('span');date.className='muted';date.style.fontSize='10px';date.textContent=last?chatTime(last.created_at):'';
-        info.append(name,preview);button.append(avatar,info,date);button.addEventListener('click',()=>openChat(c.id));root.append(button);
+      (conversations||[]).forEach(conversation=>{
+        const peers=(membersByChat.get(conversation.id)||[]).filter(m=>m.user_id!==currentUser.id);
+        const title=conversation.type==='group'?(conversation.title||'Групповой чат'):((chatNameMap.get(peers[0]?.user_id))||'Личный чат');const last=latestByChat.get(conversation.id);
+        const button=document.createElement('button');button.type='button';button.className='chat-list-item';const avatar=document.createElement('span');avatar.className='chat-avatar';avatar.textContent=(title.trim()[0]||'Ч').toUpperCase();
+        const info=document.createElement('span');info.style.flex='1';info.style.minWidth='0';const name=document.createElement('strong');name.textContent=title;
+        const preview=document.createElement('div');preview.className='muted';preview.style.cssText='font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px';preview.textContent=last?((last.sender_id===currentUser.id?'Вы: ':'')+(last.body||'📎 Вложение')):'Пока нет сообщений';
+        const date=document.createElement('span');date.className='muted';date.style.fontSize='10px';date.textContent=last?chatTime(last.created_at):'';info.append(name,preview);button.append(avatar,info,date);
+        button.addEventListener('click',()=>openChat(conversation.id).catch(e=>{console.error(e);setMessage('chatSendMessage','Не удалось открыть чат: '+(e.message||'ошибка'),true);}));root.append(button);
       });
     }
     async function openChat(chatId) {
-      activeChatId=chatId;
-      const {data:members,error:memberError}=await sb.from('chat_members').select('user_id').eq('conversation_id',chatId);
-      if(memberError)throw memberError;
+      activeChatId=chatId;const {data:members,error:memberError}=await sb.from('chat_members').select('user_id').eq('conversation_id',chatId);if(memberError)throw memberError;
       const ids=(members||[]).map(x=>x.user_id);
-      const [{data:conversation,error:convError},{data:profiles,error:profileError},{data:messages,error:messageError}]=await Promise.all([
-        sb.from('chat_conversations').select('id,type,title').eq('id',chatId).single(),
-        sb.rpc('get_chat_profiles',{p_user_ids:ids}),
-        sb.from('chat_messages').select('id,sender_id,body,created_at').eq('conversation_id',chatId).order('created_at',{ascending:true}).limit(100)
+      const [{data:conversation,error:convError},{data:profiles,error:profileError},{data:recentMessages,error:messageError}]=await Promise.all([
+        sb.from('chat_conversations').select('id,type,title').eq('id',chatId).single(),sb.rpc('get_chat_profiles',{p_user_ids:ids}),
+        sb.from('chat_messages').select('id,sender_id,body,created_at').eq('conversation_id',chatId).order('created_at',{ascending:false}).limit(60)
       ]);
-      const err=convError||profileError||messageError;if(err)throw err;
-      const messageIds=(messages||[]).map(m=>m.id);
-      const {data:attachments,error:attachmentError}=messageIds.length
-        ? await sb.from('chat_attachments').select('id,message_id,file_name,file_path,mime_type,file_size').in('message_id',messageIds).order('created_at')
-        : {data:[],error:null};
-      if(attachmentError)throw attachmentError;
-      const attachmentsByMessage=new Map();
-      for(const file of (attachments||[])){
-        if(!attachmentsByMessage.has(file.message_id))attachmentsByMessage.set(file.message_id,[]);
-        attachmentsByMessage.get(file.message_id).push(file);
-      }
-      const names=new Map((profiles||[]).map(p=>[p.user_id,chatDisplayName(p)]));
-      const peers=ids.filter(id=>id!==currentUser.id).map(id=>names.get(id)||'Участник');
+      const err=convError||profileError||messageError;if(err)throw err;const messages=(recentMessages||[]).reverse();const messageIds=messages.map(m=>m.id);
+      const {data:attachments,error:attachmentError}=messageIds.length?await sb.from('chat_attachments').select('id,message_id,file_name,file_path,mime_type,file_size').in('message_id',messageIds).order('created_at'):{data:[],error:null};
+      if(attachmentError)throw attachmentError;const attachmentsByMessage=new Map();
+      for(const file of(attachments||[])){if(!attachmentsByMessage.has(file.message_id))attachmentsByMessage.set(file.message_id,[]);attachmentsByMessage.get(file.message_id).push(file);}
+      const signedByPath=new Map();const allFiles=attachments||[];
+      if(allFiles.length){const {data:signedFiles,error:signedError}=await sb.storage.from('chat-attachments').createSignedUrls(allFiles.map(file=>file.file_path),3600);if(signedError)console.warn('Не удалось получить ссылки на некоторые вложения:',signedError);(signedFiles||[]).forEach(item=>{if(item.path&&item.signedUrl)signedByPath.set(item.path,item.signedUrl);});}
+      const names=new Map((profiles||[]).map(p=>[p.user_id,chatDisplayName(p)]));const peers=ids.filter(id=>id!==currentUser.id).map(id=>names.get(id)||'Участник');
       $('chatThreadTitle').textContent=conversation.type==='group'?(conversation.title||'Групповой чат'):(peers[0]||'Личный чат');
-      $('chatThreadMembers').textContent=conversation.type==='group'?'Участники: '+peers.concat([chatDisplayName(currentProfile)||'Вы']).join(', '):'Личная переписка';
+      $('chatThreadMembers').textContent=conversation.type==='group'?'Участники: '+peers.concat([chatDisplayName(currentProfile)||'Вы']).join(', '):'Личная переписка · последние 60 сообщений';
       const box=$('chatMessages');box.replaceChildren();
-      for(const m of (messages||[])){
-        const item=document.createElement('div');item.className='chat-message'+(m.sender_id===currentUser.id?' mine':'');
-        if(m.body){const body=document.createElement('div');body.textContent=m.body;item.append(body);}
-        for(const file of (attachmentsByMessage.get(m.id)||[])){
-          const {data:signed,error:signedError}=await sb.storage.from('chat-attachments').createSignedUrl(file.file_path,3600);
-          if(signedError||!signed?.signedUrl)continue;
-          if((file.mime_type||'').startsWith('image/')){
-            const link=document.createElement('a');link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';
-            const image=document.createElement('img');image.className='chat-image';image.src=signed.signedUrl;image.alt=file.file_name;image.loading='lazy';
-            image.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openChatPhotoViewer(signed.signedUrl,file.file_name);});
-            link.append(image);item.append(link);
-          }else{
-            const link=document.createElement('a');link.className='chat-file';link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';link.download=file.file_name;
-            link.textContent='📎 '+file.file_name+' ('+Math.max(1,Math.round(file.file_size/1024))+' КБ)';item.append(link);
-          }
+      for(const m of messages){
+        const item=document.createElement('div');item.className='chat-message'+(m.sender_id===currentUser.id?' mine':'');if(m.body){const body=document.createElement('div');body.textContent=m.body;item.append(body);}
+        for(const file of(attachmentsByMessage.get(m.id)||[])){const signedUrl=signedByPath.get(file.file_path);if(!signedUrl)continue;
+          if((file.mime_type||'').startsWith('image/')){const link=document.createElement('a');link.href=signedUrl;link.target='_blank';link.rel='noopener noreferrer';const image=document.createElement('img');image.className='chat-image';image.src=signedUrl;image.alt=file.file_name;image.loading='lazy';image.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openChatPhotoViewer(signedUrl,file.file_name);});link.append(image);item.append(link);}
+          else{const link=document.createElement('a');link.className='chat-file';link.href=signedUrl;link.target='_blank';link.rel='noopener noreferrer';link.download=file.file_name;link.textContent='📎 '+file.file_name+' ('+Math.max(1,Math.round(file.file_size/1024))+' КБ)';item.append(link);}
         }
-        const meta=document.createElement('div');meta.className='chat-message-meta';meta.textContent=(m.sender_id===currentUser.id?'Вы':names.get(m.sender_id)||'Участник')+' · '+chatTime(m.created_at);
-        item.append(meta);box.append(item);
+        const meta=document.createElement('div');meta.className='chat-message-meta';meta.textContent=(m.sender_id===currentUser.id?'Вы':names.get(m.sender_id)||'Участник')+' · '+chatTime(m.created_at);item.append(meta);
+        const actions=document.createElement('div');actions.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:6px';const removeMine=document.createElement('button');removeMine.type='button';removeMine.className='small-btn';removeMine.textContent='Удалить у себя';removeMine.addEventListener('click',()=>deleteChatMessage(m.id,false));actions.append(removeMine);
+        if(m.sender_id===currentUser.id){const removeAll=document.createElement('button');removeAll.type='button';removeAll.className='small-btn';removeAll.textContent='Удалить у всех';removeAll.addEventListener('click',()=>deleteChatMessage(m.id,true));actions.append(removeAll);}item.append(actions);box.append(item);
       }
-      if(!messages?.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Это начало переписки. Отправь первое сообщение!';box.append(empty);}
-      box.scrollTop=box.scrollHeight;
+      if(!messages.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Это начало переписки. Отправь первое сообщение!';box.append(empty);}box.scrollTop=box.scrollHeight;
       await sb.from('chat_members').update({last_read_at:new Date().toISOString()}).eq('conversation_id',chatId).eq('user_id',currentUser.id);
       $('chatList').classList.add('hidden');$('chatCreateBox').classList.add('hidden');$('chatThread').classList.remove('hidden');
-      if(chatRealtimeChannel) await sb.removeChannel(chatRealtimeChannel);
-      chatRealtimeChannel=sb.channel('chat-'+chatId)
-        .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+chatId},()=>{openChat(chatId).catch(console.error);loadChats().catch(console.error);})
-        .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_attachments',filter:'conversation_id=eq.'+chatId},()=>{openChat(chatId).catch(console.error);})
-        .subscribe();
+      if(chatRealtimeChannel)await sb.removeChannel(chatRealtimeChannel);let refreshPending=false;
+      const refreshThread=()=>{if(refreshPending)return;refreshPending=true;setTimeout(()=>{refreshPending=false;if(activeChatId===chatId)openChat(chatId).catch(console.error);loadChats().catch(console.error);},350);};
+      chatRealtimeChannel=sb.channel('chat-'+chatId).on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+chatId},refreshThread)
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_attachments',filter:'conversation_id=eq.'+chatId},refreshThread).subscribe();
+    }
+    async function deleteChatMessage(messageId,forEveryone) {
+      if(!confirm(forEveryone?'Удалить это сообщение у всех участников?':'Скрыть это сообщение только у себя?'))return;
+      try{
+        if(forEveryone){const {data:files,error:fileError}=await sb.from('chat_attachments').select('file_path').eq('message_id',messageId);if(fileError)throw fileError;const paths=(files||[]).map(x=>x.file_path);
+          if(paths.length){const {error:removeError}=await sb.storage.from('chat-attachments').remove(paths);if(removeError)console.warn('Не удалось удалить файлы из хранилища:',removeError.message);}}
+        const {error}=await sb.rpc('delete_chat_message',{p_message_id:messageId,p_for_everyone:forEveryone});if(error)throw error;await openChat(activeChatId);await loadChats();
+      }catch(error){alert('Не удалось удалить сообщение: '+(error.message||'ошибка'));}
     }
     async function createChatFromSelection() {
-      const selected=[...$('chatUsersList').querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);
-      if(!selected.length){setMessage('chatCreateMessage','Выбери хотя бы одного участника.',true);return;}
-      const type=selected.length===1?'direct':'group';
-      const title=$('newChatTitle').value.trim();
-      const button=$('createChatConfirm');button.disabled=true;
-      try{
-        const {data,error}=await sb.rpc('create_chat',{p_title:title,p_member_ids:selected,p_type:type});
-        if(error)throw error;
-        $('newChatTitle').value='';$('chatCreateBox').classList.add('hidden');
-        await loadChats();await openChat(data);
-      }catch(err){setMessage('chatCreateMessage','Не удалось создать чат: '+(err.message||'ошибка'),true);}
-      finally{button.disabled=false;}
+      const selected=[...$('chatUsersList').querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);if(!selected.length){setMessage('chatCreateMessage','Выбери хотя бы одного участника.',true);return;}
+      const type=selected.length===1?'direct':'group';const title=$('newChatTitle').value.trim();const button=$('createChatConfirm');button.disabled=true;
+      try{const {data,error}=await sb.rpc('create_chat',{p_title:title,p_member_ids:selected,p_type:type});if(error)throw error;
+        $('newChatTitle').value='';$('chatCreateBox').classList.add('hidden');await loadChats();await openChat(data);
+      }catch(err){setMessage('chatCreateMessage','Не удалось создать чат: '+(err.message||'ошибка'),true);}finally{button.disabled=false;}
     }
-    async function uploadChatAttachments(messageId,files){
-      const uploaded=[];
-      for(const file of files){
-        if(file.size>25*1024*1024)throw new Error('Файл «'+file.name+'» больше 25 МБ.');
-        const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100)||'file';
-        const path=activeChatId+'/'+messageId+'/'+crypto.randomUUID()+'_'+safeName;
-        const {error:uploadError}=await sb.storage.from('chat-attachments').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
-        if(uploadError)throw uploadError;
+    async function uploadChatAttachments(messageId,files) {
+      const uploaded=[];for(const file of files){if(file.size>25*1024*1024)throw new Error('Файл «'+file.name+'» больше 25 МБ.');
+        const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100)||'file';const path=activeChatId+'/'+messageId+'/'+crypto.randomUUID()+'_'+safeName;
+        const {error:uploadError}=await sb.storage.from('chat-attachments').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});if(uploadError)throw uploadError;
         const {error:metaError}=await sb.from('chat_attachments').insert({message_id:messageId,conversation_id:activeChatId,file_name:file.name,file_path:path,mime_type:file.type||null,file_size:file.size,uploaded_by:currentUser.id});
-        if(metaError){await sb.storage.from('chat-attachments').remove([path]);throw metaError;}
-        uploaded.push(file.name);
-      }
-      return uploaded;
+        if(metaError){await sb.storage.from('chat-attachments').remove([path]);throw metaError;}uploaded.push(file.name);
+      }return uploaded;
     }
     async function sendChatMessage(event) {
-      event.preventDefault();
-      const input=$('chatMessageInput'),body=input.value.trim(),files=[...($('chatAttachmentInput').files||[])];
-      if((!body&&!files.length)||!activeChatId)return;
-      const button=$('chatSendForm').querySelector('button[type="submit"]');button.disabled=true;
-      try{
-        const {data:message,error}=await sb.from('chat_messages').insert({conversation_id:activeChatId,sender_id:currentUser.id,body}).select('id').single();
-        if(error)throw error;
-        if(files.length)await uploadChatAttachments(message.id,files);
-        input.value='';$('chatAttachmentInput').value='';$('chatSelectedFiles').textContent='';
-        await openChat(activeChatId);await loadChats();
-      }catch(err){setMessage('chatSendMessage','Не удалось отправить сообщение или вложение: '+(err.message||'ошибка'),true);await openChat(activeChatId).catch(()=>{});}
-      finally{button.disabled=false;}
+      event.preventDefault();const input=$('chatMessageInput'),body=input.value.trim(),files=[...($('chatAttachmentInput').files||[])];if((!body&&!files.length)||!activeChatId)return;
+      const chatId=activeChatId;const button=$('chatSendForm').querySelector('button[type="submit"]');button.disabled=true;
+      try{const {data:message,error}=await sb.from('chat_messages').insert({conversation_id:chatId,sender_id:currentUser.id,body:body||''}).select('id').single();if(error)throw error;
+        if(!message?.id)throw new Error('Сервер не вернул ID сообщения.');if(files.length)await uploadChatAttachments(message.id,files);
+        input.value='';$('chatAttachmentInput').value='';$('chatSelectedFiles').textContent='';await openChat(chatId);await loadChats();
+      }catch(err){setMessage('chatSendMessage','Не удалось отправить сообщение или вложение: '+(err.message||'ошибка'),true);await openChat(chatId).catch(()=>{});}finally{button.disabled=false;}
     }
 
     async function showAccount() {
@@ -849,11 +820,7 @@
         loadPoll()
       ]);
       homeLoads.filter(x=>x.status==='rejected').forEach(x=>console.warn('Ошибка загрузки главной:',x.reason));
-      // Подписываемся на новые сообщения, но не загружаем всю историю чатов при входе.
-      if(chatInboxChannel) await sb.removeChannel(chatInboxChannel);
-      chatInboxChannel=sb.channel('chat-inbox-'+currentUser.id)
-        .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages'},()=>loadChats().catch(console.error))
-        .subscribe();
+      // Список чатов обновляется при открытии раздела; активный чат использует отдельную realtime-подписку.
     }
     function normalizeHeader(v) {
       return String(v || '').replace(/^\uFEFF/, '').trim().toLowerCase()

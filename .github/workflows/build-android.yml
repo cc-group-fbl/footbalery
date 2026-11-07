@@ -8,6 +8,7 @@ on:
       - "capacitor.config.json"
       - "google-services.json"
       - "www/**"
+      - "assets/**"
       - ".github/workflows/build-android.yml"
   workflow_dispatch:
 
@@ -60,6 +61,14 @@ jobs:
               text += "\n" + plugin + "\n"
               app.write_text(text)
           PY
+
+      - name: Generate Android app icons
+        run: |
+          if [ -f assets/icon.png ]; then
+            npx capacitor-assets generate --android
+          else
+            echo "assets/icon.png not found; keeping default Android launcher icons"
+          fi
 
       - name: Sync Capacitor
         run: npx cap sync android

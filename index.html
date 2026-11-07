@@ -530,7 +530,7 @@
     }
     async function loadNewsRecipients() {
       const root=$('newsRecipientsList'); if(!root)return;
-      const {data,error}=await sb.from('profiles').select('user_id,username').order('username');
+      const {data,error}=await sb.from('profiles').select('user_id,username,first_name,last_name').order('last_name');
       root.replaceChildren();
       if(error||!data){root.textContent='Не удалось загрузить список участников.';return;}
       data.forEach(p=>{const label=document.createElement('label');label.className='candidate';label.style.margin='6px 0';const cb=document.createElement('input');cb.type='checkbox';cb.name='newsRecipient';cb.value=p.user_id;const span=document.createElement('span');span.style.cssText='font-size:12px;overflow-wrap:anywhere';span.textContent=p.username;label.append(cb,span);root.appendChild(label);});
@@ -650,6 +650,10 @@
       try { return new Date(value).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }
       catch (_) { return ''; }
     }
+    function chatDisplayName(profile) {
+      const fullName=[profile?.first_name,profile?.last_name].filter(Boolean).join(' ').trim();
+      return fullName || profile?.username || 'Участник';
+    }
     async function loadChatUsers() {
       const root=$('chatUsersList'); root.replaceChildren();
       const {data,error}=await sb.from('profiles').select('user_id,username').order('username');
@@ -657,7 +661,7 @@
       (data||[]).filter(p=>p.user_id!==currentUser.id).forEach(p=>{
         const label=document.createElement('label'); label.className='chat-user-choice';
         const input=document.createElement('input'); input.type='checkbox'; input.value=p.user_id;
-        const name=document.createElement('span'); name.textContent=p.username||'Участник';
+        const name=document.createElement('span'); name.textContent=chatDisplayName(p);
         label.append(input,name); root.append(label);
       });
       if(!root.children.length) root.textContent='Пока нет других пользователей.';
@@ -673,10 +677,10 @@
         sb.from('chat_conversations').select('id,type,title,updated_at').in('id',ids).order('updated_at',{ascending:false}),
         sb.from('chat_members').select('conversation_id,user_id').in('conversation_id',ids),
         sb.from('chat_messages').select('conversation_id,body,sender_id,created_at').in('conversation_id',ids).order('created_at',{ascending:false}),
-        sb.from('profiles').select('user_id,username')
+        sb.from('profiles').select('user_id,username,first_name,last_name')
       ]);
       const err=convError||memberError||messageError||profileError;if(err)throw err;
-      chatNameMap.clear();(profiles||[]).forEach(p=>chatNameMap.set(p.user_id,p.username||'Участник'));
+      chatNameMap.clear();(profiles||[]).forEach(p=>chatNameMap.set(p.user_id,chatDisplayName(p)));
       root.replaceChildren();
       (conversations||[]).forEach(c=>{
         const peers=(members||[]).filter(m=>m.conversation_id===c.id&&m.user_id!==currentUser.id);
@@ -699,14 +703,14 @@
       const ids=(members||[]).map(x=>x.user_id);
       const [{data:conversation,error:convError},{data:profiles,error:profileError},{data:messages,error:messageError}]=await Promise.all([
         sb.from('chat_conversations').select('id,type,title').eq('id',chatId).single(),
-        sb.from('profiles').select('user_id,username').in('user_id',ids),
+        sb.from('profiles').select('user_id,username,first_name,last_name').in('user_id',ids),
         sb.from('chat_messages').select('id,sender_id,body,created_at').eq('conversation_id',chatId).order('created_at',{ascending:true}).limit(100)
       ]);
       const err=convError||profileError||messageError;if(err)throw err;
-      const names=new Map((profiles||[]).map(p=>[p.user_id,p.username||'Участник']));
+      const names=new Map((profiles||[]).map(p=>[p.user_id,chatDisplayName(p)]));
       const peers=ids.filter(id=>id!==currentUser.id).map(id=>names.get(id)||'Участник');
       $('chatThreadTitle').textContent=conversation.type==='group'?(conversation.title||'Групповой чат'):(peers[0]||'Личный чат');
-      $('chatThreadMembers').textContent=conversation.type==='group'?'Участники: '+peers.concat([currentProfile?.username||'Вы']).join(', '):'Личная переписка';
+      $('chatThreadMembers').textContent=conversation.type==='group'?'Участники: '+peers.concat([chatDisplayName(currentProfile)||'Вы']).join(', '):'Личная переписка';
       const box=$('chatMessages');box.replaceChildren();
       (messages||[]).forEach(m=>{
         const item=document.createElement('div');item.className='chat-message'+(m.sender_id===currentUser.id?' mine':'');
@@ -751,7 +755,7 @@
     }
 
     async function showAccount() {
-      const { data: profile, error } = await sb.from('profiles').select('user_id, username, player_id, role, captain_team').eq('user_id', currentUser.id).maybeSingle();
+      const { data: profile, error } = await sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team').eq('user_id', currentUser.id).maybeSingle();
       if (error || !profile) { await sb.auth.signOut(); $('accountPanel').classList.add('hidden'); $('loginPanel').classList.remove('hidden'); return setMessage('loginMessage','Для аккаунта не назначена карточка игрока. Обратитесь к администратору.',true); }
       currentProfile = profile; window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); await loadSharedSeasonTheme(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');

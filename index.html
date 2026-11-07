@@ -170,6 +170,9 @@
   .chat-message{max-width:86%;padding:10px 12px;margin:7px 0;border-radius:13px;background:rgba(255,255,255,.09);overflow-wrap:anywhere}
   .chat-message.mine{margin-left:auto;background:rgba(0,160,220,.24);border:1px solid rgba(0,195,255,.2)}
   .chat-message-meta{font-size:10px;opacity:.65;margin-top:5px}
+  .chat-message-actions{display:none;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .chat-message.show-actions .chat-message-actions{display:flex}
+  .chat-search{margin-top:12px;width:100%}
   .chat-image{display:block;max-width:100%;max-height:280px;object-fit:contain;border-radius:10px;margin-top:7px;cursor:zoom-in}
   .chat-photo-viewer{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.94);backdrop-filter:blur(8px)}
   .chat-photo-viewer img{display:block;max-width:100%;max-height:calc(100dvh - 36px);object-fit:contain;border-radius:8px}
@@ -404,7 +407,8 @@
           <button type="button" class="small-btn" id="cancelChatCreate">Отмена</button>
           <div id="chatCreateMessage" class="message"></div>
         </div>
-        <div id="chatList" style="margin-top:14px"><div class="muted">Загрузка чатов…</div></div>
+        <input id="chatSearchInput" class="field chat-search" type="search" placeholder="Поиск по чатам…" autocomplete="off" aria-label="Поиск по чатам">
+        <div id="chatList" style="margin-top:8px"><div class="muted">Загрузка чатов…</div></div>
         <div id="chatThread" class="hidden" style="margin-top:16px">
           <button type="button" class="small-btn" id="backToChatList">← К списку чатов</button>
           <h3 id="chatThreadTitle" style="margin:12px 0"></h3>
@@ -732,7 +736,7 @@
         const title=conversation.type==='group'?(conversation.title||'Групповой чат'):((chatNameMap.get(peers[0]?.user_id))||'Личный чат');const last=latestByChat.get(conversation.id);
         const button=document.createElement('button');button.type='button';button.className='chat-list-item';const avatar=document.createElement('span');avatar.className='chat-avatar';avatar.textContent=(title.trim()[0]||'Ч').toUpperCase();
         const info=document.createElement('span');info.style.flex='1';info.style.minWidth='0';const name=document.createElement('strong');name.textContent=title;
-        const preview=document.createElement('div');preview.className='muted';preview.style.cssText='font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px';preview.textContent=last?((last.sender_id===currentUser.id?'Вы: ':'')+(last.body||'📎 Вложение')):'Пока нет сообщений';
+        const preview=document.createElement('div');preview.className='muted';preview.style.cssText='font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px';preview.textContent=last?((last.sender_id===currentUser.id?'Вы: ':'')+(last.body||'📎 Вложение')):'Пока нет сообщений';button.dataset.search=(title+' '+preview.textContent).toLocaleLowerCase('ru');
         const date=document.createElement('span');date.className='muted';date.style.fontSize='10px';date.textContent=last?chatTime(last.created_at):'';info.append(name,preview);button.append(avatar,info,date);
         button.addEventListener('click',()=>openChat(conversation.id).catch(e=>{console.error(e);setMessage('chatSendMessage','Не удалось открыть чат: '+(e.message||'ошибка'),true);}));root.append(button);
       });
@@ -761,8 +765,12 @@
           else{const link=document.createElement('a');link.className='chat-file';link.href=signedUrl;link.target='_blank';link.rel='noopener noreferrer';link.download=file.file_name;link.textContent='📎 '+file.file_name+' ('+Math.max(1,Math.round(file.file_size/1024))+' КБ)';item.append(link);}
         }
         const meta=document.createElement('div');meta.className='chat-message-meta';meta.textContent=(m.sender_id===currentUser.id?'Вы':names.get(m.sender_id)||'Участник')+' · '+chatTime(m.created_at);item.append(meta);
-        const actions=document.createElement('div');actions.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:6px';const removeMine=document.createElement('button');removeMine.type='button';removeMine.className='small-btn';removeMine.textContent='Удалить у себя';removeMine.addEventListener('click',()=>deleteChatMessage(m.id,false));actions.append(removeMine);
-        if(m.sender_id===currentUser.id){const removeAll=document.createElement('button');removeAll.type='button';removeAll.className='small-btn';removeAll.textContent='Удалить у всех';removeAll.addEventListener('click',()=>deleteChatMessage(m.id,true));actions.append(removeAll);}item.append(actions);box.append(item);
+        const actions=document.createElement('div');actions.className='chat-message-actions';const removeMine=document.createElement('button');removeMine.type='button';removeMine.className='small-btn';removeMine.textContent='Удалить у себя';removeMine.addEventListener('click',()=>deleteChatMessage(m.id,false));actions.append(removeMine);
+        if(m.sender_id===currentUser.id){const removeAll=document.createElement('button');removeAll.type='button';removeAll.className='small-btn';removeAll.textContent='Удалить у всех';removeAll.addEventListener('click',()=>deleteChatMessage(m.id,true));actions.append(removeAll);}item.append(actions);
+         let holdTimer=null;const cancelHold=()=>{if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}};
+         item.addEventListener('pointerdown',e=>{if(e.target.closest('button,a'))return;cancelHold();holdTimer=setTimeout(()=>{item.classList.add('show-actions');holdTimer=null;},550);});
+         ['pointerup','pointerleave','pointercancel'].forEach(type=>item.addEventListener(type,cancelHold));
+         item.addEventListener('contextmenu',e=>{e.preventDefault();item.classList.add('show-actions');});box.append(item);
       }
       if(!messages.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Это начало переписки. Отправь первое сообщение!';box.append(empty);}box.scrollTop=box.scrollHeight;
       await sb.from('chat_members').update({last_read_at:new Date().toISOString()}).eq('conversation_id',chatId).eq('user_id',currentUser.id);
@@ -781,7 +789,12 @@
         const {error}=await sb.rpc('delete_chat_message',{p_message_id:messageId,p_for_everyone:forEveryone});if(error)throw error;await openChat(activeChatId);await loadChats();
       }catch(error){alert('Не удалось удалить сообщение: '+(error.message||'ошибка'));}
     }
-    async function createChatFromSelection() {
+    $('chatSearchInput')?.addEventListener('input',()=>{
+       const query=$('chatSearchInput').value.trim().toLocaleLowerCase('ru');let visible=0;
+       $('chatList').querySelectorAll('.chat-list-item').forEach(item=>{const match=!query||(item.dataset.search||'').includes(query);item.hidden=!match;if(match)visible++;});
+       let empty=$('chatSearchEmpty');if(query&&visible===0){if(!empty){empty=document.createElement('div');empty.id='chatSearchEmpty';empty.className='muted';empty.style.padding='12px 4px';empty.textContent='Ничего не найдено.';$('chatList').append(empty);}}else if(empty)empty.remove();
+     });
+     async function createChatFromSelection() {
       const selected=[...$('chatUsersList').querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);if(!selected.length){setMessage('chatCreateMessage','Выбери хотя бы одного участника.',true);return;}
       const type=selected.length===1?'direct':'group';const title=$('newChatTitle').value.trim();const button=$('createChatConfirm');button.disabled=true;
       try{const {data,error}=await sb.rpc('create_chat',{p_title:title,p_member_ids:selected,p_type:type});if(error)throw error;

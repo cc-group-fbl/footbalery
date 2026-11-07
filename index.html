@@ -171,6 +171,9 @@
   .chat-message.mine{margin-left:auto;background:rgba(0,160,220,.24);border:1px solid rgba(0,195,255,.2)}
   .chat-message-meta{font-size:10px;opacity:.65;margin-top:5px}
   .chat-image{display:block;max-width:100%;max-height:280px;object-fit:contain;border-radius:10px;margin-top:7px;cursor:zoom-in}
+  .chat-photo-viewer{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.94);backdrop-filter:blur(8px)}
+  .chat-photo-viewer img{display:block;max-width:100%;max-height:calc(100dvh - 36px);object-fit:contain;border-radius:8px}
+  .chat-photo-viewer-close{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));width:42px;height:42px;border:1px solid #ffffff55;border-radius:50%;background:#171b24;color:#fff;font-size:26px;line-height:1;cursor:pointer}
   .chat-file{display:inline-flex;align-items:center;gap:7px;margin-top:7px;padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.1);color:inherit;text-decoration:none;overflow-wrap:anywhere}
   .chat-messages{height:min(48vh,430px);overflow-y:auto;padding:10px;border:1px solid var(--border-color);border-radius:14px;background:rgba(0,0,0,.16);display:flex;flex-direction:column}
   .chat-user-choice{display:flex;align-items:center;gap:10px;padding:9px;border-bottom:1px solid rgba(255,255,255,.07);text-align:left}
@@ -670,6 +673,17 @@
       try { return new Date(value).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }
       catch (_) { return ''; }
     }
+    function openChatPhotoViewer(src,alt){
+      const old=document.querySelector('.chat-photo-viewer');if(old)old.remove();
+      const overlay=document.createElement('div');overlay.className='chat-photo-viewer';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Просмотр фотографии');
+      const image=document.createElement('img');image.src=src;image.alt=alt||'Фотография';
+      const close=document.createElement('button');close.type='button';close.className='chat-photo-viewer-close';close.textContent='×';close.setAttribute('aria-label','Закрыть фото');
+      const dismiss=()=>{overlay.remove();document.removeEventListener('keydown',onKey);};
+      const onKey=e=>{if(e.key==='Escape')dismiss();};
+      close.addEventListener('click',dismiss);overlay.addEventListener('click',e=>{if(e.target===overlay)dismiss();});
+      image.addEventListener('click',e=>e.stopPropagation());overlay.append(image,close);document.body.append(overlay);
+      document.addEventListener('keydown',onKey);close.focus();
+    }
     function chatDisplayName(profile) {
       const fullName=[profile?.first_name,profile?.last_name].filter(Boolean).join(' ').trim();
       return fullName || profile?.username || 'Участник';
@@ -754,6 +768,7 @@
           if((file.mime_type||'').startsWith('image/')){
             const link=document.createElement('a');link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';
             const image=document.createElement('img');image.className='chat-image';image.src=signed.signedUrl;image.alt=file.file_name;image.loading='lazy';
+            image.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openChatPhotoViewer(signed.signedUrl,file.file_name);});
             link.append(image);item.append(link);
           }else{
             const link=document.createElement('a');link.className='chat-file';link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';link.download=file.file_name;

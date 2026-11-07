@@ -76,4 +76,21 @@ with check (
   )
 );
 
+
+-- Realtime: уведомляем участников после сохранения вложения.
+do $realtime$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname='supabase_realtime'
+      and schemaname='public'
+      and tablename='chat_attachments'
+  ) then
+    alter publication supabase_realtime add table public.chat_attachments;
+  end if;
+exception when undefined_object then
+  null;
+end
+$realtime$;
+
 commit;

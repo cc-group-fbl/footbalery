@@ -170,6 +170,8 @@
   .chat-message{max-width:86%;padding:10px 12px;margin:7px 0;border-radius:13px;background:rgba(255,255,255,.09);overflow-wrap:anywhere}
   .chat-message.mine{margin-left:auto;background:rgba(0,160,220,.24);border:1px solid rgba(0,195,255,.2)}
   .chat-message-meta{font-size:10px;opacity:.65;margin-top:5px}
+  .chat-image{display:block;max-width:100%;max-height:280px;object-fit:contain;border-radius:10px;margin-top:7px;cursor:zoom-in}
+  .chat-file{display:inline-flex;align-items:center;gap:7px;margin-top:7px;padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.1);color:inherit;text-decoration:none;overflow-wrap:anywhere}
   .chat-messages{height:min(48vh,430px);overflow-y:auto;padding:10px;border:1px solid var(--border-color);border-radius:14px;background:rgba(0,0,0,.16);display:flex;flex-direction:column}
   .chat-user-choice{display:flex;align-items:center;gap:10px;padding:9px;border-bottom:1px solid rgba(255,255,255,.07);text-align:left}
   .chat-user-choice input{width:18px;height:18px;accent-color:var(--cyan)}
@@ -405,10 +407,13 @@
           <h3 id="chatThreadTitle" style="margin:12px 0"></h3>
           <div id="chatThreadMembers" class="muted" style="margin-bottom:8px"></div>
           <div id="chatMessages" class="chat-messages"></div>
-          <form id="chatSendForm" style="display:flex;gap:8px;margin-top:10px">
-            <input id="chatMessageInput" class="field" maxlength="5000" placeholder="Написать сообщение…" autocomplete="off" required style="min-width:0">
+          <form id="chatSendForm" style="display:flex;gap:8px;margin-top:10px;align-items:center">
+            <label for="chatAttachmentInput" class="small-btn" title="Прикрепить файлы" style="cursor:pointer;white-space:nowrap">📎</label>
+            <input id="chatAttachmentInput" type="file" multiple class="hidden">
+            <input id="chatMessageInput" class="field" maxlength="5000" placeholder="Написать сообщение…" autocomplete="off" style="min-width:0">
             <button type="submit" class="action-btn" style="width:auto;min-width:74px;padding:10px">➤</button>
           </form>
+          <div id="chatSelectedFiles" class="muted" style="font-size:11px;margin-top:5px"></div>
           <div id="chatSendMessage" class="message"></div>
         </div>
       </section>
@@ -707,6 +712,16 @@
         sb.from('chat_messages').select('id,sender_id,body,created_at').eq('conversation_id',chatId).order('created_at',{ascending:true}).limit(100)
       ]);
       const err=convError||profileError||messageError;if(err)throw err;
+      const messageIds=(messages||[]).map(m=>m.id);
+      const {data:attachments,error:attachmentError}=messageIds.length
+        ? await sb.from('chat_attachments').select('id,message_id,file_name,file_path,mime_type,file_size').in('message_id',messageIds).order('created_at')
+        : {data:[],error:null};
+      if(attachmentError)throw attachmentError;
+      const attachmentsByMessage=new Map();
+      for(const file of (attachments||[])){
+        if(!attachmentsByMessage.has(file.message_id))attachmentsByMessage.set(file.message_id,[]);
+        attachmentsByMessage.get(file.message_id).push(file);
+      }
       const names=new Map((profiles||[]).map(p=>[p.user_id,chatDisplayName(p)]));
       const peers=ids.filter(id=>id!==currentUser.id).map(id=>names.get(id)||'Участник');
       $('chatThreadTitle').textContent=conversation.type==='group'?(conversation.title||'Групповой чат'):(peers[0]||'Личный чат');
@@ -714,19 +729,31 @@
       const box=$('chatMessages');box.replaceChildren();
       (messages||[]).forEach(m=>{
         const item=document.createElement('div');item.className='chat-message'+(m.sender_id===currentUser.id?' mine':'');
-        const body=document.createElement('div');body.textContent=m.body;
+        if(m.body){const body=document.createElement('div');body.textContent=m.body;item.append(body);}
+        for(const file of (attachmentsByMessage.get(m.id)||[])){
+          const {data:signed,error:signedError}=await sb.storage.from('chat-attachments').createSignedUrl(file.file_path,3600);
+          if(signedError||!signed?.signedUrl)continue;
+          if((file.mime_type||'').startsWith('image/')){
+            const link=document.createElement('a');link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';
+            const image=document.createElement('img');image.className='chat-image';image.src=signed.signedUrl;image.alt=file.file_name;image.loading='lazy';
+            link.append(image);item.append(link);
+          }else{
+            const link=document.createElement('a');link.className='chat-file';link.href=signed.signedUrl;link.target='_blank';link.rel='noopener noreferrer';link.download=file.file_name;
+            link.textContent='📎 '+file.file_name+' ('+Math.max(1,Math.round(file.file_size/1024))+' КБ)';item.append(link);
+          }
+        }
         const meta=document.createElement('div');meta.className='chat-message-meta';meta.textContent=(m.sender_id===currentUser.id?'Вы':names.get(m.sender_id)||'Участник')+' · '+chatTime(m.created_at);
-        item.append(body,meta);box.append(item);
+        item.append(meta);box.append(item);
       });
       if(!messages?.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Это начало переписки. Отправь первое сообщение!';box.append(empty);}
       box.scrollTop=box.scrollHeight;
       await sb.from('chat_members').update({last_read_at:new Date().toISOString()}).eq('conversation_id',chatId).eq('user_id',currentUser.id);
       $('chatList').classList.add('hidden');$('chatCreateBox').classList.add('hidden');$('chatThread').classList.remove('hidden');
       if(chatRealtimeChannel) await sb.removeChannel(chatRealtimeChannel);
-      chatRealtimeChannel=sb.channel('chat-'+chatId).on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+chatId},payload=>{
-        if(payload.new?.sender_id!==currentUser.id) openChat(chatId).catch(console.error);
-        loadChats().catch(console.error);
-      }).subscribe();
+      chatRealtimeChannel=sb.channel('chat-'+chatId)
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+chatId},()=>{openChat(chatId).catch(console.error);loadChats().catch(console.error);})
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_attachments',filter:'conversation_id=eq.'+chatId},()=>{openChat(chatId).catch(console.error);})
+        .subscribe();
     }
     async function createChatFromSelection() {
       const selected=[...$('chatUsersList').querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);
@@ -742,15 +769,32 @@
       }catch(err){setMessage('chatCreateMessage','Не удалось создать чат: '+(err.message||'ошибка'),true);}
       finally{button.disabled=false;}
     }
+    async function uploadChatAttachments(messageId,files){
+      const uploaded=[];
+      for(const file of files){
+        if(file.size>25*1024*1024)throw new Error('Файл «'+file.name+'» больше 25 МБ.');
+        const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100)||'file';
+        const path=activeChatId+'/'+messageId+'/'+crypto.randomUUID()+'_'+safeName;
+        const {error:uploadError}=await sb.storage.from('chat-attachments').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
+        if(uploadError)throw uploadError;
+        const {error:metaError}=await sb.from('chat_attachments').insert({message_id:messageId,conversation_id:activeChatId,file_name:file.name,file_path:path,mime_type:file.type||null,file_size:file.size,uploaded_by:currentUser.id});
+        if(metaError){await sb.storage.from('chat-attachments').remove([path]);throw metaError;}
+        uploaded.push(file.name);
+      }
+      return uploaded;
+    }
     async function sendChatMessage(event) {
       event.preventDefault();
-      const input=$('chatMessageInput'),body=input.value.trim();if(!body||!activeChatId)return;
+      const input=$('chatMessageInput'),body=input.value.trim(),files=[...($('chatAttachmentInput').files||[])];
+      if((!body&&!files.length)||!activeChatId)return;
       const button=$('chatSendForm').querySelector('button[type="submit"]');button.disabled=true;
       try{
-        const {error}=await sb.from('chat_messages').insert({conversation_id:activeChatId,sender_id:currentUser.id,body});
+        const {data:message,error}=await sb.from('chat_messages').insert({conversation_id:activeChatId,sender_id:currentUser.id,body}).select('id').single();
         if(error)throw error;
-        input.value='';await openChat(activeChatId);await loadChats();
-      }catch(err){setMessage('chatSendMessage','Не удалось отправить сообщение: '+(err.message||'ошибка'),true);}
+        if(files.length)await uploadChatAttachments(message.id,files);
+        input.value='';$('chatAttachmentInput').value='';$('chatSelectedFiles').textContent='';
+        await openChat(activeChatId);await loadChats();
+      }catch(err){setMessage('chatSendMessage','Не удалось отправить сообщение или вложение: '+(err.message||'ошибка'),true);await openChat(activeChatId).catch(()=>{});}
       finally{button.disabled=false;}
     }
 
@@ -1670,6 +1714,7 @@
     $('createChatConfirm')?.addEventListener('click',createChatFromSelection);
     $('backToChatList')?.addEventListener('click',async()=>{if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('chatThread').classList.add('hidden');$('chatList').classList.remove('hidden');await loadChats();});
     $('chatSendForm')?.addEventListener('submit',sendChatMessage);
+    $('chatAttachmentInput')?.addEventListener('change',()=>{$('chatSelectedFiles').textContent=[...$('chatAttachmentInput').files].map(f=>f.name).join(' · ');});
 
     $('matchApplicationForm').addEventListener('submit',submitMatchApplication);
     $('matchSelect')?.addEventListener('change',updateMatchTeamVisibility);

@@ -40,12 +40,12 @@ language sql
 stable
 security definer
 set search_path = public, auth
-as $
+as $fn$
   select exists (
     select 1 from public.chat_members m
     where m.conversation_id=p_conversation_id and m.user_id=p_user_id
   );
-$;
+$fn$;
 revoke all on function public.is_chat_member(uuid,uuid) from public;
 grant execute on function public.is_chat_member(uuid,uuid) to authenticated;
 
@@ -105,8 +105,8 @@ begin
   if v_count>50 then raise exception 'В чате может быть не более 50 участников'; end if;
 
   if exists (
-    select 1 from unnest(v_members) u
-    where not exists (select 1 from public.profiles p where p.user_id=u)
+    select 1 from unnest(v_members) as ids(member_id)
+    where not exists (select 1 from public.profiles p where p.user_id=ids.member_id)
   ) then raise exception 'Один из участников не найден'; end if;
 
   insert into public.chat_conversations(type,title,created_by)
@@ -126,12 +126,12 @@ grant execute on function public.create_chat(text,uuid[],text) to authenticated;
 -- Обновляем сортировку списка чатов при появлении нового сообщения.
 create or replace function public.touch_chat_updated_at()
 returns trigger language plpgsql security definer set search_path=public
-as $
+as $trigger$
 begin
   update public.chat_conversations set updated_at=new.created_at where id=new.conversation_id;
   return new;
 end;
-$;
+$trigger$;
 drop trigger if exists chat_message_touch_conversation on public.chat_messages;
 create trigger chat_message_touch_conversation
 after insert on public.chat_messages

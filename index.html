@@ -770,7 +770,8 @@
       if(chatRealtimeChannel)await sb.removeChannel(chatRealtimeChannel);let refreshPending=false;
       const refreshThread=()=>{if(refreshPending)return;refreshPending=true;setTimeout(()=>{refreshPending=false;if(activeChatId===chatId)openChat(chatId).catch(console.error);loadChats().catch(console.error);},350);};
       chatRealtimeChannel=sb.channel('chat-'+chatId).on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+chatId},refreshThread)
-        .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_attachments',filter:'conversation_id=eq.'+chatId},refreshThread).subscribe();
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_attachments',filter:'conversation_id=eq.'+chatId},refreshThread)
+        .on('postgres_changes',{event:'DELETE',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+chatId},refreshThread).subscribe();
     }
     async function deleteChatMessage(messageId,forEveryone) {
       if(!confirm(forEveryone?'Удалить это сообщение у всех участников?':'Скрыть это сообщение только у себя?'))return;

@@ -707,13 +707,15 @@
       if(error) throw error;
       const ids=(mine||[]).map(x=>x.conversation_id);
       if(!ids.length){$('chatUnreadBadge')?.classList.add('hidden');root.textContent='У тебя пока нет чатов. Нажми «Создать чат», чтобы начать переписку.';return;}
-      const [{data:conversations,error:convError},{data:members,error:memberError},{data:messages,error:messageError},{data:profiles,error:profileError}]=await Promise.all([
+      const [{data:conversations,error:convError},{data:members,error:memberError},{data:messages,error:messageError}]=await Promise.all([
         sb.from('chat_conversations').select('id,type,title,updated_at').in('id',ids).order('updated_at',{ascending:false}),
         sb.from('chat_members').select('conversation_id,user_id').in('conversation_id',ids),
-        sb.from('chat_messages').select('conversation_id,body,sender_id,created_at').in('conversation_id',ids).order('created_at',{ascending:false}),
-        sb.from('profiles').select('user_id,username,first_name,last_name')
+        sb.from('chat_messages').select('conversation_id,body,sender_id,created_at').in('conversation_id',ids).order('created_at',{ascending:false})
       ]);
-      const err=convError||memberError||messageError||profileError;if(err)throw err;
+      const err=convError||memberError||messageError;if(err)throw err;
+      const profileUserIds=[...new Set((members||[]).map(m=>m.user_id))];
+      const {data:profiles,error:profileError}=await sb.rpc('get_chat_profiles',{p_user_ids:profileUserIds});
+      if(profileError)throw profileError;
       const readAt=new Map((mine||[]).map(x=>[x.conversation_id,x.last_read_at?new Date(x.last_read_at).getTime():0]));
       const unreadCount=(messages||[]).filter(m=>m.sender_id!==currentUser.id&&new Date(m.created_at).getTime()>(readAt.get(m.conversation_id)||0)).length;
       const unreadBadge=$('chatUnreadBadge');if(unreadBadge){unreadBadge.textContent=unreadCount>99?'99+':String(unreadCount);unreadBadge.classList.toggle('hidden',unreadCount===0);}
@@ -740,7 +742,7 @@
       const ids=(members||[]).map(x=>x.user_id);
       const [{data:conversation,error:convError},{data:profiles,error:profileError},{data:messages,error:messageError}]=await Promise.all([
         sb.from('chat_conversations').select('id,type,title').eq('id',chatId).single(),
-        sb.from('profiles').select('user_id,username,first_name,last_name').in('user_id',ids),
+        sb.rpc('get_chat_profiles',{p_user_ids:ids}),
         sb.from('chat_messages').select('id,sender_id,body,created_at').eq('conversation_id',chatId).order('created_at',{ascending:true}).limit(100)
       ]);
       const err=convError||profileError||messageError;if(err)throw err;

@@ -225,6 +225,7 @@
           <button type="button" class="dashboard-card" id="openStatsButton"><span class="dashboard-icon">📊</span><span><span class="dashboard-title">СТАТИСТИКА</span><span class="dashboard-description">Твои показатели, достижения и трансферная стоимость</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openChatsButton"><span class="dashboard-icon">💬</span><span><span class="dashboard-title">ЧАТЫ <span id="chatUnreadBadge" class="notice-pill hidden">0</span></span><span class="dashboard-description">Личные сообщения и групповые переписки</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openNewsButton"><span class="dashboard-icon">📰</span><span><span class="dashboard-title">НОВОСТИ <span id="newsUnreadBadge" class="notice-pill hidden">НОВОЕ</span></span><span class="dashboard-description">Новости сообщества и информационные сообщения</span></span><span class="dashboard-arrow">›</span></button>
+          <button type="button" class="dashboard-card" id="openFinanceButton"><span class="dashboard-icon">💰</span><span><span class="dashboard-title">ФИНАНСЫ</span><span class="dashboard-description">Общий баланс и цели сообщества</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openScheduleButton"><span class="dashboard-icon">🗓️</span><span><span class="dashboard-title">РАСПИСАНИЕ</span><span class="dashboard-description">Предстоящие матчи и официальные мероприятия</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openMatchesButton"><span class="dashboard-icon">⚽</span><span><span class="dashboard-title">ЗАЯВКА НА МАТЧ</span><span class="dashboard-description">Подать заявку и посмотреть составы</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card hidden" id="openCaptainButton"><span class="dashboard-icon">🧢</span><span><span class="dashboard-title">КАПИТАН</span><span class="dashboard-description">Состав заявленных в твою команду</span></span><span class="dashboard-arrow">›</span></button>
@@ -254,6 +255,40 @@
       <section id="matchesPanel" class="vote-box hidden"><h2>ЗАЯВКА НА МАТЧ</h2><div class="muted">Выбери матч и команду. Администратор может изменить команду в заявке.</div>
         <form id="matchApplicationForm" style="margin-top:12px"><label class="muted" for="matchSelect">Матч</label><select id="matchSelect" class="field" required><option value="">Загрузка матчей…</option></select>
         <div id="teamSelectWrap" class="hidden"><label class="muted" for="teamSelect">Команда</label><select id="teamSelect" class="field" required><option value="ДЕРЕВЕНСКИЕ">ФК ДЕРЕВЕНСКИЕ</option><option value="ГОРОДСКИЕ">ФК ГОРОДСКИЕ</option></select></div><label class="muted" for="applicationPlayerNumber">Игровой номер</label><input id="applicationPlayerNumber" class="field" type="number" min="0" max="99" step="1" placeholder="Например, 10" required><label class="candidate" style="margin:12px 0"><input id="readyToHelp" type="checkbox"><span style="font-size:13px">Готов помочь с организацией и подготовкой матча</span></label><button class="action-btn" type="submit">ПОДАТЬ ЗАЯВКУ</button></form><div id="applicationMessage" class="message"></div><h3>Мои заявки</h3><div id="myApplications" class="muted"></div>
+      </section>
+      <button type="button" class="small-btn section-back hidden" id="financeBackButton">← На главный экран</button>
+      <section id="financePanel" class="vote-box hidden">
+        <h2>ФИНАНСЫ СООБЩЕСТВА</h2>
+        <div class="muted">Общий финансовый баланс и цели сообщества. Просмотр доступен всем участникам.</div>
+        <div style="margin:14px 0;padding:18px;border:1px solid rgba(245,197,24,.35);border-radius:16px;background:linear-gradient(135deg,rgba(245,197,24,.12),rgba(255,255,255,.025))">
+          <div class="muted" style="text-align:left">БАЛАНС НА СЕГОДНЯ</div>
+          <div id="financeBalanceValue" style="font-size:30px;font-weight:900;color:var(--accent-text);margin-top:6px">Загрузка…</div>
+          <div id="financeBalanceUpdated" class="muted" style="margin-top:5px"></div>
+        </div>
+        <div id="financeAdminControls" class="hidden" style="padding:14px;border:1px solid var(--border-color);border-radius:14px;margin:14px 0">
+          <h3 style="margin:0 0 10px;font-size:14px">Управление балансом</h3>
+          <label class="muted" for="financeBalanceInput">Новая сумма баланса, ₽</label>
+          <input id="financeBalanceInput" class="field" type="number" step="0.01" placeholder="0">
+          <button type="button" id="saveFinanceBalance" class="action-btn">СОХРАНИТЬ БАЛАНС</button>
+          <div id="financeBalanceMessage" class="message"></div>
+        </div>
+        <div class="topline" style="margin-top:20px"><h3 style="margin:0">ЦЕЛИ</h3></div>
+        <div id="financeGoalsList" style="margin-top:10px"><div class="muted">Загрузка целей…</div></div>
+        <div id="financeGoalAdminControls" class="hidden" style="padding:14px;border:1px solid var(--border-color);border-radius:14px;margin-top:16px">
+          <h3 style="margin:0 0 10px;font-size:14px">＋ Новая цель</h3>
+          <form id="financeGoalForm">
+            <label class="muted" for="financeGoalTitle">Название цели</label>
+            <input id="financeGoalTitle" class="field" maxlength="120" placeholder="Например, новая форма" required>
+            <label class="muted" for="financeGoalDescription">Описание</label>
+            <textarea id="financeGoalDescription" class="field" maxlength="1000" rows="3" placeholder="Для чего собираем средства?"></textarea>
+            <label class="muted" for="financeGoalTarget">Необходимая сумма, ₽</label>
+            <input id="financeGoalTarget" class="field" type="number" min="0.01" step="0.01" placeholder="10000" required>
+            <label class="muted" for="financeGoalCurrent">Уже собрано, ₽</label>
+            <input id="financeGoalCurrent" class="field" type="number" min="0" step="0.01" value="0">
+            <button type="submit" class="action-btn">СОЗДАТЬ ЦЕЛЬ</button>
+          </form>
+          <div id="financeGoalMessage" class="message"></div>
+        </div>
       </section>
       <button type="button" class="small-btn section-back hidden" id="scheduleBackButton">← На главный экран</button>
       <section id="schedulePanel" class="vote-box hidden">
@@ -478,10 +513,10 @@
 
     function showSection(sectionId) {
       $('accountPanel')?.classList.toggle('main-menu-open',sectionId==='homeScreen');
-      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel','chatsPanel'].forEach(id => {
+      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel','chatsPanel','financePanel'].forEach(id => {
         const panel=$(id); if(panel) panel.classList.toggle('hidden', id !== sectionId);
       });
-      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton',chatsPanel:'chatsBackButton'};
+      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton',chatsPanel:'chatsBackButton',financePanel:'financeBackButton'};
       Object.entries(backButtons).forEach(([panelId,buttonId])=>{const button=$(buttonId);if(button)button.classList.toggle('hidden',sectionId!==panelId);});
       window.scrollTo({top:0,behavior:'smooth'});
     }
@@ -843,6 +878,89 @@
       }catch(err){setMessage('chatSendMessage','Не удалось отправить сообщение или вложение: '+(err.message||'ошибка'),true);await openChat(chatId).catch(()=>{});}finally{button.disabled=false;}
     }
 
+    const financeMoney=value=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(Number(value)||0);
+    async function loadFinance() {
+      const balanceEl=$('financeBalanceValue'),goalsEl=$('financeGoalsList');
+      if(!sb||!currentUser||!balanceEl||!goalsEl)return;
+      const isAdmin=currentProfile?.role==='admin';
+      $('financeAdminControls')?.classList.toggle('hidden',!isAdmin);
+      $('financeGoalAdminControls')?.classList.toggle('hidden',!isAdmin);
+      balanceEl.textContent='Загрузка…';goalsEl.textContent='Загружаем цели…';
+      const [{data:balance,error:balanceError},{data:goals,error:goalsError}]=await Promise.all([
+        sb.from('finance_balance').select('amount,updated_at').eq('id',1).maybeSingle(),
+        sb.from('finance_goals').select('id,title,description,target_amount,current_amount,created_at,updated_at').order('created_at',{ascending:false})
+      ]);
+      if(balanceError){balanceEl.textContent='Не удалось загрузить';$('financeBalanceUpdated').textContent=balanceError.message;}
+      else {
+        const amount=Number(balance?.amount||0);balanceEl.textContent=financeMoney(amount);
+        $('financeBalanceUpdated').textContent=balance?.updated_at?'Обновлено: '+new Date(balance.updated_at).toLocaleString('ru-RU'):'Баланс ещё не изменялся';
+        if($('financeBalanceInput'))$('financeBalanceInput').value=amount;
+      }
+      if(goalsError){goalsEl.textContent='Не удалось загрузить цели: '+goalsError.message;return;}
+      goalsEl.replaceChildren();
+      if(!goals?.length){goalsEl.textContent='Пока нет финансовых целей.';return;}
+      goals.forEach(goal=>{
+        const target=Math.max(0,Number(goal.target_amount)||0),current=Math.max(0,Number(goal.current_amount)||0);
+        const percent=target>0?Math.min(100,Math.round(current/target*100)):0;
+        const card=document.createElement('div');card.style.cssText='padding:14px;margin:10px 0;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,.025)';
+        const title=document.createElement('div');title.style.cssText='font-weight:900;font-size:15px';title.textContent=goal.title;
+        const desc=document.createElement('div');desc.className='muted';desc.style.cssText='text-align:left;margin-top:6px;white-space:pre-wrap';desc.textContent=goal.description||'Описание не добавлено';
+        const stats=document.createElement('div');stats.style.cssText='display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;margin:12px 0 7px;font-weight:800';
+        const collected=document.createElement('span');collected.textContent=financeMoney(current);
+        const total=document.createElement('span');total.className='muted';total.textContent='из '+financeMoney(target);
+        stats.append(collected,total);
+        const track=document.createElement('div');track.style.cssText='height:12px;background:rgba(255,255,255,.12);border-radius:20px;overflow:hidden';
+        const fill=document.createElement('div');fill.style.cssText='height:100%;width:'+percent+'%;background:linear-gradient(90deg,#ff8c00,#ffd21f);border-radius:20px;transition:width .25s';track.appendChild(fill);
+        const pct=document.createElement('div');pct.className='muted';pct.style.cssText='text-align:right;margin-top:5px;font-weight:800';pct.textContent=percent+'%';
+        card.append(title,desc,stats,track,pct);
+        if(isAdmin){
+          const editor=document.createElement('div');editor.style.cssText='display:grid;gap:7px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-color)';
+          const name=document.createElement('input');name.className='field';name.maxLength=120;name.value=goal.title;name.placeholder='Название';
+          const description=document.createElement('textarea');description.className='field';description.rows=2;description.maxLength=1000;description.value=goal.description||'';description.placeholder='Описание';
+          const amounts=document.createElement('div');amounts.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:7px';
+          const raised=document.createElement('input');raised.className='field';raised.type='number';raised.min='0';raised.step='0.01';raised.value=current;raised.placeholder='Собрано';
+          const goalAmount=document.createElement('input');goalAmount.className='field';goalAmount.type='number';goalAmount.min='0.01';goalAmount.step='0.01';goalAmount.value=target;goalAmount.placeholder='Цель';
+          amounts.append(raised,goalAmount);
+          const actions=document.createElement('div');actions.style.cssText='display:flex;gap:8px';
+          const save=document.createElement('button');save.type='button';save.className='small-btn';save.textContent='СОХРАНИТЬ ИЗМЕНЕНИЯ';save.style.flex='1';
+          save.addEventListener('click',async()=>{
+            const t=Number(goalAmount.value),v=Number(raised.value),n=name.value.trim();
+            if(!n||!Number.isFinite(t)||t<=0||!Number.isFinite(v)||v<0){alert('Проверь название и суммы цели.');return;}
+            save.disabled=true;
+            const {error}=await sb.from('finance_goals').update({title:n,description:description.value.trim(),target_amount:t,current_amount:v,updated_at:new Date().toISOString()}).eq('id',goal.id);
+            save.disabled=false;if(error){alert('Не удалось сохранить цель: '+error.message);return;}await loadFinance();
+          });
+          const remove=document.createElement('button');remove.type='button';remove.className='small-btn';remove.textContent='УДАЛИТЬ';remove.addEventListener('click',async()=>{
+            if(!confirm('Удалить цель «'+goal.title+'»?'))return;
+            const {error}=await sb.from('finance_goals').delete().eq('id',goal.id);
+            if(error)alert('Не удалось удалить цель: '+error.message);else await loadFinance();
+          });
+          actions.append(save,remove);editor.append(name,description,amounts,actions);card.appendChild(editor);
+        }
+        goalsEl.appendChild(card);
+      });
+    }
+    $('saveFinanceBalance')?.addEventListener('click',async()=>{
+      if(currentProfile?.role!=='admin')return;
+      const amount=Number($('financeBalanceInput')?.value);
+      if(!Number.isFinite(amount))return setMessage('financeBalanceMessage','Укажи корректную сумму.',true);
+      const button=$('saveFinanceBalance');button.disabled=true;
+      const {error}=await sb.from('finance_balance').upsert({id:1,amount,updated_at:new Date().toISOString()},{onConflict:'id'});
+      button.disabled=false;
+      if(error)return setMessage('financeBalanceMessage','Не удалось сохранить баланс: '+error.message,true);
+      setMessage('financeBalanceMessage','Баланс успешно обновлён.');await loadFinance();
+    });
+    $('financeGoalForm')?.addEventListener('submit',async e=>{
+      e.preventDefault();if(currentProfile?.role!=='admin')return;
+      const title=$('financeGoalTitle').value.trim(),description=$('financeGoalDescription').value.trim();
+      const target=Number($('financeGoalTarget').value),current=Number($('financeGoalCurrent').value||0);
+      if(!title||!Number.isFinite(target)||target<=0||!Number.isFinite(current)||current<0)return setMessage('financeGoalMessage','Проверь название и суммы.',true);
+      const button=$('financeGoalForm').querySelector('button[type="submit"]');button.disabled=true;
+      const {error}=await sb.from('finance_goals').insert({title,description,target_amount:target,current_amount:current});
+      button.disabled=false;
+      if(error)return setMessage('financeGoalMessage','Не удалось создать цель: '+error.message,true);
+      $('financeGoalForm').reset();$('financeGoalCurrent').value='0';setMessage('financeGoalMessage','Цель создана.');await loadFinance();
+    });
     async function loadLoginHistory() {
       const root=$('loginHistoryList');
       if(!root||!sb||currentProfile?.role!=='admin') return;
@@ -1819,6 +1937,8 @@
     $('createMatchForm')?.addEventListener('submit',createMatch);
     $('refreshAdminMatches')?.addEventListener('click',loadAdminMatches);
     $('refreshAdminMatches')?.addEventListener('click',loadAdminMatches);
+    $('openFinanceButton')?.addEventListener('click',async()=>{showSection('financePanel');await loadFinance();});
+    $('financeBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
     $('openScheduleButton')?.addEventListener('click',async()=>{showSection('schedulePanel');await loadSchedule();});
     $('scheduleBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
     $('importScheduleCsvButton')?.addEventListener('click',importScheduleCSV);

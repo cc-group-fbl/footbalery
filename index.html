@@ -321,11 +321,15 @@
           <button type="button" class="admin-tab active" data-tournament="dg">Д×Г</button>
           <button type="button" class="admin-tab" data-tournament="one">ТУРНИР 1 НА 1</button>
         </div>
-        <div id="tournamentStageWrap" class="tournament-switch hidden">
-          <button type="button" class="admin-tab active" data-stage="autumn">ОСЕНЬ</button>
-          <button type="button" class="admin-tab" data-stage="winter">ЗИМА</button>
-          <button type="button" class="admin-tab" data-stage="spring">ВЕСНА</button>
-          <button type="button" class="admin-tab" data-stage="summer_playoff">ЛЕТНИЙ ПЛЕЙ-ОФФ</button>
+        <div id="tournamentStageWrap" class="hidden" style="margin:12px 0">
+          <label for="tournamentStageSelect" class="muted" style="display:block;margin-bottom:7px;font-weight:700">ВЫБЕРИТЕ ЭТАП ТУРНИРА</label>
+          <select id="tournamentStageSelect" class="field" style="width:100%;min-height:46px;font-size:15px;font-weight:700;padding:10px 12px">
+            <option value="autumn">🍂 Осенний этап 2026</option>
+            <option value="winter">❄️ Зимний этап 2026/2027</option>
+            <option value="spring">🌱 Весенний этап 2027</option>
+            <option value="summer_playoff">☀️ Летний плей-офф</option>
+          </select>
+          <div id="tournamentStageHint" class="muted" style="font-size:12px;margin-top:6px">Выберите сезон, чтобы открыть его матчи и турнирную таблицу.</div>
         </div>
         <div id="tournamentPhaseWrap" class="tournament-switch hidden" style="margin-top:6px">
           <button type="button" class="admin-tab active" data-phase="qualification">КВАЛИФИКАЦИЯ</button>
@@ -1083,6 +1087,8 @@
     function renderTournamentSwitch(){
       document.querySelectorAll('[data-tournament]').forEach(b=>b.classList.toggle('active',b.dataset.tournament===activeTournamentKey));
       $('tournamentStageWrap')?.classList.toggle('hidden',activeTournamentKey!=='one');
+      const stageSelect=$('tournamentStageSelect');if(stageSelect)stageSelect.value=activeTournamentStage;
+      const stageHint=$('tournamentStageHint');if(stageHint){const labels={autumn:'Сейчас открыт осенний этап. Здесь показаны его матчи и результаты.',winter:'Сейчас открыт зимний этап. Здесь показаны его матчи и результаты.',spring:'Сейчас открыт весенний этап. Здесь показаны его матчи и результаты.',summer_playoff:'Сейчас открыт летний плей-офф.'};stageHint.textContent=labels[activeTournamentStage]||'Выберите этап турнира.';}
       const playoffEnabled=oneOnOnePlayoffEnabled();
       $('tournamentPhaseWrap')?.classList.toggle('hidden',activeTournamentKey!=='one');
       $('tournamentPhaseDescription')?.classList.toggle('hidden',activeTournamentKey!=='one');
@@ -1357,11 +1363,11 @@
     document.querySelectorAll('[data-tournament]').forEach(button=>button.addEventListener('click',async()=>{
       activeTournamentKey=button.dataset.tournament;await loadTournamentBrackets();
     }));
-    document.querySelectorAll('[data-stage]').forEach(button=>button.addEventListener('click',async()=>{
-      activeTournamentStage=button.dataset.stage;
-      // При переходе на другой сезон открываем его с квалификации, а не с фазы предыдущего сезона.
+    $('tournamentStageSelect')?.addEventListener('change',async event=>{
+      activeTournamentStage=event.target.value;
+      // При переходе на другой сезон открываем его с квалификации.
       activeTournamentPhase='qualification';renderTournamentSwitch();await loadTournamentBrackets();
-    }));
+    });
     document.querySelectorAll('[data-one-view]').forEach(button=>button.addEventListener('click',()=>{
       activeOneOnOneView=button.dataset.oneView;renderTournamentSwitch();if(activeOneOnOneView==='table')renderOneOnOneStandings();
     }));

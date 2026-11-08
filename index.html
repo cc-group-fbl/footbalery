@@ -193,17 +193,17 @@
   .tournament-switch .admin-tab{min-width:0}
   .bracket-card{padding:14px;margin:12px 0;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,.025);overflow:hidden}
   .bracket-round{padding:10px;margin:12px 0;border:1px solid rgba(255,255,255,.12);border-radius:11px;background:rgba(0,0,0,.13)}
-  .bracket-match{display:grid;grid-template-columns:minmax(0,1fr) 54px 54px;gap:7px;align-items:center;margin:8px 0;padding:9px;border-radius:9px;background:rgba(255,255,255,.045)}
+  .bracket-match{display:grid;grid-template-columns:minmax(0,1fr) 104px minmax(0,1fr);gap:7px;align-items:center;margin:8px 0;padding:9px;border-radius:9px;background:rgba(255,255,255,.045)}
   .bracket-team{min-width:0;overflow-wrap:anywhere;font-size:12px}
   .bracket-team input,.bracket-score{width:100%;min-width:0;padding:8px 5px;border:1px solid rgba(255,255,255,.16);border-radius:7px;background:#0d1118;color:#fff;font:600 11px Montserrat,sans-serif}
-  .bracket-score{text-align:center}
+  .bracket-score{text-align:center}.bracket-score-pair{display:flex;gap:4px;min-width:0}
   .bracket-winner{grid-column:1/-1;width:100%;padding:8px;border:1px solid rgba(255,255,255,.15);border-radius:7px;background:#111722;color:#fff;font:600 11px Montserrat,sans-serif}
   .bracket-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
   .bracket-actions .small-btn{flex:1}
   .bracket-view-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;padding:10px;margin:7px 0;border-radius:9px;background:rgba(255,255,255,.045);font-size:12px}
   .bracket-view-match span:last-child{text-align:right}
   .bracket-view-score{font-family:'JetBrains Mono',monospace;font-weight:900;color:var(--accent-text);white-space:nowrap}
-  @media(max-width:360px){.bracket-match{grid-template-columns:minmax(0,1fr) 43px 43px;gap:4px}.bracket-team input,.bracket-score{font-size:10px}}
+  @media(max-width:360px){.bracket-match{grid-template-columns:minmax(0,1fr) 88px minmax(0,1fr);gap:4px}.bracket-team input,.bracket-score{font-size:10px}}
 
 
 </style>
@@ -951,7 +951,8 @@
               const hs=document.createElement('input');hs.className='bracket-score';hs.dataset.field='homeScore';hs.type='number';hs.min='0';hs.step='1';hs.placeholder='—';hs.value=tournamentSafeText(match.homeScore);
               const as=document.createElement('input');as.className='bracket-score';as.dataset.field='awayScore';as.type='number';as.min='0';as.step='1';as.placeholder='—';as.value=tournamentSafeText(match.awayScore);
               const away=document.createElement('div');away.className='bracket-team';const awayInput=document.createElement('input');awayInput.className='bracket-team-input';awayInput.dataset.field='away';awayInput.placeholder='Участник 2';awayInput.value=tournamentSafeText(match.away);away.appendChild(awayInput);
-              row.append(home,hs,as,away);
+              const scorePair=document.createElement('div');scorePair.className='bracket-score-pair';scorePair.append(hs,as);
+              row.append(home,scorePair,away);
               const winner=document.createElement('select');winner.className='bracket-winner';winner.dataset.field='winner';
               [['','Победитель не выбран'],['home',match.home||'Участник 1'],['away',match.away||'Участник 2'],['draw','Ничья']].forEach(([value,label])=>{const o=document.createElement('option');o.value=value;o.textContent=label;winner.appendChild(o);});
               winner.value=match.winner||'';row.appendChild(winner);
@@ -1026,8 +1027,10 @@
     $('tournamentBracketsList')?.addEventListener('click',async event=>{
       const button=event.target.closest('button[data-action]');if(!button||!tournamentIsAdmin())return;
       const card=button.closest('[data-bracket-id]');const bracket=tournamentBrackets.find(x=>x.id===card?.dataset.bracketId);if(!bracket)return;
-      const action=button.dataset.action;const rounds=bracket.bracket_data?.rounds||[];
+      const action=button.dataset.action;
       if(action==='save-bracket'){await saveTournamentBracket(card,bracket);return;}
+      bracket.bracket_data=readBracketEditor(card,bracket);
+      const rounds=bracket.bracket_data.rounds||[];
       if(action==='delete-bracket'){
         if(!confirm('Удалить турнирную сетку «'+bracket.title+'»?'))return;
         const {error}=await sb.from('tournament_brackets').delete().eq('id',bracket.id);

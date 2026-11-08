@@ -954,6 +954,55 @@
     let activeOneOnOneView='matches';
     let oneOnOneSheetCache=null,oneOnOneSheetPromise=null;
     const oneOnOneStageNames={autumn:'осень',winter:'зима',spring:'весна'};
+    let oneOnOneScheduleMatchesCache=[];
+    function oneOnOneStageFromDate(value){
+      const raw=String(value||'').trim();
+      let month=0;
+      const iso=raw.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
+      const ru=raw.match(/^(\\d{1,2})[./-](\\d{1,2})[./-](\\d{4})$/);
+      if(iso)month=Number(iso[2]);else if(ru)month=Number(ru[2]);else return null;
+      if(month>=9&&month<=11)return 'autumn';
+      if(month===12||month<=2&&month>=1)return 'winter';
+      if(month>=3&&month<=5)return 'spring';
+      return null;
+    }
+    function oneOnOneNormalizeName(value){
+      return String(value||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\\s+/g,' ');
+    }
+    function oneOnOneScheduleNames(value){
+      if(Array.isArray(value))return value.map(x=>String(x||'').trim()).filter(Boolean);
+      const raw=String(value||'').trim();if(!raw)return [];
+      try{const parsed=JSON.parse(raw);if(Array.isArray(parsed))return parsed.map(x=>String(x||'').trim()).filter(Boolean);}catch(_){}
+      return raw.split(',').map(x=>x.trim()).filter(Boolean);
+    }
+    async function loadOneOnOneScheduleMatches(){
+      const rows=await getScheduleRows();
+      oneOnOneScheduleMatchesCache=(rows||[]).filter(item=>
+        item.type==='match'&&/турнир\\s*1\\s*на\\s*1|1\\s*на\\s*1/i.test(String(item.tournament||''))&&item.match
+      ).map(item=>({
+        id:item.id,date:item.event_date,stage:oneOnOneStageFromDate(item.event_date),
+        home:oneOnOneScheduleNames(item.match.home_players),
+        away:oneOnOneScheduleNames(item.match.away_players),
+        scoreHome:item.match.score_home,scoreAway:item.match.score_away
+      })).filter(item=>item.stage&&item.home.length===1&&item.away.length===1);
+      return oneOnOneScheduleMatchesCache;
+    }
+    function oneOnOneScheduleResult(bracketMatch){
+      const home=oneOnOneNormalizeName(bracketMatch?.home),away=oneOnOneNormalizeName(bracketMatch?.away);
+      if(!home||!away)return null;
+      const candidates=oneOnOneScheduleMatchesCache.filter(item=>
+        item.stage===activeTournamentStage&&
+        ((oneOnOneNormalizeName(item.home[0])===home&&oneOnOneNormalizeName(item.away[0])===away)||
+         (oneOnOneNormalizeName(item.home[0])===away&&oneOnOneNormalizeName(item.away[0])===home))
+      );
+      if(candidates.length!==1)return candidates.length>1?{ambiguous:true,count:candidates.length}:null;
+      const item=candidates[0];
+      if(item.scoreHome===null||item.scoreAway===null||item.scoreHome===undefined||item.scoreAway===undefined)return {pending:true,date:item.date};
+      const reversed=oneOnOneNormalizeName(item.home[0])===away;
+      const homeScore=Number(reversed?item.scoreAway:item.scoreHome),awayScore=Number(reversed?item.scoreHome:item.scoreAway);
+      if(!Number.isFinite(homeScore)||!Number.isFinite(awayScore))return {pending:true,date:item.date};
+      return {result:true,date:item.date,homeScore,awayScore,winner:homeScore>awayScore?'home':homeScore<awayScore?'away':'draw',scheduleId:item.id};
+    }
     async function loadOneOnOneSheet(){
       if(oneOnOneSheetCache)return oneOnOneSheetCache;
       if(oneOnOneSheetPromise)return oneOnOneSheetPromise;
@@ -1093,27 +1142,49 @@
           const roundTitle=document.createElement('div');roundTitle.style.cssText='font-size:12px;font-weight:900;margin-bottom:8px';roundTitle.textContent=round.name||('Раунд '+(ri+1));section.appendChild(roundTitle);
           (round.matches||[]).forEach((match,mi)=>{
             const row=document.createElement('div');
+            const scheduleResult=oneOnOneScheduleResult(match);
+            const displayMatch=scheduleResult?.result?{...match,homeScore:String(scheduleResult.homeScore),awayScore:String(scheduleResult.awayScore),winner:scheduleResult.winner}:match;
             if(tournamentIsAdmin()){
               row.className='bracket-match';row.dataset.matchIndex=String(mi);
               const home=document.createElement('div');home.className='bracket-team';const homeInput=document.createElement('input');homeInput.className='bracket-team-input';homeInput.dataset.field='home';homeInput.placeholder='Участник 1';homeInput.value=tournamentSafeText(match.home);home.appendChild(homeInput);
-              const hs=document.createElement('input');hs.className='bracket-score';hs.dataset.field='homeScore';hs.type='number';hs.min='0';hs.step='1';hs.placeholder='—';hs.value=tournamentSafeText(match.homeScore);
-              const as=document.createElement('input');as.className='bracket-score';as.dataset.field='awayScore';as.type='number';as.min='0';as.step='1';as.placeholder='—';as.value=tournamentSafeText(match.awayScore);
+              const hs=document.createElement('input');hs.className='bracket-score';hs.dataset.field='homeScore';hs.type='number';hs.min='0';hs.step='1';hs.placeholder='—';hs.value=tournamentSafeText(displayMatch.homeScore);
+              const as=document.createElement('input');as.className='bracket-score';as.dataset.field='awayScore';as.type='number';as.min='0';as.step='1';as.placeholder='—';as.value=tournamentSafeText(displayMatch.awayScore);
               const away=document.createElement('div');away.className='bracket-team';const awayInput=document.createElement('input');awayInput.className='bracket-team-input';awayInput.dataset.field='away';awayInput.placeholder='Участник 2';awayInput.value=tournamentSafeText(match.away);away.appendChild(awayInput);
               const scorePair=document.createElement('div');scorePair.className='bracket-score-pair';scorePair.append(hs,as);
               row.append(home,scorePair,away);
               const winner=document.createElement('select');winner.className='bracket-winner';winner.dataset.field='winner';
               [['','Победитель не выбран'],['home',match.home||'Участник 1'],['away',match.away||'Участник 2'],['draw','Ничья']].forEach(([value,label])=>{const o=document.createElement('option');o.value=value;o.textContent=label;winner.appendChild(o);});
-              winner.value=match.winner||'';row.appendChild(winner);
+              winner.value=displayMatch.winner||'';row.appendChild(winner);
               const remove=document.createElement('button');remove.type='button';remove.className='small-btn';remove.dataset.action='remove-match';remove.textContent='Удалить матч';row.appendChild(remove);
             }else{
               row.className='bracket-view-match';
               const home=document.createElement('span');home.textContent=match.home||'—';
-              const score=document.createElement('span');score.className='bracket-view-score';score.textContent=(match.homeScore!==''&&match.awayScore!=='')?match.homeScore+' : '+match.awayScore:'vs';
+              const score=document.createElement('span');score.className='bracket-view-score';score.textContent=(displayMatch.homeScore!==''&&displayMatch.awayScore!=='')?displayMatch.homeScore+' : '+displayMatch.awayScore:'vs';
               const away=document.createElement('span');away.textContent=match.away||'—';
               row.append(home,score,away);
-              if(match.winner){const result=document.createElement('div');result.className='muted';result.style.cssText='grid-column:1/-1;text-align:center;color:var(--accent-text)';result.textContent='Победитель: '+(match.winner==='home'?(match.home||'Участник 1'):match.winner==='away'?(match.away||'Участник 2'):'Ничья');row.appendChild(result);}
+              if(displayMatch.winner){const result=document.createElement('div');result.className='muted';result.style.cssText='grid-column:1/-1;text-align:center;color:var(--accent-text)';result.textContent='Победитель: '+(displayMatch.winner==='home'?(match.home||'Участник 1'):displayMatch.winner==='away'?(match.away||'Участник 2'):'Ничья');row.appendChild(result);}
             }
-            section.appendChild(row);
+            if(scheduleResult?.result){
+              if(tournamentIsAdmin()){
+                row.querySelector('[data-field="homeScore"]').readOnly=true;
+                row.querySelector('[data-field="awayScore"]').readOnly=true;
+                row.querySelector('[data-field="winner"]').disabled=true;
+              }
+              const source=document.createElement('div');source.className='muted';source.style.cssText='font-size:10px;margin:-4px 0 8px;text-align:center;color:var(--accent-text)';
+              source.textContent='Результат из расписания · '+scheduleDateLabel(scheduleResult.date);
+              section.appendChild(row);section.appendChild(source);
+            }else{
+              section.appendChild(row);
+              if(scheduleResult?.ambiguous){
+                const warning=document.createElement('div');warning.className='muted';warning.style.cssText='font-size:10px;margin:-4px 0 8px;text-align:center;color:#e0a34a';
+                warning.textContent='Результат не перенесён: найдено несколько таких матчей в этом этапе.';
+                section.appendChild(warning);
+              }else if(scheduleResult?.pending){
+                const pending=document.createElement('div');pending.className='muted';pending.style.cssText='font-size:10px;margin:-4px 0 8px;text-align:center';
+                pending.textContent='Матч найден в расписании ('+scheduleDateLabel(scheduleResult.date)+'), ожидается счёт.';
+                section.appendChild(pending);
+              }
+            }
             appendOneOnOneStats(section,match.home);
             appendOneOnOneStats(section,match.away);
           });
@@ -1152,6 +1223,8 @@
       if(activeTournamentKey==='one'){
         try{await loadOneOnOneSheet();}
         catch(sheetError){console.warn('Не удалось загрузить статистику Турнира 1 на 1:',sheetError);}
+        try{await loadOneOnOneScheduleMatches();}
+        catch(scheduleError){oneOnOneScheduleMatchesCache=[];console.warn('Не удалось загрузить результаты из расписания:',scheduleError);}
       }
       renderTournamentBrackets();
       renderOneOnOneStandings();

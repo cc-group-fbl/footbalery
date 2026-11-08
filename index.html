@@ -188,6 +188,13 @@
   .chat-messages{height:min(48vh,430px);overflow-y:auto;padding:10px;border:1px solid var(--border-color);border-radius:14px;background:rgba(0,0,0,.16);display:flex;flex-direction:column}
   .chat-user-choice{display:flex;align-items:center;gap:10px;padding:9px;border-bottom:1px solid rgba(255,255,255,.07);text-align:left}
   .chat-user-choice input{width:18px;height:18px;accent-color:var(--cyan)}
+  .dg-teams-grid{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);gap:8px;align-items:center}
+  .dg-team-card{min-width:0;padding:18px 8px;border:1px solid var(--border-color);border-radius:15px;text-align:center;background:rgba(255,255,255,.04)}
+  .dg-village{border-color:rgba(63,166,106,.55);background:linear-gradient(145deg,rgba(63,166,106,.18),rgba(255,255,255,.025))}
+  .dg-city{border-color:rgba(64,135,220,.55);background:linear-gradient(145deg,rgba(64,135,220,.18),rgba(255,255,255,.025))}
+  .dg-team-symbol{width:46px;height:46px;margin:0 auto 10px;display:grid;place-items:center;border-radius:50%;font-size:24px;font-weight:900;background:rgba(255,255,255,.12)}
+  .dg-team-name{font-size:clamp(10px,2.8vw,13px);font-weight:900;overflow-wrap:anywhere}
+  .dg-versus{text-align:center;font-size:19px;font-weight:900;color:var(--accent-text)}
   .tournament-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:12px 0}
   #tournamentStageWrap{grid-template-columns:repeat(2,minmax(0,1fr))}
   .tournament-switch .admin-tab{min-width:0}
@@ -320,7 +327,15 @@
           <button type="button" class="admin-tab" data-stage="spring">ВЕСНА</button>
           <button type="button" class="admin-tab" data-stage="summer_playoff">ЛЕТНИЙ ПЛЕЙ-ОФФ</button>
         </div>
-        <div id="tournamentBracketsList" style="margin-top:14px"><div class="muted">Загрузка турниров…</div></div>
+        <div id="dgTeamsView" class="hidden" style="margin-top:16px">
+          <div class="muted" style="margin-bottom:10px">ДВА СОПЕРНИЧАЮЩИХ КОЛЛЕКТИВА</div>
+          <div class="dg-teams-grid">
+            <div class="dg-team-card dg-village"><div class="dg-team-symbol">Д</div><div class="dg-team-name">ДЕРЕВЕНСКИЕ</div></div>
+            <div class="dg-versus">×</div>
+            <div class="dg-team-card dg-city"><div class="dg-team-symbol">Г</div><div class="dg-team-name">ГОРОДСКИЕ</div></div>
+          </div>
+        </div>
+        <div id="tournamentBracketsList" style="margin-top:14px"><div class="muted">Загрузка турнирных сеток…</div></div>
         <div id="tournamentAdminCreate" class="hidden" style="padding:14px;border:1px solid var(--border-color);border-radius:14px;margin-top:18px">
           <h3 style="font-size:14px;margin-bottom:8px">＋ Создать турнирную сетку</h3>
           <form id="tournamentCreateForm">
@@ -928,8 +943,10 @@
     function renderTournamentSwitch(){
       document.querySelectorAll('[data-tournament]').forEach(b=>b.classList.toggle('active',b.dataset.tournament===activeTournamentKey));
       $('tournamentStageWrap')?.classList.toggle('hidden',activeTournamentKey!=='one');
+      $('dgTeamsView')?.classList.toggle('hidden',activeTournamentKey!=='dg');
+      $('tournamentBracketsList')?.classList.toggle('hidden',activeTournamentKey==='dg');
       document.querySelectorAll('[data-stage]').forEach(b=>b.classList.toggle('active',b.dataset.stage===activeTournamentStage));
-      $('tournamentAdminCreate')?.classList.toggle('hidden',!tournamentIsAdmin());
+      $('tournamentAdminCreate')?.classList.toggle('hidden',!tournamentIsAdmin()||activeTournamentKey==='dg');
     }
     function tournamentSafeText(value){return String(value??'');}
     function renderTournamentBrackets(){
@@ -991,7 +1008,9 @@
     }
     async function loadTournamentBrackets(){
       const root=$('tournamentBracketsList');if(!root||!sb||!currentUser)return;
-      root.textContent='Загрузка турнирных сеток…';renderTournamentSwitch();
+      renderTournamentSwitch();
+      if(activeTournamentKey==='dg'){tournamentBrackets=[];root.replaceChildren();return;}
+      root.textContent='Загрузка турнирных сеток…';
       let query=sb.from('tournament_brackets').select('id,tournament_key,stage,title,bracket_data,created_at,updated_at').eq('tournament_key',activeTournamentKey).order('created_at',{ascending:true});
       if(activeTournamentKey==='one')query=query.eq('stage',activeTournamentStage);
       const {data,error}=await query;

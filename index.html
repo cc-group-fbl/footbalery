@@ -938,7 +938,11 @@
       if(!tournamentBrackets.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Для этого турнира пока нет турнирных сеток.';root.appendChild(empty);return;}
       tournamentBrackets.forEach(bracket=>{
         const card=document.createElement('article');card.className='bracket-card';card.dataset.bracketId=bracket.id;
-        const heading=document.createElement('div');heading.style.cssText='font-weight:900;font-size:15px;margin-bottom:8px';heading.textContent=bracket.title;card.appendChild(heading);
+        if(tournamentIsAdmin()){
+          const titleInput=document.createElement('input');titleInput.className='field bracket-title-input';titleInput.maxLength=120;titleInput.value=bracket.title;titleInput.placeholder='Название сетки';titleInput.style.margin='0 0 10px';card.appendChild(titleInput);
+        }else{
+          const heading=document.createElement('div');heading.style.cssText='font-weight:900;font-size:15px;margin-bottom:8px';heading.textContent=bracket.title;card.appendChild(heading);
+        }
         const rounds=Array.isArray(bracket.bracket_data?.rounds)?bracket.bracket_data.rounds:[];
         rounds.forEach((round,ri)=>{
           const section=document.createElement('section');section.className='bracket-round';section.dataset.roundIndex=String(ri);
@@ -997,6 +1001,7 @@
     function readBracketEditor(card,bracket){
       const data=JSON.parse(JSON.stringify(bracket.bracket_data||{rounds:[]}));
       data.rounds=data.rounds||[];
+      bracket.title=card.querySelector('.bracket-title-input')?.value.trim()||bracket.title;
       card.querySelectorAll('.bracket-round').forEach(roundEl=>{
         const ri=Number(roundEl.dataset.roundIndex),round=data.rounds[ri];if(!round)return;
         round.name=roundEl.querySelector('[data-field="roundName"]')?.value||round.name;
@@ -1011,7 +1016,7 @@
       const status=card.querySelector('[data-status]');const button=card.querySelector('[data-action="save-bracket"]');
       const bracketData=readBracketEditor(card,bracket);
       if(button)button.disabled=true;if(status)status.textContent='Сохраняем…';
-      const {error}=await sb.from('tournament_brackets').update({bracket_data:bracketData,updated_at:new Date().toISOString()}).eq('id',bracket.id);
+      const {error}=await sb.from('tournament_brackets').update({title:bracket.title,bracket_data:bracketData,updated_at:new Date().toISOString()}).eq('id',bracket.id);
       if(button)button.disabled=false;
       if(error){if(status)status.textContent='Ошибка сохранения: '+error.message;return;}
       bracket.bracket_data=bracketData;if(status)status.textContent='Изменения сохранены.';renderTournamentBrackets();

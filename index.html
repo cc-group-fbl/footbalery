@@ -332,6 +332,10 @@
           <button type="button" class="admin-tab" data-phase="playoff">ПЛЕЙ-ОФФ</button>
         </div>
         <div id="tournamentPhaseDescription" class="muted hidden" style="margin:4px 0 10px"></div>
+        <div id="oneOnOneViewTabs" class="tournament-switch hidden" style="margin-top:10px">
+          <button type="button" class="admin-tab active" data-one-view="matches">СЕТКА МАТЧЕЙ</button>
+          <button type="button" class="admin-tab" data-one-view="table">ТУРНИРНАЯ ТАБЛИЦА</button>
+        </div>
         <div id="dgTeamsView" class="hidden" style="margin-top:16px">
           <div class="muted" style="margin-bottom:10px">ДВА СОПЕРНИЧАЮЩИХ КОЛЛЕКТИВА</div>
           <div class="dg-teams-grid">
@@ -341,6 +345,7 @@
           </div>
         </div>
         <div id="tournamentBracketsList" style="margin-top:14px"><div class="muted">Загрузка турнирных сеток…</div></div>
+        <div id="oneOnOneStandings" class="hidden" style="margin-top:14px"></div>
         <div id="tournamentAdminCreate" class="hidden" style="padding:14px;border:1px solid var(--border-color);border-radius:14px;margin-top:18px">
           <h3 style="font-size:14px;margin-bottom:8px">＋ Создать турнирную сетку</h3>
           <form id="tournamentCreateForm">
@@ -946,6 +951,7 @@
     // Турнирные сетки: участники могут смотреть, администраторы — полностью редактировать.
     const tournamentStages={autumn:'Осень',winter:'Зима',spring:'Весна',summer_playoff:'Летний плей-офф'};
     let activeTournamentKey='dg',activeTournamentStage='autumn',activeTournamentPhase='qualification',tournamentBrackets=[];
+    let activeOneOnOneView='matches';
     let oneOnOneSheetCache=null,oneOnOneSheetPromise=null;
     const oneOnOneStageNames={autumn:'осень',winter:'зима',spring:'весна'};
     async function loadOneOnOneSheet(){
@@ -983,6 +989,25 @@
       const points=player.values[normalizeHeader('Очков за '+(stage==='осень'?'осенний':stage==='зима'?'зимний':'весенний')+' этап')]||'';
       return {values:total,place,points};
     }
+    function renderOneOnOneStandings(){
+      const root=$('oneOnOneStandings');if(!root)return;root.replaceChildren();
+      const stage=oneOnOneStageNames[activeTournamentStage];
+      if(!stage){root.textContent='Для этого этапа турнирная таблица пока не предусмотрена.';return;}
+      if(!oneOnOneSheetCache){root.textContent='Не удалось загрузить данные Google Таблицы. Обновите страницу.';return;}
+      const get=(p,key)=>p.values[normalizeHeader(key+', '+stage)]??'';
+      const num=v=>{const n=Number(String(v??'').replace(',','.'));return Number.isFinite(n)?n:0;};
+      const players=oneOnOneSheetCache.map(p=>({name:p.name,played:num(get(p,'И')),wins:num(get(p,'В')),draws:num(get(p,'Н')),losses:num(get(p,'П')),scored:num(get(p,'ЗМ')),conceded:num(get(p,'ПМ')),yellow:num(get(p,'ЖК')),red:num(get(p,'КК')),diff:num(get(p,'РМ')),points:num(get(p,'О')),place:p.values[normalizeHeader('Место, '+stage[0].toUpperCase()+stage.slice(1))]||''})).filter(p=>p.played||p.points||p.scored||p.conceded);
+      players.sort((a,b)=>b.points-a.points||b.wins-a.wins||b.diff-a.diff||b.scored-a.scored||a.name.localeCompare(b.name,'ru'));
+      const heading=document.createElement('div');heading.style.cssText='font-weight:900;margin:0 0 10px';heading.textContent='ТУРНИРНАЯ ТАБЛИЦА · '+stage.toUpperCase();root.appendChild(heading);
+      if(!players.length){root.textContent='В таблице пока нет результатов этого этапа.';return;}
+      const wrap=document.createElement('div');wrap.style.cssText='overflow-x:auto;border:1px solid var(--border-color);border-radius:12px';
+      const table=document.createElement('table');table.style.cssText='width:100%;border-collapse:collapse;min-width:650px;font-size:11px;text-align:center';
+      const head=document.createElement('tr');['#','Участник','И','В','Н','П','ЗМ','ПМ','РМ','ЖК','КК','О'].forEach(x=>{const th=document.createElement('th');th.textContent=x;th.style.cssText='padding:9px 6px;background:rgba(255,255,255,.07);white-space:nowrap';head.appendChild(th);});
+      const thead=document.createElement('thead');thead.appendChild(head);table.appendChild(thead);const body=document.createElement('tbody');
+      players.forEach((p,i)=>{const tr=document.createElement('tr');tr.style.borderTop='1px solid var(--border-color)';[p.place||i+1,p.name,p.played,p.wins,p.draws,p.losses,p.scored,p.conceded,p.diff,p.yellow,p.red,p.points].forEach((v,j)=>{const td=document.createElement('td');td.textContent=String(v);td.style.cssText='padding:9px 6px;white-space:nowrap';if(j===1){td.style.textAlign='left';td.style.fontWeight='700';}if(j===11){td.style.fontWeight='900';td.style.color='var(--accent-text)';}tr.appendChild(td);});body.appendChild(tr);});
+      table.appendChild(body);wrap.appendChild(table);root.appendChild(wrap);
+      const note=document.createElement('div');note.className='muted';note.style.cssText='font-size:10px;margin-top:8px';note.textContent='Данные из Google Таблицы Memento. Сортировка: очки, победы, разница мячей, забитые мячи.';root.appendChild(note);
+    }
     function appendOneOnOneStats(container,name){
       const stats=oneOnOnePlayerStats(name);if(!stats)return;
       const line=document.createElement('div');
@@ -1006,7 +1031,10 @@
       const phaseDescription=$('tournamentPhaseDescription');if(phaseDescription)phaseDescription.textContent=activeTournamentPhase==='playoff'?'Победители матчей автоматически переходят в следующий раунд. Проигравшие полуфиналов попадают в матч за 3-е место.':'Правила, состав участников и порядок прохождения квалификации настраиваются администратором.';
       document.querySelectorAll('[data-phase]').forEach(b=>b.classList.toggle('active',b.dataset.phase===activeTournamentPhase));
       $('dgTeamsView')?.classList.toggle('hidden',activeTournamentKey!=='dg');
-      $('tournamentBracketsList')?.classList.toggle('hidden',activeTournamentKey==='dg');
+      $('tournamentBracketsList')?.classList.toggle('hidden',activeTournamentKey==='dg'||activeOneOnOneView!=='matches');
+      $('oneOnOneViewTabs')?.classList.toggle('hidden',activeTournamentKey!=='one');
+      $('oneOnOneStandings')?.classList.toggle('hidden',activeTournamentKey!=='one'||activeOneOnOneView!=='table');
+      document.querySelectorAll('[data-one-view]').forEach(b=>b.classList.toggle('active',b.dataset.oneView===activeOneOnOneView));
       document.querySelectorAll('[data-stage]').forEach(b=>b.classList.toggle('active',b.dataset.stage===activeTournamentStage));
       $('tournamentAdminCreate')?.classList.toggle('hidden',!tournamentIsAdmin()||activeTournamentKey==='dg');
     }
@@ -1124,6 +1152,7 @@
         catch(sheetError){console.warn('Не удалось загрузить статистику Турнира 1 на 1:',sheetError);}
       }
       renderTournamentBrackets();
+      renderOneOnOneStandings();
     }
     function applyPlayoffProgression(data){
       const rounds=Array.isArray(data.rounds)?data.rounds:[];
@@ -1244,6 +1273,9 @@
       activeTournamentStage=button.dataset.stage;
       // При переходе на другой сезон открываем его с квалификации, а не с фазы предыдущего сезона.
       activeTournamentPhase='qualification';renderTournamentSwitch();await loadTournamentBrackets();
+    }));
+    document.querySelectorAll('[data-one-view]').forEach(button=>button.addEventListener('click',()=>{
+      activeOneOnOneView=button.dataset.oneView;renderTournamentSwitch();if(activeOneOnOneView==='table')renderOneOnOneStandings();
     }));
     document.querySelectorAll('[data-phase]').forEach(button=>button.addEventListener('click',async()=>{
       activeTournamentPhase=button.dataset.phase;renderTournamentSwitch();await loadTournamentBrackets();

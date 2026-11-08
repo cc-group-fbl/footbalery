@@ -188,6 +188,23 @@
   .chat-messages{height:min(48vh,430px);overflow-y:auto;padding:10px;border:1px solid var(--border-color);border-radius:14px;background:rgba(0,0,0,.16);display:flex;flex-direction:column}
   .chat-user-choice{display:flex;align-items:center;gap:10px;padding:9px;border-bottom:1px solid rgba(255,255,255,.07);text-align:left}
   .chat-user-choice input{width:18px;height:18px;accent-color:var(--cyan)}
+  .tournament-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:12px 0}
+  #tournamentStageWrap{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tournament-switch .admin-tab{min-width:0}
+  .bracket-card{padding:14px;margin:12px 0;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,.025);overflow:hidden}
+  .bracket-round{padding:10px;margin:12px 0;border:1px solid rgba(255,255,255,.12);border-radius:11px;background:rgba(0,0,0,.13)}
+  .bracket-match{display:grid;grid-template-columns:minmax(0,1fr) 54px 54px;gap:7px;align-items:center;margin:8px 0;padding:9px;border-radius:9px;background:rgba(255,255,255,.045)}
+  .bracket-team{min-width:0;overflow-wrap:anywhere;font-size:12px}
+  .bracket-team input,.bracket-score{width:100%;min-width:0;padding:8px 5px;border:1px solid rgba(255,255,255,.16);border-radius:7px;background:#0d1118;color:#fff;font:600 11px Montserrat,sans-serif}
+  .bracket-score{text-align:center}
+  .bracket-winner{grid-column:1/-1;width:100%;padding:8px;border:1px solid rgba(255,255,255,.15);border-radius:7px;background:#111722;color:#fff;font:600 11px Montserrat,sans-serif}
+  .bracket-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+  .bracket-actions .small-btn{flex:1}
+  .bracket-view-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;padding:10px;margin:7px 0;border-radius:9px;background:rgba(255,255,255,.045);font-size:12px}
+  .bracket-view-match span:last-child{text-align:right}
+  .bracket-view-score{font-family:'JetBrains Mono',monospace;font-weight:900;color:var(--accent-text);white-space:nowrap}
+  @media(max-width:360px){.bracket-match{grid-template-columns:minmax(0,1fr) 43px 43px;gap:4px}.bracket-team input,.bracket-score{font-size:10px}}
+
 
 </style>
 </head>
@@ -230,7 +247,7 @@
           <button type="button" class="dashboard-card" id="openMatchesButton"><span class="dashboard-icon">⚽</span><span><span class="dashboard-title">ЗАЯВКА НА МАТЧ</span><span class="dashboard-description">Подать заявку и посмотреть составы</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card hidden" id="openCaptainButton"><span class="dashboard-icon">🧢</span><span><span class="dashboard-title">КАПИТАН</span><span class="dashboard-description">Состав заявленных в твою команду</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openVoteButton"><span class="dashboard-icon">🗳️</span><span><span class="dashboard-title">ГОЛОСОВАНИЕ</span><span class="dashboard-description">Участвуй в активных опросах сообщества</span></span><span class="dashboard-arrow">›</span></button>
-          <a class="dashboard-card" href="https://1na1-fbl.netlify.app/" target="_blank" rel="noopener noreferrer" style="text-decoration:none"><span class="dashboard-icon">⚔️</span><span><span class="dashboard-title">ТУРНИР 1 НА 1</span><span class="dashboard-description">Открыть таблицу турнира</span></span><span class="dashboard-arrow">↗</span></a>
+          <button type="button" class="dashboard-card" id="openTournamentsButton"><span class="dashboard-icon">🏆</span><span><span class="dashboard-title">ТУРНИРЫ</span><span class="dashboard-description">Д×Г и Турнир 1 на 1 · турнирные сетки</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card hidden" id="openAdminButton"><span class="dashboard-icon">⚙️</span><span><span class="dashboard-title">АДМИНИСТРИРОВАНИЕ</span><span class="dashboard-description">Управление опросами, участниками и результатами</span></span><span class="dashboard-arrow">›</span></button>
         </div>
       </section>
@@ -288,6 +305,30 @@
             <button type="submit" class="action-btn">СОЗДАТЬ ЦЕЛЬ</button>
           </form>
           <div id="financeGoalMessage" class="message"></div>
+        </div>
+      </section>
+      <button type="button" class="small-btn section-back hidden" id="tournamentsBackButton">← На главный экран</button>
+      <section id="tournamentsPanel" class="vote-box hidden">
+        <h2>ТУРНИРЫ</h2>
+        <div class="tournament-switch">
+          <button type="button" class="admin-tab active" data-tournament="dg">Д×Г</button>
+          <button type="button" class="admin-tab" data-tournament="one">ТУРНИР 1 НА 1</button>
+        </div>
+        <div id="tournamentStageWrap" class="tournament-switch hidden">
+          <button type="button" class="admin-tab active" data-stage="autumn">ОСЕНЬ</button>
+          <button type="button" class="admin-tab" data-stage="winter">ЗИМА</button>
+          <button type="button" class="admin-tab" data-stage="spring">ВЕСНА</button>
+          <button type="button" class="admin-tab" data-stage="summer_playoff">ЛЕТНИЙ ПЛЕЙ-ОФФ</button>
+        </div>
+        <div id="tournamentBracketsList" style="margin-top:14px"><div class="muted">Загрузка турниров…</div></div>
+        <div id="tournamentAdminCreate" class="hidden" style="padding:14px;border:1px solid var(--border-color);border-radius:14px;margin-top:18px">
+          <h3 style="font-size:14px;margin-bottom:8px">＋ Создать турнирную сетку</h3>
+          <form id="tournamentCreateForm">
+            <label class="muted" for="tournamentBracketTitle">Название сетки</label>
+            <input id="tournamentBracketTitle" class="field" maxlength="120" placeholder="Например, Основная сетка" required>
+            <button type="submit" class="action-btn">СОЗДАТЬ СЕТКУ</button>
+          </form>
+          <div id="tournamentCreateMessage" class="message"></div>
         </div>
       </section>
       <button type="button" class="small-btn section-back hidden" id="scheduleBackButton">← На главный экран</button>
@@ -513,10 +554,10 @@
 
     function showSection(sectionId) {
       $('accountPanel')?.classList.toggle('main-menu-open',sectionId==='homeScreen');
-      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel','chatsPanel','financePanel'].forEach(id => {
+      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel','chatsPanel','financePanel','tournamentsPanel'].forEach(id => {
         const panel=$(id); if(panel) panel.classList.toggle('hidden', id !== sectionId);
       });
-      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton',chatsPanel:'chatsBackButton',financePanel:'financeBackButton'};
+      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton',chatsPanel:'chatsBackButton',financePanel:'financeBackButton',tournamentsPanel:'tournamentsBackButton'};
       Object.entries(backButtons).forEach(([panelId,buttonId])=>{const button=$(buttonId);if(button)button.classList.toggle('hidden',sectionId!==panelId);});
       window.scrollTo({top:0,behavior:'smooth'});
     }
@@ -877,6 +918,141 @@
         input.value='';$('chatAttachmentInput').value='';$('chatSelectedFiles').textContent='';await openChat(chatId);await loadChats();
       }catch(err){setMessage('chatSendMessage','Не удалось отправить сообщение или вложение: '+(err.message||'ошибка'),true);await openChat(chatId).catch(()=>{});}finally{button.disabled=false;}
     }
+
+    // Турнирные сетки: участники могут смотреть, администраторы — полностью редактировать.
+    const tournamentStages={autumn:'Осень',winter:'Зима',spring:'Весна',summer_playoff:'Летний плей-офф'};
+    let activeTournamentKey='dg',activeTournamentStage='autumn',tournamentBrackets=[];
+    const tournamentIsAdmin=()=>currentProfile?.role==='admin';
+    const makeTournamentId=()=>window.crypto?.randomUUID?.()||('m'+Date.now()+Math.random().toString(36).slice(2,8));
+    function blankTournamentRound(name){return {id:makeTournamentId(),name:name||'Раунд 1',matches:[{id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}]};}
+    function renderTournamentSwitch(){
+      document.querySelectorAll('[data-tournament]').forEach(b=>b.classList.toggle('active',b.dataset.tournament===activeTournamentKey));
+      $('tournamentStageWrap')?.classList.toggle('hidden',activeTournamentKey!=='one');
+      document.querySelectorAll('[data-stage]').forEach(b=>b.classList.toggle('active',b.dataset.stage===activeTournamentStage));
+      $('tournamentAdminCreate')?.classList.toggle('hidden',!tournamentIsAdmin());
+    }
+    function tournamentSafeText(value){return String(value??'');}
+    function renderTournamentBrackets(){
+      const root=$('tournamentBracketsList');if(!root)return;
+      root.replaceChildren();
+      if(!tournamentBrackets.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Для этого турнира пока нет турнирных сеток.';root.appendChild(empty);return;}
+      tournamentBrackets.forEach(bracket=>{
+        const card=document.createElement('article');card.className='bracket-card';card.dataset.bracketId=bracket.id;
+        const heading=document.createElement('div');heading.style.cssText='font-weight:900;font-size:15px;margin-bottom:8px';heading.textContent=bracket.title;card.appendChild(heading);
+        const rounds=Array.isArray(bracket.bracket_data?.rounds)?bracket.bracket_data.rounds:[];
+        rounds.forEach((round,ri)=>{
+          const section=document.createElement('section');section.className='bracket-round';section.dataset.roundIndex=String(ri);
+          const roundTitle=document.createElement('div');roundTitle.style.cssText='font-size:12px;font-weight:900;margin-bottom:8px';roundTitle.textContent=round.name||('Раунд '+(ri+1));section.appendChild(roundTitle);
+          (round.matches||[]).forEach((match,mi)=>{
+            const row=document.createElement('div');
+            if(tournamentIsAdmin()){
+              row.className='bracket-match';row.dataset.matchIndex=String(mi);
+              const home=document.createElement('div');home.className='bracket-team';const homeInput=document.createElement('input');homeInput.className='bracket-team-input';homeInput.dataset.field='home';homeInput.placeholder='Участник 1';homeInput.value=tournamentSafeText(match.home);home.appendChild(homeInput);
+              const hs=document.createElement('input');hs.className='bracket-score';hs.dataset.field='homeScore';hs.type='number';hs.min='0';hs.step='1';hs.placeholder='—';hs.value=tournamentSafeText(match.homeScore);
+              const as=document.createElement('input');as.className='bracket-score';as.dataset.field='awayScore';as.type='number';as.min='0';as.step='1';as.placeholder='—';as.value=tournamentSafeText(match.awayScore);
+              const away=document.createElement('div');away.className='bracket-team';const awayInput=document.createElement('input');awayInput.className='bracket-team-input';awayInput.dataset.field='away';awayInput.placeholder='Участник 2';awayInput.value=tournamentSafeText(match.away);away.appendChild(awayInput);
+              row.append(home,hs,as,away);
+              const winner=document.createElement('select');winner.className='bracket-winner';winner.dataset.field='winner';
+              [['','Победитель не выбран'],['home',match.home||'Участник 1'],['away',match.away||'Участник 2'],['draw','Ничья']].forEach(([value,label])=>{const o=document.createElement('option');o.value=value;o.textContent=label;winner.appendChild(o);});
+              winner.value=match.winner||'';row.appendChild(winner);
+              const remove=document.createElement('button');remove.type='button';remove.className='small-btn';remove.dataset.action='remove-match';remove.textContent='Удалить матч';row.appendChild(remove);
+            }else{
+              row.className='bracket-view-match';
+              const home=document.createElement('span');home.textContent=match.home||'—';
+              const score=document.createElement('span');score.className='bracket-view-score';score.textContent=(match.homeScore!==''&&match.awayScore!=='')?match.homeScore+' : '+match.awayScore:'vs';
+              const away=document.createElement('span');away.textContent=match.away||'—';
+              row.append(home,score,away);
+              if(match.winner){const result=document.createElement('div');result.className='muted';result.style.cssText='grid-column:1/-1;text-align:center;color:var(--accent-text)';result.textContent='Победитель: '+(match.winner==='home'?(match.home||'Участник 1'):match.winner==='away'?(match.away||'Участник 2'):'Ничья');row.appendChild(result);}
+            }
+            section.appendChild(row);
+          });
+          if(tournamentIsAdmin()){
+            const add=document.createElement('button');add.type='button';add.className='small-btn';add.dataset.action='add-match';add.textContent='＋ Добавить матч';section.appendChild(add);
+            const rename=document.createElement('input');rename.className='field';rename.dataset.field='roundName';rename.value=round.name||('Раунд '+(ri+1));rename.placeholder='Название раунда';section.appendChild(rename);
+            const removeRound=document.createElement('button');removeRound.type='button';removeRound.className='small-btn';removeRound.dataset.action='remove-round';removeRound.textContent='Удалить раунд';section.appendChild(removeRound);
+          }
+          card.appendChild(section);
+        });
+        if(tournamentIsAdmin()){
+          const actions=document.createElement('div');actions.className='bracket-actions';
+          const addRound=document.createElement('button');addRound.type='button';addRound.className='small-btn';addRound.dataset.action='add-round';addRound.textContent='＋ Добавить раунд';
+          const save=document.createElement('button');save.type='button';save.className='action-btn';save.style.marginTop='0';save.dataset.action='save-bracket';save.textContent='СОХРАНИТЬ ИЗМЕНЕНИЯ';
+          const del=document.createElement('button');del.type='button';del.className='small-btn';del.dataset.action='delete-bracket';del.textContent='Удалить сетку';
+          actions.append(addRound,save,del);card.appendChild(actions);
+          const status=document.createElement('div');status.className='message';status.dataset.status='';card.appendChild(status);
+        }
+        root.appendChild(card);
+      });
+    }
+    async function loadTournamentBrackets(){
+      const root=$('tournamentBracketsList');if(!root||!sb||!currentUser)return;
+      root.textContent='Загрузка турнирных сеток…';renderTournamentSwitch();
+      let query=sb.from('tournament_brackets').select('id,tournament_key,stage,title,bracket_data,created_at,updated_at').eq('tournament_key',activeTournamentKey).order('created_at',{ascending:true});
+      if(activeTournamentKey==='one')query=query.eq('stage',activeTournamentStage);
+      const {data,error}=await query;
+      if(error){root.textContent='Не удалось загрузить сетки: '+error.message+' Проверьте SQL-миграцию турниров в Supabase.';return;}
+      tournamentBrackets=data||[];renderTournamentBrackets();
+    }
+    function readBracketEditor(card,bracket){
+      const data=JSON.parse(JSON.stringify(bracket.bracket_data||{rounds:[]}));
+      data.rounds=data.rounds||[];
+      card.querySelectorAll('.bracket-round').forEach(roundEl=>{
+        const ri=Number(roundEl.dataset.roundIndex),round=data.rounds[ri];if(!round)return;
+        round.name=roundEl.querySelector('[data-field="roundName"]')?.value||round.name;
+        roundEl.querySelectorAll('.bracket-match').forEach(matchEl=>{
+          const mi=Number(matchEl.dataset.matchIndex),match=round.matches?.[mi];if(!match)return;
+          matchEl.querySelectorAll('[data-field]').forEach(input=>{match[input.dataset.field]=input.value;});
+        });
+      });
+      return data;
+    }
+    async function saveTournamentBracket(card,bracket){
+      const status=card.querySelector('[data-status]');const button=card.querySelector('[data-action="save-bracket"]');
+      const bracketData=readBracketEditor(card,bracket);
+      if(button)button.disabled=true;if(status)status.textContent='Сохраняем…';
+      const {error}=await sb.from('tournament_brackets').update({bracket_data:bracketData,updated_at:new Date().toISOString()}).eq('id',bracket.id);
+      if(button)button.disabled=false;
+      if(error){if(status)status.textContent='Ошибка сохранения: '+error.message;return;}
+      bracket.bracket_data=bracketData;if(status)status.textContent='Изменения сохранены.';renderTournamentBrackets();
+    }
+    $('tournamentCreateForm')?.addEventListener('submit',async event=>{
+      event.preventDefault();if(!tournamentIsAdmin())return;
+      const title=$('tournamentBracketTitle').value.trim();if(!title)return;
+      const payload={tournament_key:activeTournamentKey,stage:activeTournamentKey==='one'?activeTournamentStage:null,title,bracket_data:{rounds:[blankTournamentRound('Раунд 1')]},created_by:currentUser.id};
+      const {error}=await sb.from('tournament_brackets').insert(payload);
+      if(error){$('tournamentCreateMessage').textContent='Не удалось создать сетку: '+error.message;return;}
+      $('tournamentCreateForm').reset();$('tournamentCreateMessage').textContent='Сетка создана.';await loadTournamentBrackets();
+    });
+    $('tournamentBracketsList')?.addEventListener('click',async event=>{
+      const button=event.target.closest('button[data-action]');if(!button||!tournamentIsAdmin())return;
+      const card=button.closest('[data-bracket-id]');const bracket=tournamentBrackets.find(x=>x.id===card?.dataset.bracketId);if(!bracket)return;
+      const action=button.dataset.action;const rounds=bracket.bracket_data?.rounds||[];
+      if(action==='save-bracket'){await saveTournamentBracket(card,bracket);return;}
+      if(action==='delete-bracket'){
+        if(!confirm('Удалить турнирную сетку «'+bracket.title+'»?'))return;
+        const {error}=await sb.from('tournament_brackets').delete().eq('id',bracket.id);
+        if(error){const s=card.querySelector('[data-status]');if(s)s.textContent='Ошибка удаления: '+error.message;return;}
+        tournamentBrackets=tournamentBrackets.filter(x=>x.id!==bracket.id);renderTournamentBrackets();return;
+      }
+      const ri=Number(button.closest('.bracket-round')?.dataset.roundIndex);
+      if(action==='add-round'){rounds.push(blankTournamentRound('Раунд '+(rounds.length+1)));}
+      if(action==='add-match'&&rounds[ri])rounds[ri].matches.push({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''});
+      if(action==='remove-round'&&rounds[ri]&&confirm('Удалить этот раунд и все его матчи?'))rounds.splice(ri,1);
+      if(action==='remove-match'&&rounds[ri]){
+        const mi=Number(button.closest('.bracket-match')?.dataset.matchIndex);
+        if(rounds[ri].matches.length===1)rounds[ri].matches[0]={id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''};
+        else rounds[ri].matches.splice(mi,1);
+      }
+      bracket.bracket_data={rounds};renderTournamentBrackets();
+    });
+    document.querySelectorAll('[data-tournament]').forEach(button=>button.addEventListener('click',async()=>{
+      activeTournamentKey=button.dataset.tournament;await loadTournamentBrackets();
+    }));
+    document.querySelectorAll('[data-stage]').forEach(button=>button.addEventListener('click',async()=>{
+      activeTournamentStage=button.dataset.stage;await loadTournamentBrackets();
+    }));
+    $('openTournamentsButton')?.addEventListener('click',async()=>{showSection('tournamentsPanel');await loadTournamentBrackets();});
+    $('tournamentsBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
 
     const financeMoney=value=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(Number(value)||0);
     async function loadFinance() {

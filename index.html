@@ -952,9 +952,9 @@
 
     // Турнирные сетки: участники могут смотреть, администраторы — полностью редактировать.
     const tournamentStages={autumn:'Осень',winter:'Зима',spring:'Весна',summer_playoff:'Летний плей-офф'};
-    let activeTournamentKey='dg',activeTournamentStage='autumn',activeTournamentPhase='qualification',tournamentBrackets=[];
+    let activeTournamentKey='dg',activeTournamentStage='autumn',activeTournamentPhase='qualification',tournamentBrackets=[],oneOnOneStageBracketsCache=[];
     function oneOnOnePlayoffEnabled(){
-      const qualification=(tournamentBrackets||[]).filter(b=>b.phase==='qualification');
+      const qualification=(oneOnOneStageBracketsCache||[]).filter(b=>b.phase==='qualification');
       return qualification.length?qualification.every(b=>b.bracket_data?.playoffEnabled!==false):true;
     }
     let activeOneOnOneView='matches';
@@ -1087,7 +1087,7 @@
       $('tournamentPhaseWrap')?.classList.toggle('hidden',activeTournamentKey!=='one');
       $('tournamentPhaseDescription')?.classList.toggle('hidden',activeTournamentKey!=='one');
       $('tournamentPlayoffToggleWrap')?.classList.toggle('hidden',activeTournamentKey!=='one'||!tournamentIsAdmin());
-      const playoffToggle=$('tournamentPlayoffEnabled');if(playoffToggle){playoffToggle.checked=playoffEnabled;playoffToggle.disabled=!tournamentBrackets.some(b=>b.phase==='qualification');}
+      const playoffToggle=$('tournamentPlayoffEnabled');if(playoffToggle){playoffToggle.checked=playoffEnabled;playoffToggle.disabled=!oneOnOneStageBracketsCache.some(b=>b.phase==='qualification');}
       $('tournamentPlayoffLockMessage')?.classList.toggle('hidden',activeTournamentKey!=='one'||playoffEnabled);
       const playoffButton=document.querySelector('[data-phase="playoff"]');if(playoffButton)playoffButton.disabled=!playoffEnabled;
       const phaseDescription=$('tournamentPhaseDescription');if(phaseDescription)phaseDescription.textContent=activeTournamentPhase==='playoff'?'Победители матчей автоматически переходят в следующий раунд. Проигравшие полуфиналов попадают в матч за 3-е место.':'Правила, состав участников и порядок прохождения квалификации настраиваются администратором.';
@@ -1227,6 +1227,7 @@
       if(activeTournamentKey==='one')query=query.eq('stage',activeTournamentStage);
       const {data,error}=await query;
       if(error){root.textContent='Не удалось загрузить сетки: '+error.message+' Проверьте SQL-миграцию турниров в Supabase.';return;}
+      if(activeTournamentKey==='one')oneOnOneStageBracketsCache=data||[];
       tournamentBrackets=activeTournamentKey==='one'?(data||[]).filter(b=>b.phase===activeTournamentPhase):(data||[]);
       if(activeTournamentKey==='one'&&!oneOnOnePlayoffEnabled()&&activeTournamentPhase==='playoff'){
         activeTournamentPhase='qualification';renderTournamentSwitch();
@@ -1370,7 +1371,7 @@
     }));
     $('tournamentPlayoffEnabled')?.addEventListener('change',async event=>{
       if(!tournamentIsAdmin())return;
-      const qualification=(tournamentBrackets||[]).filter(b=>b.phase==='qualification');
+      const qualification=(oneOnOneStageBracketsCache||[]).filter(b=>b.phase==='qualification');
       if(!qualification.length){event.target.checked=true;return;}
       const enabled=event.target.checked;
       event.target.disabled=true;

@@ -971,9 +971,9 @@
     function oneOnOnePlayerStats(name){
       const stage=oneOnOneStageNames[activeTournamentStage];
       if(!stage||!oneOnOneSheetCache)return null;
-      const key=String(name||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\\s+/g,' ');
+      const key=String(name||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ');
       if(!key)return null;
-      const player=oneOnOneSheetCache.find(p=>p.name.toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\\s+/g,' ')===key);
+      const player=oneOnOneSheetCache.find(p=>p.name.toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ')===key);
       if(!player)return null;
       const get=short=>player.values[normalizeHeader(short+', '+stage)]??'';
       const fields=[['И','Игр'],['В','В'],['Н','Н'],['П','П'],['ЗМ','ЗМ'],['ПМ','ПМ'],['ЖК','ЖК'],['КК','КК'],['РМ','РМ'],['О','Очки']];

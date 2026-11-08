@@ -1001,12 +1001,13 @@
       const heading=document.createElement('div');heading.style.cssText='font-weight:900;margin:0 0 10px';heading.textContent='ТУРНИРНАЯ ТАБЛИЦА · '+stage.toUpperCase();root.appendChild(heading);
       if(!players.length){root.textContent='В таблице пока нет результатов этого этапа.';return;}
       const wrap=document.createElement('div');wrap.style.cssText='overflow-x:auto;border:1px solid var(--border-color);border-radius:12px';
-      const table=document.createElement('table');table.style.cssText='width:100%;border-collapse:collapse;min-width:650px;font-size:11px;text-align:center';
-      const head=document.createElement('tr');['#','Участник','И','В','Н','П','ЗМ','ПМ','РМ','ЖК','КК','О'].forEach(x=>{const th=document.createElement('th');th.textContent=x;th.style.cssText='padding:9px 6px;background:rgba(255,255,255,.07);white-space:nowrap';head.appendChild(th);});
+      const table=document.createElement('table');table.style.cssText='width:100%;border-collapse:separate;border-spacing:0;min-width:650px;font-size:11px;text-align:center';
+      const stickyStyle='position:sticky;left:0;z-index:2;background:var(--card-bg, #151a22);box-shadow:2px 0 5px rgba(0,0,0,.22)';
+      const stickyHeaderStyle='position:sticky;left:0;z-index:4;background:var(--card-bg, #202733);box-shadow:2px 0 5px rgba(0,0,0,.22)';
+      const head=document.createElement('tr');['#','Участник','И','В','Н','П','ЗМ','ПМ','РМ','ЖК','КК','О'].forEach((x,j)=>{const th=document.createElement('th');th.textContent=x;th.style.cssText='padding:9px 6px;background:rgba(255,255,255,.07);white-space:nowrap'+(j===1?';'+stickyHeaderStyle:'');head.appendChild(th);});
       const thead=document.createElement('thead');thead.appendChild(head);table.appendChild(thead);const body=document.createElement('tbody');
-      players.forEach((p,i)=>{const tr=document.createElement('tr');tr.style.borderTop='1px solid var(--border-color)';[p.place||i+1,p.name,p.played,p.wins,p.draws,p.losses,p.scored,p.conceded,p.diff,p.yellow,p.red,p.points].forEach((v,j)=>{const td=document.createElement('td');td.textContent=String(v);td.style.cssText='padding:9px 6px;white-space:nowrap';if(j===1){td.style.textAlign='left';td.style.fontWeight='700';}if(j===11){td.style.fontWeight='900';td.style.color='var(--accent-text)';}tr.appendChild(td);});body.appendChild(tr);});
+      players.forEach((p,i)=>{const tr=document.createElement('tr');tr.style.borderTop='1px solid var(--border-color)';[p.place||i+1,p.name,p.played,p.wins,p.draws,p.losses,p.scored,p.conceded,p.diff,p.yellow,p.red,p.points].forEach((v,j)=>{const td=document.createElement('td');td.textContent=String(v);td.style.cssText='padding:9px 6px;white-space:nowrap';if(j===1){td.style.textAlign='left';td.style.fontWeight='700';td.style.cssText+=';'+stickyStyle;}if(j===11){td.style.fontWeight='900';td.style.color='var(--accent-text)';}tr.appendChild(td);});body.appendChild(tr);});
       table.appendChild(body);wrap.appendChild(table);root.appendChild(wrap);
-      const note=document.createElement('div');note.className='muted';note.style.cssText='font-size:10px;margin-top:8px';note.textContent='Данные из Google Таблицы Memento. Сортировка: очки, победы, разница мячей, забитые мячи.';root.appendChild(note);
     }
     function appendOneOnOneStats(container,name){
       const stats=oneOnOnePlayerStats(name);if(!stats)return;

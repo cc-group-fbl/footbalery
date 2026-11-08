@@ -971,6 +971,7 @@
         }
         const rounds=Array.isArray(bracket.bracket_data?.rounds)?bracket.bracket_data.rounds:[];
         rounds.forEach((round,ri)=>{
+          if(round.hidden) return;
           const section=document.createElement('section');section.className='bracket-round';section.dataset.roundIndex=String(ri);
           const roundTitle=document.createElement('div');roundTitle.style.cssText='font-size:12px;font-weight:900;margin-bottom:8px';roundTitle.textContent=round.name||('Раунд '+(ri+1));section.appendChild(roundTitle);
           (round.matches||[]).forEach((match,mi)=>{
@@ -1000,12 +1001,14 @@
           if(tournamentIsAdmin()){
             const add=document.createElement('button');add.type='button';add.className='small-btn';add.dataset.action='add-match';add.textContent='＋ Добавить матч';section.appendChild(add);
             const rename=document.createElement('input');rename.className='field';rename.dataset.field='roundName';rename.value=round.name||('Раунд '+(ri+1));rename.placeholder='Название раунда';section.appendChild(rename);
+            const hideRound=document.createElement('button');hideRound.type='button';hideRound.className='small-btn';hideRound.dataset.action='hide-round';hideRound.textContent='Скрыть раунд';section.appendChild(hideRound);
             const removeRound=document.createElement('button');removeRound.type='button';removeRound.className='small-btn';removeRound.dataset.action='remove-round';removeRound.textContent='Удалить раунд';section.appendChild(removeRound);
           }
           card.appendChild(section);
         });
         if(tournamentIsAdmin()){
           const actions=document.createElement('div');actions.className='bracket-actions';
+          rounds.forEach((round,ri)=>{if(round.hidden){const show=document.createElement('button');show.type='button';show.className='small-btn';show.dataset.action='show-round';show.dataset.roundIndex=String(ri);show.textContent='Показать: '+(round.name||('Раунд '+(ri+1)));actions.appendChild(show);}});
           const addRound=document.createElement('button');addRound.type='button';addRound.className='small-btn';addRound.dataset.action='add-round';addRound.textContent='＋ Добавить раунд';
           const save=document.createElement('button');save.type='button';save.className='action-btn';save.style.marginTop='0';save.dataset.action='save-bracket';save.textContent='СОХРАНИТЬ ИЗМЕНЕНИЯ';
           const del=document.createElement('button');del.type='button';del.className='small-btn';del.dataset.action='delete-bracket';del.textContent='Удалить сетку';
@@ -1028,6 +1031,7 @@
     }
     function applyPlayoffProgression(data){
       const rounds=Array.isArray(data.rounds)?data.rounds:[];
+      const activeIndices=rounds.map((r,i)=>r.hidden?-1:i).filter(i=>i>=0);
       const winnerName=match=>match?.winner==='home'?String(match.home||'').trim():match?.winner==='away'?String(match.away||'').trim():'';
       const loserName=match=>match?.winner==='home'?String(match.away||'').trim():match?.winner==='away'?String(match.home||'').trim():'';
       // Если указан счёт, победитель определяется автоматически.
@@ -1037,12 +1041,13 @@
           match.winner=homeScore>awayScore?'home':'away';
         }
       }));
-      const semiIndex=rounds.findIndex(r=>/полуфинал|1\s*\/\s*2\s*финала/i.test(String(r.name||'')));
-      // Победители обычных раундов автоматически переходят в следующий.
-      rounds.forEach((round,ri)=>{
+      const semiIndex=rounds.findIndex(r=>!r.hidden&&/полуфинал|1\s*\/\s*2\s*финала/i.test(String(r.name||'')));
+      // Победители проходят по следующему видимому раунду; скрытые раунды пропускаются.
+      activeIndices.forEach((ri,pos)=>{
         if(ri===semiIndex)return;
-        const next=rounds[ri+1];if(!next)return;
-        (round.matches||[]).forEach((match,mi)=>{
+        const nextIndex=activeIndices[pos+1];if(nextIndex===undefined)return;
+        const next=rounds[nextIndex];
+        (rounds[ri].matches||[]).forEach((match,mi)=>{
           const target=next.matches?.[Math.floor(mi/2)];if(!target)return;
           target[mi%2===0?'home':'away']=winnerName(match);
         });
@@ -1093,7 +1098,9 @@
     $('tournamentCreateForm')?.addEventListener('submit',async event=>{
       event.preventDefault();if(!tournamentIsAdmin())return;
       const title=$('tournamentBracketTitle').value.trim();if(!title)return;
-      const payload={tournament_key:activeTournamentKey,stage:activeTournamentKey==='one'?activeTournamentStage:null,phase:activeTournamentKey==='one'?activeTournamentPhase:null,title,bracket_data:{rounds:[blankTournamentRound(activeTournamentPhase==='playoff'?'1-й раунд':'Квалификационный раунд')]},created_by:currentUser.id};
+      const playoffTemplate=[['1/16',8],['1/8',4],['1/4',2],['Полуфинал',2],['Финал',1],['Матч за 3-е место',1]];
+      const initialRounds=activeTournamentPhase==='playoff'?playoffTemplate.map(([name,count])=>{const round=blankTournamentRound(name);round.matches=Array.from({length:count},()=>({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}));return round;}):[blankTournamentRound('Квалификационный раунд')];
+      const payload={tournament_key:activeTournamentKey,stage:activeTournamentKey==='one'?activeTournamentStage:null,phase:activeTournamentKey==='one'?activeTournamentPhase:null,title,bracket_data:{rounds:initialRounds},created_by:currentUser.id};
       const {error}=await sb.from('tournament_brackets').insert(payload);
       if(error){$('tournamentCreateMessage').textContent='Не удалось создать сетку: '+error.message;return;}
       $('tournamentCreateForm').reset();$('tournamentCreateMessage').textContent='Сетка создана.';await loadTournamentBrackets();
@@ -1113,6 +1120,8 @@
       }
       const ri=Number(button.closest('.bracket-round')?.dataset.roundIndex);
       if(action==='add-round'){rounds.push(blankTournamentRound('Раунд '+(rounds.length+1)));}
+      if(action==='hide-round'&&rounds[ri])rounds[ri].hidden=true;
+      if(action==='show-round'){const showIndex=Number(button.dataset.roundIndex);if(rounds[showIndex])rounds[showIndex].hidden=false;}
       if(action==='add-match'&&rounds[ri])rounds[ri].matches.push({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''});
       if(action==='remove-round'&&rounds[ri]&&confirm('Удалить этот раунд и все его матчи?'))rounds.splice(ri,1);
       if(action==='remove-match'&&rounds[ri]){

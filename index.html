@@ -1228,6 +1228,18 @@
       renderTournamentSwitch();
       if(tournamentIsAdmin())await loadTournamentParticipants();
       if(activeTournamentKey==='dg'){tournamentBrackets=[];root.replaceChildren();return;}
+      if(!navigator.onLine){
+        const saved=offlineRead('one_brackets');
+        if(!saved){root.textContent='Нет сохранённых турнирных сеток. Откройте раздел с интернетом хотя бы один раз.';return;}
+        const stageRows=saved.filter(b=>b.tournament_key===activeTournamentKey&&(activeTournamentKey!=='one'||b.stage===activeTournamentStage));
+        oneOnOneStageBracketsCache=stageRows;
+        tournamentBrackets=stageRows.filter(b=>b.phase===activeTournamentPhase);
+        if(!oneOnOnePlayoffEnabled()&&activeTournamentPhase==='playoff'){activeTournamentPhase='qualification';renderTournamentSwitch();tournamentBrackets=stageRows.filter(b=>b.phase==='qualification');}
+        try{await loadOneOnOneSheet();}catch(_){}
+        const cachedSchedule=offlineRead('schedule_rows')||[];
+        oneOnOneScheduleMatchesCache=cachedSchedule.filter(item=>item.type==='match'&&/турнир\\s*1\\s*на\\s*1|1\\s*на\\s*1/i.test(String(item.tournament||''))&&item.match).map(item=>({id:item.id,date:item.event_date,stage:oneOnOneStageFromDate(item.event_date),home:oneOnOneScheduleNames(item.match.home_players),away:oneOnOneScheduleNames(item.match.away_players),scoreHome:item.match.score_home,scoreAway:item.match.score_away})).filter(item=>item.stage&&item.home.length===1&&item.away.length===1);
+        renderTournamentBrackets();renderOneOnOneStandings();return;
+      }
       root.textContent='Загрузка турнирных сеток…';
       let query=sb.from('tournament_brackets').select('id,tournament_key,stage,phase,title,bracket_data,created_at,updated_at').eq('tournament_key',activeTournamentKey).order('created_at',{ascending:true});
       if(activeTournamentKey==='one')query=query.eq('stage',activeTournamentStage);

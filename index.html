@@ -549,6 +549,7 @@
     const SUPABASE_URL = 'https://qyarjovuxthzxfaksapp.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_p5db1Dw-6yLoqXmB-1UoEg_hKHniYW5';
     const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1EBqurekL2MJH4OItnBRY_cF-Le8Q6BHyie7Q3bPMW4Q/export?format=csv';
+    const ONE_ON_ONE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1NjsxexzD6iF_Y_PjJ2szJ--4EMVaBAiJtIwklqXJfMk/export?format=csv';
     let sb = null, currentUser = null, currentProfile = null, activePoll = null;
     const $ = id => document.getElementById(id);
     // Инициализируем Supabase в самом начале, чтобы более поздняя ошибка интерфейса
@@ -945,6 +946,55 @@
     // Турнирные сетки: участники могут смотреть, администраторы — полностью редактировать.
     const tournamentStages={autumn:'Осень',winter:'Зима',spring:'Весна',summer_playoff:'Летний плей-офф'};
     let activeTournamentKey='dg',activeTournamentStage='autumn',activeTournamentPhase='qualification',tournamentBrackets=[];
+    let oneOnOneSheetCache=null,oneOnOneSheetPromise=null;
+    const oneOnOneStageNames={autumn:'осень',winter:'зима',spring:'весна'};
+    async function loadOneOnOneSheet(){
+      if(oneOnOneSheetCache)return oneOnOneSheetCache;
+      if(oneOnOneSheetPromise)return oneOnOneSheetPromise;
+      oneOnOneSheetPromise=(async()=>{
+        const response=await fetch(ONE_ON_ONE_SHEET_URL,{cache:'no-store'});
+        if(!response.ok)throw new Error('Не удалось загрузить таблицу Турнира 1 на 1');
+        const rows=parseCSV(await response.text());
+        if(rows.length<2)return (oneOnOneSheetCache=[]);
+        const headers=rows[0].map(h=>String(h||'').trim());
+        const nameIndex=headers.findIndex(h=>normalizeHeader(h)==='участник');
+        if(nameIndex<0)throw new Error('В таблице Турнира 1 на 1 нет столбца «Участник»');
+        oneOnOneSheetCache=rows.slice(1).filter(r=>String(r[nameIndex]||'').trim()).map(r=>{
+          const item={name:String(r[nameIndex]||'').trim(),values:{}};
+          headers.forEach((h,i)=>{item.values[normalizeHeader(h)]=String(r[i]??'').trim();});
+          return item;
+        });
+        return oneOnOneSheetCache;
+      })().catch(error=>{oneOnOneSheetPromise=null;throw error;});
+      return oneOnOneSheetPromise;
+    }
+    function oneOnOnePlayerStats(name){
+      const stage=oneOnOneStageNames[activeTournamentStage];
+      if(!stage||!oneOnOneSheetCache)return null;
+      const key=String(name||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\\s+/g,' ');
+      if(!key)return null;
+      const player=oneOnOneSheetCache.find(p=>p.name.toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\\s+/g,' ')===key);
+      if(!player)return null;
+      const get=short=>player.values[normalizeHeader(short+', '+stage)]??'';
+      const fields=[['И','Игр'],['В','В'],['Н','Н'],['П','П'],['ЗМ','ЗМ'],['ПМ','ПМ'],['ЖК','ЖК'],['КК','КК'],['РМ','РМ'],['О','Очки']];
+      const values=fields.map(([key,label])=>({label,value:get(key)})).filter(x=>x.value!==''&&x.value!=='0');
+      const total=fields.map(([key,label])=>({label,value:get(key)}));
+      const place=player.values[normalizeHeader('Место, '+stage[0].toUpperCase()+stage.slice(1))]||'';
+      const points=player.values[normalizeHeader('Очков за '+(stage==='осень'?'осенний':stage==='зима'?'зимний':'весенний')+' этап')]||'';
+      return {values:total,place,points};
+    }
+    function appendOneOnOneStats(container,name){
+      const stats=oneOnOnePlayerStats(name);if(!stats)return;
+      const line=document.createElement('div');
+      line.className='muted';
+      line.style.cssText='font-size:10px;line-height:1.5;grid-column:1/-1;text-align:center;margin:-2px 0 7px;opacity:.9';
+      const summary=stats.values.filter(x=>x.value!==''&&x.value!=='0').map(x=>x.label+': '+x.value).join(' · ');
+      const extras=[];
+      if(stats.place)extras.push('Место: '+stats.place);
+      if(stats.points)extras.push('Очки этапа: '+stats.points);
+      line.textContent=[summary,...extras].filter(Boolean).join(' | ')||'Статистика этапа: пока нет данных';
+      container.appendChild(line);
+    }
     const tournamentIsAdmin=()=>currentProfile?.role==='admin';
     const makeTournamentId=()=>window.crypto?.randomUUID?.()||('m'+Date.now()+Math.random().toString(36).slice(2,8));
     function blankTournamentRound(name){return {id:makeTournamentId(),name:name||'Раунд 1',matches:[{id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}]};}
@@ -1034,6 +1084,8 @@
               if(match.winner){const result=document.createElement('div');result.className='muted';result.style.cssText='grid-column:1/-1;text-align:center;color:var(--accent-text)';result.textContent='Победитель: '+(match.winner==='home'?(match.home||'Участник 1'):match.winner==='away'?(match.away||'Участник 2'):'Ничья');row.appendChild(result);}
             }
             section.appendChild(row);
+            appendOneOnOneStats(section,match.home);
+            appendOneOnOneStats(section,match.away);
           });
           if(tournamentIsAdmin()){
             const add=document.createElement('button');add.type='button';add.className='small-btn';add.dataset.action='add-match';add.textContent='＋ Добавить матч';section.appendChild(add);
@@ -1066,7 +1118,12 @@
       if(activeTournamentKey==='one')query=query.eq('stage',activeTournamentStage).eq('phase',activeTournamentPhase);
       const {data,error}=await query;
       if(error){root.textContent='Не удалось загрузить сетки: '+error.message+' Проверьте SQL-миграцию турниров в Supabase.';return;}
-      tournamentBrackets=data||[];renderTournamentBrackets();
+      tournamentBrackets=data||[];
+      if(activeTournamentKey==='one'){
+        try{await loadOneOnOneSheet();}
+        catch(sheetError){console.warn('Не удалось загрузить статистику Турнира 1 на 1:',sheetError);}
+      }
+      renderTournamentBrackets();
     }
     function applyPlayoffProgression(data){
       const rounds=Array.isArray(data.rounds)?data.rounds:[];

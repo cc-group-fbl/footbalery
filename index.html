@@ -346,6 +346,9 @@
           <form id="tournamentCreateForm">
             <label class="muted" for="tournamentBracketTitle">Название сетки</label>
             <input id="tournamentBracketTitle" class="field" maxlength="120" placeholder="Например, Основная сетка" required>
+            <label class="muted" style="display:flex;gap:9px;align-items:center;margin:12px 0"><input id="tournamentRoundRobin" type="checkbox" style="width:18px;height:18px;accent-color:var(--gold)"> Создать по круговой системе</label>
+            <div class="muted" style="margin:0 0 8px">Выбери участников — каждый сыграет с каждым по одному разу.</div>
+            <div id="tournamentParticipantsList" style="max-height:260px;overflow:auto;padding:8px;border:1px solid var(--border-color);border-radius:10px;margin-bottom:12px"><div class="muted">Загрузка участников…</div></div>
             <button type="submit" class="action-btn">СОЗДАТЬ СЕТКУ</button>
           </form>
           <div id="tournamentCreateMessage" class="message"></div>
@@ -958,6 +961,40 @@
       $('tournamentAdminCreate')?.classList.toggle('hidden',!tournamentIsAdmin()||activeTournamentKey==='dg');
     }
     function tournamentSafeText(value){return String(value??'');}
+    let tournamentParticipantProfiles=[];
+    async function loadTournamentParticipants(){
+      const root=$('tournamentParticipantsList');if(!root||!sb||!tournamentIsAdmin())return;
+      root.textContent='Загружаем участников…';
+      const {data,error}=await sb.from('profiles').select('user_id,username,first_name,last_name').order('last_name');
+      root.replaceChildren();
+      if(error||!data){root.textContent='Не удалось загрузить участников: '+(error?.message||'нет данных');return;}
+      tournamentParticipantProfiles=data;
+      if(!data.length){root.textContent='В системе пока нет участников.';return;}
+      data.forEach(p=>{
+        const label=document.createElement('label');label.style.cssText='display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid var(--border-color);cursor:pointer';
+        const cb=document.createElement('input');cb.type='checkbox';cb.value=p.user_id;cb.dataset.tournamentParticipant='';cb.style.cssText='width:17px;height:17px;accent-color:var(--gold);flex-shrink:0';
+        const name=[p.first_name,p.last_name].filter(Boolean).join(' ').trim()||p.username||'Участник';
+        const span=document.createElement('span');span.style.cssText='font-size:12px;overflow-wrap:anywhere';span.textContent=name+(p.username&&name!==p.username?' (@'+p.username+')':'');
+        label.append(cb,span);root.appendChild(label);
+      });
+    }
+    function generateRoundRobinRounds(selectedProfiles){
+      const entries=selectedProfiles.map(p=>({id:p.user_id,name:([p.first_name,p.last_name].filter(Boolean).join(' ').trim()||p.username||'Участник')}));
+      const rotation=entries.slice();if(rotation.length%2)rotation.push(null);
+      const rounds=[],n=rotation.length;
+      for(let r=0;r<n-1;r++){
+        const matches=[];
+        for(let i=0;i<n/2;i++){
+          const a=rotation[i],b=rotation[n-1-i];if(!a||!b)continue;
+          const flip=(r+i)%2===1;
+          const home=flip?b:a,away=flip?a:b;
+          matches.push({id:makeTournamentId(),home:home.name,away:away.name,homeScore:'',awayScore:'',winner:'',homeUserId:home.id,awayUserId:away.id});
+        }
+        rounds.push({id:makeTournamentId(),name:'Тур '+(r+1),matches});
+        const fixed=rotation[0],tail=rotation.slice(1);tail.unshift(tail.pop());rotation.splice(0,rotation.length,fixed,...tail);
+      }
+      return rounds;
+    }
     function renderTournamentBrackets(){
       const root=$('tournamentBracketsList');if(!root)return;
       root.replaceChildren();
@@ -1022,6 +1059,7 @@
     async function loadTournamentBrackets(){
       const root=$('tournamentBracketsList');if(!root||!sb||!currentUser)return;
       renderTournamentSwitch();
+      if(tournamentIsAdmin())await loadTournamentParticipants();
       if(activeTournamentKey==='dg'){tournamentBrackets=[];root.replaceChildren();return;}
       root.textContent='Загрузка турнирных сеток…';
       let query=sb.from('tournament_brackets').select('id,tournament_key,stage,phase,title,bracket_data,created_at,updated_at').eq('tournament_key',activeTournamentKey).order('created_at',{ascending:true});
@@ -1089,7 +1127,7 @@
     async function saveTournamentBracket(card,bracket){
       const status=card.querySelector('[data-status]');const button=card.querySelector('[data-action="save-bracket"]');
       const bracketData=readBracketEditor(card,bracket);
-      if(bracket.phase==='playoff')applyPlayoffProgression(bracketData);
+      if(bracket.phase==='playoff'&&bracketData.format!=='round_robin')applyPlayoffProgression(bracketData);
       if(button)button.disabled=true;if(status)status.textContent='Сохраняем…';
       const {error}=await sb.from('tournament_brackets').update({title:bracket.title,bracket_data:bracketData,updated_at:new Date().toISOString()}).eq('id',bracket.id);
       if(button)button.disabled=false;
@@ -1099,12 +1137,18 @@
     $('tournamentCreateForm')?.addEventListener('submit',async event=>{
       event.preventDefault();if(!tournamentIsAdmin())return;
       const title=$('tournamentBracketTitle').value.trim();if(!title)return;
+      const isRoundRobin=$('tournamentRoundRobin')?.checked===true;
+      const selectedIds=[...document.querySelectorAll('[data-tournament-participant]:checked')].map(x=>x.value);
+      if(isRoundRobin&&selectedIds.length<2){$('tournamentCreateMessage').textContent='Для кругового турнира выбери минимум двух участников.';return;}
+      const selectedProfiles=tournamentParticipantProfiles.filter(p=>selectedIds.includes(p.user_id));
       const playoffTemplate=[['1/16',8],['1/8',4],['1/4',2],['Полуфинал',2],['Финал',1],['Матч за 3-е место',1]];
-      const initialRounds=activeTournamentPhase==='playoff'?playoffTemplate.map(([name,count])=>{const round=blankTournamentRound(name);round.matches=Array.from({length:count},()=>({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}));return round;}):[blankTournamentRound('Квалификационный раунд')];
-      const payload={tournament_key:activeTournamentKey,stage:activeTournamentKey==='one'?activeTournamentStage:null,phase:activeTournamentKey==='one'?activeTournamentPhase:null,title,bracket_data:{rounds:initialRounds},created_by:currentUser.id};
+      const initialRounds=isRoundRobin?generateRoundRobinRounds(selectedProfiles):activeTournamentPhase==='playoff'?playoffTemplate.map(([name,count])=>{const round=blankTournamentRound(name);round.matches=Array.from({length:count},()=>({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}));return round;}):[blankTournamentRound('Квалификационный раунд')];
+      const bracketData={rounds:initialRounds};
+      if(isRoundRobin){bracketData.format='round_robin';bracketData.participants=selectedProfiles.map(p=>({user_id:p.user_id,name:([p.first_name,p.last_name].filter(Boolean).join(' ').trim()||p.username||'Участник')}));}
+      const payload={tournament_key:activeTournamentKey,stage:activeTournamentKey==='one'?activeTournamentStage:null,phase:activeTournamentKey==='one'?activeTournamentPhase:null,title,bracket_data:bracketData,created_by:currentUser.id};
       const {error}=await sb.from('tournament_brackets').insert(payload);
       if(error){$('tournamentCreateMessage').textContent='Не удалось создать сетку: '+error.message;return;}
-      $('tournamentCreateForm').reset();$('tournamentCreateMessage').textContent='Сетка создана.';await loadTournamentBrackets();
+      $('tournamentCreateForm').reset();$('tournamentCreateMessage').textContent=isRoundRobin?'Круговой турнир создан: '+selectedProfiles.length+' участников, '+initialRounds.length+' туров.':'Сетка создана.';await loadTournamentBrackets();await loadTournamentParticipants();
     });
     $('tournamentBracketsList')?.addEventListener('click',async event=>{
       const button=event.target.closest('button[data-action]');if(!button||!tournamentIsAdmin())return;

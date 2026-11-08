@@ -567,7 +567,7 @@
     const offlineRead=key=>{try{const raw=localStorage.getItem(OFFLINE_CACHE_PREFIX+key);return raw?JSON.parse(raw):null;}catch(_){return null;}};
     const offlineWrite=(key,value)=>{try{localStorage.setItem(OFFLINE_CACHE_PREFIX+key,JSON.stringify(value));return true;}catch(error){console.warn('Не удалось сохранить офлайн-данные:',key,error);return false;}};
     let isOfflineMode=!navigator.onLine;
-    function updateOfflineInterface(){isOfflineMode=!navigator.onLine;let banner=$('offlineStatusBanner');if(!banner){banner=document.createElement('div');banner.id='offlineStatusBanner';banner.style.cssText='position:sticky;top:0;z-index:9999;padding:9px 12px;text-align:center;font-size:12px;font-weight:800;background:#8a4b12;color:#fff;display:none';document.body.prepend(banner);}banner.textContent=isOfflineMode?'НЕТ ПОДКЛЮЧЕНИЯ · ПОКАЗЫВАЮТСЯ СОХРАНЁННЫЕ ДАННЫЕ':'ПОДКЛЮЧЕНИЕ ВОССТАНОВЛЕНО · ОБНОВИТЕ РАЗДЕЛЫ ДЛЯ СИНХРОНИЗАЦИИ';banner.style.display=isOfflineMode?'block':'none';const available={openStatsButton:!!offlineRead('player_csv'),openScheduleButton:!!offlineRead('schedule_rows'),openTournamentsButton:!!offlineRead('one_brackets')||!!offlineRead('one_sheet')};Object.entries(available).forEach(([id,ok])=>{const b=$(id);if(b)b.classList.toggle('hidden',isOfflineMode&&!ok);});['openChatsButton','openNewsButton','openFinanceButton','openMatchesButton','openCaptainButton','openVoteButton','openAdminButton'].forEach(id=>{const b=$(id);if(b&&isOfflineMode)b.classList.add('hidden');});}
+    function updateOfflineInterface(){isOfflineMode=!navigator.onLine;let banner=$('offlineStatusBanner');if(!banner){banner=document.createElement('div');banner.id='offlineStatusBanner';banner.style.cssText='position:sticky;top:0;z-index:9999;padding:9px 12px;text-align:center;font-size:12px;font-weight:800;background:#8a4b12;color:#fff;display:none';document.body.prepend(banner);}banner.textContent=isOfflineMode?'НЕТ ПОДКЛЮЧЕНИЯ · ПОКАЗЫВАЮТСЯ СОХРАНЁННЫЕ ДАННЫЕ':'ПОДКЛЮЧЕНИЕ ВОССТАНОВЛЕНО · ОБНОВИТЕ РАЗДЕЛЫ ДЛЯ СИНХРОНИЗАЦИИ';banner.style.display=isOfflineMode?'block':'none';const available={openStatsButton:!!offlineRead('player_csv'),openScheduleButton:!!offlineRead('schedule_rows'),openTournamentsButton:true};Object.entries(available).forEach(([id,ok])=>{const b=$(id);if(b)b.classList.toggle('hidden',isOfflineMode&&!ok);});['openChatsButton','openNewsButton','openFinanceButton','openMatchesButton','openCaptainButton','openVoteButton','openAdminButton'].forEach(id=>{const b=$(id);if(b&&isOfflineMode)b.classList.add('hidden');});}
     window.addEventListener('online',updateOfflineInterface);window.addEventListener('offline',updateOfflineInterface);
     if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('Service worker:',e)));
     // Инициализируем Supabase в самом начале, чтобы более поздняя ошибка интерфейса
@@ -796,7 +796,7 @@
         const { data, error } = await sb.auth.signInWithPassword({ email: usernameEmail(username), password });
         if (error) throw error;
         try { localStorage.setItem('futbolery_remember_session', $('rememberMeCheckbox')?.checked ? 'true' : 'false'); } catch (_) {}
-        currentUser = data.user;
+        currentUser = data.user;offlineWrite('user_snapshot',currentUser);
         try {
           const ua=navigator.userAgent||'';
           const device=/Android|iPhone|iPad|iPod/i.test(ua)?'Мобильное устройство':(/Windows|Macintosh|Linux/i.test(ua)?'Компьютер':'Устройство');
@@ -2562,7 +2562,9 @@
     if(!SUPABASE_URL.startsWith('https://') || SUPABASE_KEY.startsWith('ВСТАВЬТЕ_')) {
       setMessage('loginMessage','Не настроен адрес сервера или ключ Supabase.',true);
     } else if (!window.supabase) {
-      setMessage('loginMessage','Не загрузилась библиотека Supabase. Проверьте интернет и обновите страницу.',true);
+      const savedUser=!navigator.onLine?offlineRead('user_snapshot'):null;
+      if(savedUser){currentUser=savedUser;showAccount();}
+      else setMessage('loginMessage','Не загрузилась библиотека Supabase. Проверьте интернет и обновите страницу.',true);
     } else if (!sb) {
       setMessage('loginMessage','Не удалось запустить подключение к Supabase. Обновите страницу.',true);
     } else {
@@ -2571,7 +2573,7 @@
         try { rememberSession = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
         if (data.session && rememberSession) {
           if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = true;
-          currentUser = data.session.user;
+          currentUser = data.session.user;offlineWrite('user_snapshot',currentUser);
           await showAccount();
         } else if (data.session && !rememberSession) {
           await sb.auth.signOut();

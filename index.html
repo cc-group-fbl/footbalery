@@ -1010,6 +1010,7 @@
           const actions=document.createElement('div');actions.className='bracket-actions';
           rounds.forEach((round,ri)=>{if(round.hidden){const show=document.createElement('button');show.type='button';show.className='small-btn';show.dataset.action='show-round';show.dataset.roundIndex=String(ri);show.textContent='Показать: '+(round.name||('Раунд '+(ri+1)));actions.appendChild(show);}});
           const addRound=document.createElement('button');addRound.type='button';addRound.className='small-btn';addRound.dataset.action='add-round';addRound.textContent='＋ Добавить раунд';
+          if(bracket.phase==='playoff'){const preset=document.createElement('button');preset.type='button';preset.className='small-btn';preset.dataset.action='add-standard-rounds';preset.textContent='＋ Добавить стандартные раунды';actions.appendChild(preset);}
           const save=document.createElement('button');save.type='button';save.className='action-btn';save.style.marginTop='0';save.dataset.action='save-bracket';save.textContent='СОХРАНИТЬ ИЗМЕНЕНИЯ';
           const del=document.createElement('button');del.type='button';del.className='small-btn';del.dataset.action='delete-bracket';del.textContent='Удалить сетку';
           actions.append(addRound,save,del);card.appendChild(actions);
@@ -1120,6 +1121,10 @@
       }
       const ri=Number(button.closest('.bracket-round')?.dataset.roundIndex);
       if(action==='add-round'){rounds.push(blankTournamentRound('Раунд '+(rounds.length+1)));}
+      if(action==='add-standard-rounds'){
+        const preset=[['1/16',8],['1/8',4],['1/4',2],['Полуфинал',2],['Финал',1],['Матч за 3-е место',1]];
+        preset.forEach(([name,count])=>{if(rounds.some(r=>String(r.name||'').toLowerCase()===name.toLowerCase()))return;const round=blankTournamentRound(name);round.matches=Array.from({length:count},()=>({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}));rounds.push(round);});
+      }
       if(action==='hide-round'&&rounds[ri])rounds[ri].hidden=true;
       if(action==='show-round'){const showIndex=Number(button.dataset.roundIndex);if(rounds[showIndex])rounds[showIndex].hidden=false;}
       if(action==='add-match'&&rounds[ri])rounds[ri].matches.push({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''});

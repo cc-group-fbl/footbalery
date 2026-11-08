@@ -331,6 +331,8 @@
           <button type="button" class="admin-tab active" data-phase="qualification">КВАЛИФИКАЦИЯ</button>
           <button type="button" class="admin-tab" data-phase="playoff">ПЛЕЙ-ОФФ</button>
         </div>
+        <label id="tournamentPlayoffToggleWrap" class="muted hidden" style="display:flex;gap:9px;align-items:center;margin:8px 0"><input id="tournamentPlayoffEnabled" type="checkbox" checked style="width:18px;height:18px;accent-color:var(--gold)"> Использовать плей-офф на этом этапе</label>
+        <div id="tournamentPlayoffLockMessage" class="muted hidden" style="margin:4px 0 10px">Плей-офф для этого этапа отключён администратором.</div>
         <div id="tournamentPhaseDescription" class="muted hidden" style="margin:4px 0 10px"></div>
         <div id="oneOnOneViewTabs" class="tournament-switch hidden" style="margin-top:10px">
           <button type="button" class="admin-tab active" data-one-view="matches">СЕТКА МАТЧЕЙ</button>
@@ -951,6 +953,10 @@
     // Турнирные сетки: участники могут смотреть, администраторы — полностью редактировать.
     const tournamentStages={autumn:'Осень',winter:'Зима',spring:'Весна',summer_playoff:'Летний плей-офф'};
     let activeTournamentKey='dg',activeTournamentStage='autumn',activeTournamentPhase='qualification',tournamentBrackets=[];
+    function oneOnOnePlayoffEnabled(){
+      const qualification=(tournamentBrackets||[]).filter(b=>b.phase==='qualification');
+      return qualification.length?qualification.every(b=>b.bracket_data?.playoffEnabled!==false):true;
+    }
     let activeOneOnOneView='matches';
     let oneOnOneSheetCache=null,oneOnOneSheetPromise=null;
     const oneOnOneStageNames={autumn:'осень',winter:'зима',spring:'весна'};
@@ -1077,8 +1083,13 @@
     function renderTournamentSwitch(){
       document.querySelectorAll('[data-tournament]').forEach(b=>b.classList.toggle('active',b.dataset.tournament===activeTournamentKey));
       $('tournamentStageWrap')?.classList.toggle('hidden',activeTournamentKey!=='one');
+      const playoffEnabled=oneOnOnePlayoffEnabled();
       $('tournamentPhaseWrap')?.classList.toggle('hidden',activeTournamentKey!=='one');
       $('tournamentPhaseDescription')?.classList.toggle('hidden',activeTournamentKey!=='one');
+      $('tournamentPlayoffToggleWrap')?.classList.toggle('hidden',activeTournamentKey!=='one'||!tournamentIsAdmin());
+      const playoffToggle=$('tournamentPlayoffEnabled');if(playoffToggle){playoffToggle.checked=playoffEnabled;playoffToggle.disabled=!tournamentBrackets.some(b=>b.phase==='qualification');}
+      $('tournamentPlayoffLockMessage')?.classList.toggle('hidden',activeTournamentKey!=='one'||playoffEnabled);
+      const playoffButton=document.querySelector('[data-phase="playoff"]');if(playoffButton)playoffButton.disabled=!playoffEnabled;
       const phaseDescription=$('tournamentPhaseDescription');if(phaseDescription)phaseDescription.textContent=activeTournamentPhase==='playoff'?'Победители матчей автоматически переходят в следующий раунд. Проигравшие полуфиналов попадают в матч за 3-е место.':'Правила, состав участников и порядок прохождения квалификации настраиваются администратором.';
       document.querySelectorAll('[data-phase]').forEach(b=>b.classList.toggle('active',b.dataset.phase===activeTournamentPhase));
       $('dgTeamsView')?.classList.toggle('hidden',activeTournamentKey!=='dg');
@@ -1170,9 +1181,7 @@
                 row.querySelector('[data-field="awayScore"]').readOnly=true;
                 row.querySelector('[data-field="winner"]').disabled=true;
               }
-              const source=document.createElement('div');source.className='muted';source.style.cssText='font-size:10px;margin:-4px 0 8px;text-align:center;color:var(--accent-text)';
-              source.textContent='Результат из расписания · '+scheduleDateLabel(scheduleResult.date);
-              section.appendChild(row);section.appendChild(source);
+              section.appendChild(row);
             }else{
               section.appendChild(row);
               if(scheduleResult?.ambiguous){
@@ -1215,10 +1224,14 @@
       if(activeTournamentKey==='dg'){tournamentBrackets=[];root.replaceChildren();return;}
       root.textContent='Загрузка турнирных сеток…';
       let query=sb.from('tournament_brackets').select('id,tournament_key,stage,phase,title,bracket_data,created_at,updated_at').eq('tournament_key',activeTournamentKey).order('created_at',{ascending:true});
-      if(activeTournamentKey==='one')query=query.eq('stage',activeTournamentStage).eq('phase',activeTournamentPhase);
+      if(activeTournamentKey==='one')query=query.eq('stage',activeTournamentStage);
       const {data,error}=await query;
       if(error){root.textContent='Не удалось загрузить сетки: '+error.message+' Проверьте SQL-миграцию турниров в Supabase.';return;}
-      tournamentBrackets=data||[];
+      tournamentBrackets=activeTournamentKey==='one'?(data||[]).filter(b=>b.phase===activeTournamentPhase):(data||[]);
+      if(activeTournamentKey==='one'&&!oneOnOnePlayoffEnabled()&&activeTournamentPhase==='playoff'){
+        activeTournamentPhase='qualification';renderTournamentSwitch();
+        tournamentBrackets=(data||[]).filter(b=>b.phase==='qualification');
+      }
       if(activeTournamentKey==='one'){
         try{await loadOneOnOneSheet();}
         catch(sheetError){console.warn('Не удалось загрузить статистику Турнира 1 на 1:',sheetError);}
@@ -1303,7 +1316,7 @@
       const selectedProfiles=tournamentParticipantProfiles.filter(p=>selectedIds.includes(p.user_id));
       const playoffTemplate=[['1/16',8],['1/8',4],['1/4',2],['Полуфинал',2],['Финал',1],['Матч за 3-е место',1]];
       const initialRounds=isRoundRobin?generateRoundRobinRounds(selectedProfiles):activeTournamentPhase==='playoff'?playoffTemplate.map(([name,count])=>{const round=blankTournamentRound(name);round.matches=Array.from({length:count},()=>({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}));return round;}):[blankTournamentRound('Квалификационный раунд')];
-      const bracketData={rounds:initialRounds};
+      const bracketData={rounds:initialRounds,...(activeTournamentKey==='one'&&activeTournamentPhase==='qualification'?{playoffEnabled:oneOnOnePlayoffEnabled()}: {})};
       if(isRoundRobin){bracketData.format='round_robin';bracketData.participants=selectedProfiles.map(p=>({user_id:p.user_id,name:([p.first_name,p.last_name].filter(Boolean).join(' ').trim()||p.username||'Участник')}));}
       const payload={tournament_key:activeTournamentKey,stage:activeTournamentKey==='one'?activeTournamentStage:null,phase:activeTournamentKey==='one'?activeTournamentPhase:null,title,bracket_data:bracketData,created_by:currentUser.id};
       const {error}=await sb.from('tournament_brackets').insert(payload);
@@ -1352,8 +1365,24 @@
       activeOneOnOneView=button.dataset.oneView;renderTournamentSwitch();if(activeOneOnOneView==='table')renderOneOnOneStandings();
     }));
     document.querySelectorAll('[data-phase]').forEach(button=>button.addEventListener('click',async()=>{
+      if(button.dataset.phase==='playoff'&&!oneOnOnePlayoffEnabled())return;
       activeTournamentPhase=button.dataset.phase;renderTournamentSwitch();await loadTournamentBrackets();
     }));
+    $('tournamentPlayoffEnabled')?.addEventListener('change',async event=>{
+      if(!tournamentIsAdmin())return;
+      const qualification=(tournamentBrackets||[]).filter(b=>b.phase==='qualification');
+      if(!qualification.length){event.target.checked=true;return;}
+      const enabled=event.target.checked;
+      event.target.disabled=true;
+      for(const bracket of qualification){
+        const bracketData={...(bracket.bracket_data||{}),playoffEnabled:enabled};
+        const {error}=await sb.from('tournament_brackets').update({bracket_data:bracketData,updated_at:new Date().toISOString()}).eq('id',bracket.id);
+        if(error){event.target.checked=!enabled;alert('Не удалось сохранить настройку плей-офф: '+error.message);event.target.disabled=false;return;}
+        bracket.bracket_data=bracketData;
+      }
+      if(!enabled&&activeTournamentPhase==='playoff')activeTournamentPhase='qualification';
+      event.target.disabled=false;renderTournamentSwitch();await loadTournamentBrackets();
+    });
     $('openTournamentsButton')?.addEventListener('click',async()=>{showSection('tournamentsPanel');await loadTournamentBrackets();});
     $('tournamentsBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
 

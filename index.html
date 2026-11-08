@@ -286,6 +286,7 @@
           <button type="button" class="admin-tab" data-admin-tab="news" role="tab" aria-selected="false">📰 Новости</button>
           <button type="button" class="admin-tab" data-admin-tab="users" role="tab" aria-selected="false">👤 Участники</button>
           <button type="button" class="admin-tab" data-admin-tab="design" role="tab" aria-selected="false">🎨 Оформление</button>
+          <button type="button" class="admin-tab" data-admin-tab="logins" role="tab" aria-selected="false">🔐 Входы</button>
         </div><div class="admin-tab-panel" data-admin-panel="matches"><details class="admin-section" open>
           <summary>⚽ Создание матча</summary>
           <div class="muted">Создай новый матч и настрой регистрацию участников.</div>
@@ -399,7 +400,14 @@
           <label class="muted" style="display:block;text-align:left">❄️ Начало зимы<input id="seasonWinterStart" class="field" type="datetime-local"></label>
           <button type="button" id="saveSeasonSchedule" class="action-btn">СОХРАНИТЬ РАСПИСАНИЕ</button>
           <div id="seasonThemeStatus" class="message" aria-live="polite"></div>
-        </div></div></section>
+        </div></div><div class="admin-tab-panel" data-admin-panel="logins" hidden>
+        <div class="admin-section">
+          <h3 style="font-size:14px;margin:4px 0 8px">🔐 История входов в аккаунты</h3>
+          <div class="muted" style="text-align:left;margin:0 0 10px">Успешные входы после включения журнала. Время отображается по часовому поясу устройства администратора. Модель устройства может быть недоступна браузеру.</div>
+          <button type="button" id="refreshLoginHistory" class="small-btn">ОБНОВИТЬ ИСТОРИЮ</button>
+          <div id="loginHistoryList" style="margin-top:12px"><div class="muted">Нажмите «Обновить историю».</div></div>
+        </div>
+      </div></section>
 
       <button type="button" class="small-btn section-back hidden" id="chatsBackButton">← На главный экран</button>
       <section id="chatsPanel" class="vote-box hidden">
@@ -671,6 +679,14 @@
         if (error) throw error;
         try { localStorage.setItem('futbolery_remember_session', $('rememberMeCheckbox')?.checked ? 'true' : 'false'); } catch (_) {}
         currentUser = data.user;
+        try {
+          const ua=navigator.userAgent||'';
+          const device=/Android|iPhone|iPad|iPod/i.test(ua)?'Мобильное устройство':(/Windows|Macintosh|Linux/i.test(ua)?'Компьютер':'Устройство');
+          const os=/Android/i.test(ua)?'Android':(/iPhone|iPad|iPod/i.test(ua)?'iOS':(/Windows/i.test(ua)?'Windows':(/Mac OS X|Macintosh/i.test(ua)?'macOS':(/Linux/i.test(ua)?'Linux':'Неизвестная ОС'))));
+          const browser=/Edg\//i.test(ua)?'Microsoft Edge':(/Firefox\//i.test(ua)?'Firefox':(/CriOS\//i.test(ua)?'Chrome (iOS)':(/Chrome\//i.test(ua)?'Chrome':(/Safari\//i.test(ua)?'Safari':'Другой браузер'))));
+          const {error:loginLogError}=await sb.rpc('log_my_login',{p_device_label:device,p_browser_label:browser,p_os_label:os,p_user_agent:ua});
+          if(loginLogError) console.warn('Не удалось записать вход в историю:',loginLogError);
+        } catch(logError) { console.warn('Ошибка журнала входов:',logError); }
         await showAccount();
       } catch(err) {
         setMessage('loginMessage','Не удалось войти: '+(err?.message || 'ошибка соединения'),true);
@@ -825,6 +841,29 @@
         if(!message?.id)throw new Error('Сервер не вернул ID сообщения.');if(files.length)await uploadChatAttachments(message.id,files);
         input.value='';$('chatAttachmentInput').value='';$('chatSelectedFiles').textContent='';await openChat(chatId);await loadChats();
       }catch(err){setMessage('chatSendMessage','Не удалось отправить сообщение или вложение: '+(err.message||'ошибка'),true);await openChat(chatId).catch(()=>{});}finally{button.disabled=false;}
+    }
+
+    async function loadLoginHistory() {
+      const root=$('loginHistoryList');
+      if(!root||!sb||currentProfile?.role!=='admin') return;
+      root.textContent='Загружаем историю входов…';
+      const {data:events,error}=await sb.from('login_history')
+        .select('id,user_id,logged_in_at,device_label,browser_label,os_label')
+        .order('logged_in_at',{ascending:false}).limit(200);
+      if(error||!events){root.textContent='Не удалось загрузить историю: '+(error?.message||'ошибка');return;}
+      root.replaceChildren();
+      if(!events.length){root.textContent='Записей пока нет. Новые успешные входы будут появляться здесь.';return;}
+      const ids=[...new Set(events.map(x=>x.user_id))];
+      const {data:profiles}=await sb.from('profiles').select('user_id,username,first_name,last_name').in('user_id',ids);
+      const names=new Map((profiles||[]).map(p=>[p.user_id,[p.username,p.first_name,p.last_name].filter(Boolean).join(' · ')]));
+      events.forEach(event=>{
+        const item=document.createElement('div');
+        item.style.cssText='padding:12px 0;border-top:1px solid rgba(255,255,255,.12);font-size:12px;overflow-wrap:anywhere';
+        const name=document.createElement('div');name.style.cssText='font-weight:900;color:var(--accent-text)';name.textContent=names.get(event.user_id)||'Аккаунт не найден';
+        const date=document.createElement('div');date.style.cssText='margin-top:5px';date.textContent=new Date(event.logged_in_at).toLocaleString('ru-RU',{dateStyle:'medium',timeStyle:'medium'});
+        const device=document.createElement('div');device.className='muted';device.style.cssText='text-align:left;margin-top:5px';device.textContent=[event.device_label,event.os_label,event.browser_label].filter(Boolean).join(' · ');
+        item.append(name,date,device);root.appendChild(item);
+      });
     }
 
     async function showAccount() {
@@ -1863,6 +1902,7 @@
     else { applySeasonTheme('autumn'); document.body.classList.remove('theme-loading'); }
     $('createPollForm')?.addEventListener('submit',createPoll);
     $('createMemberForm')?.addEventListener('submit',createMember);
+    $('refreshLoginHistory')?.addEventListener('click',loadLoginHistory);
     $('loginButton').addEventListener('click',signIn);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
     $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();});
     $('statsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('newsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('voteBackButton').addEventListener('click',()=>showSection('homeScreen'));$('adminBackButton').addEventListener('click',()=>showSection('homeScreen'));
@@ -1895,6 +1935,7 @@
     document.querySelectorAll('[data-admin-tab]').forEach(tab=>{
       tab.addEventListener('click',()=>{
         const name=tab.dataset.adminTab;
+        if(name==='logins') loadLoginHistory();
         document.querySelectorAll('[data-admin-tab]').forEach(btn=>{
           const selected=btn===tab;
           btn.classList.toggle('active',selected);

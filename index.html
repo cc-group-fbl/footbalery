@@ -563,6 +563,13 @@
     const ONE_ON_ONE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1NjsxexzD6iF_Y_PjJ2szJ--4EMVaBAiJtIwklqXJfMk/export?format=csv';
     let sb = null, currentUser = null, currentProfile = null, activePoll = null;
     const $ = id => document.getElementById(id);
+    const OFFLINE_CACHE_PREFIX='footbalery_offline_v1_';
+    const offlineRead=key=>{try{const raw=localStorage.getItem(OFFLINE_CACHE_PREFIX+key);return raw?JSON.parse(raw):null;}catch(_){return null;}};
+    const offlineWrite=(key,value)=>{try{localStorage.setItem(OFFLINE_CACHE_PREFIX+key,JSON.stringify(value));return true;}catch(error){console.warn('Не удалось сохранить офлайн-данные:',key,error);return false;}};
+    let isOfflineMode=!navigator.onLine;
+    function updateOfflineInterface(){isOfflineMode=!navigator.onLine;let banner=$('offlineStatusBanner');if(!banner){banner=document.createElement('div');banner.id='offlineStatusBanner';banner.style.cssText='position:sticky;top:0;z-index:9999;padding:9px 12px;text-align:center;font-size:12px;font-weight:800;background:#8a4b12;color:#fff;display:none';document.body.prepend(banner);}banner.textContent=isOfflineMode?'НЕТ ПОДКЛЮЧЕНИЯ · ПОКАЗЫВАЮТСЯ СОХРАНЁННЫЕ ДАННЫЕ':'ПОДКЛЮЧЕНИЕ ВОССТАНОВЛЕНО · ОБНОВИТЕ РАЗДЕЛЫ ДЛЯ СИНХРОНИЗАЦИИ';banner.style.display=isOfflineMode?'block':'none';const available={openStatsButton:!!offlineRead('player_csv'),openScheduleButton:!!offlineRead('schedule_rows'),openTournamentsButton:!!offlineRead('one_brackets')||!!offlineRead('one_sheet')};Object.entries(available).forEach(([id,ok])=>{const b=$(id);if(b)b.classList.toggle('hidden',isOfflineMode&&!ok);});['openChatsButton','openNewsButton','openFinanceButton','openMatchesButton','openCaptainButton','openVoteButton','openAdminButton'].forEach(id=>{const b=$(id);if(b&&isOfflineMode)b.classList.add('hidden');});}
+    window.addEventListener('online',updateOfflineInterface);window.addEventListener('offline',updateOfflineInterface);
+    if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('Service worker:',e)));
     // Инициализируем Supabase в самом начале, чтобы более поздняя ошибка интерфейса
     // не оставляла кнопку входа без подключения к серверу.
     try {
@@ -1017,6 +1024,7 @@
       if(oneOnOneSheetCache)return oneOnOneSheetCache;
       if(oneOnOneSheetPromise)return oneOnOneSheetPromise;
       oneOnOneSheetPromise=(async()=>{
+        if(!navigator.onLine){const saved=offlineRead('one_sheet');if(saved){oneOnOneSheetCache=saved;return saved;}throw new Error('Нет сохранённой таблицы Турнира 1 на 1.');}
         const response=await fetch(ONE_ON_ONE_SHEET_URL,{cache:'no-store'});
         if(!response.ok)throw new Error('Не удалось загрузить таблицу Турнира 1 на 1');
         const rows=parseCSV(await response.text());
@@ -1029,7 +1037,7 @@
           headers.forEach((h,i)=>{item.values[normalizeHeader(h)]=String(r[i]??'').trim();});
           return item;
         });
-        return oneOnOneSheetCache;
+        offlineWrite('one_sheet',oneOnOneSheetCache);return oneOnOneSheetCache;
       })().catch(error=>{oneOnOneSheetPromise=null;throw error;});
       return oneOnOneSheetPromise;
     }
@@ -1512,20 +1520,15 @@
     }
 
     async function showAccount() {
-      const { data: profile, error } = await sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team').eq('user_id', currentUser.id).maybeSingle();
-      if (error || !profile) { await sb.auth.signOut(); $('accountPanel').classList.add('hidden'); $('loginPanel').classList.remove('hidden'); return setMessage('loginMessage','Для аккаунта не назначена карточка игрока. Обратитесь к администратору.',true); }
+      let profile=null,error=null;if(navigator.onLine){const result=await sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team').eq('user_id', currentUser.id).maybeSingle();profile=result.data;error=result.error;if(profile)offlineWrite('profile_'+currentUser.id,profile);}else profile=offlineRead('profile_'+currentUser.id);
+      if(error||!profile){if(navigator.onLine)await sb.auth.signOut();$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');return setMessage('loginMessage',navigator.onLine?'Для аккаунта не назначена карточка игрока. Обратитесь к администратору.':'Нет сохранённого профиля. Сначала войдите с интернетом на этом устройстве.',true);}
       currentProfile = profile; window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       showSection('homeScreen');
       // При входе загружаем только то, что действительно отображается на главной.
       // Остальные тяжёлые разделы подгружаются при первом открытии.
-      const homeLoads = await Promise.allSettled([
-        loadPlayerCard(profile.player_id),
-        loadMatchOptions(),
-        loadMyApplications(),
-        loadPoll()
-      ]);
+      const homeLoads = navigator.onLine ? await Promise.allSettled([loadPlayerCard(profile.player_id),loadMatchOptions(),loadMyApplications(),loadPoll()]) : await Promise.allSettled([loadPlayerCard(profile.player_id)]);
       homeLoads.filter(x=>x.status==='rejected').forEach(x=>console.warn('Ошибка загрузки главной:',x.reason));
       // Список чатов обновляется при открытии раздела; активный чат использует отдельную realtime-подписку.
     }
@@ -1839,13 +1842,14 @@
       return data?.details||null;
     }
     async function getScheduleRows(){
+      if(!navigator.onLine){const saved=offlineRead('schedule_rows');if(saved)return saved;throw new Error('Расписание ещё не сохранено. Откройте раздел при подключении к интернету.');}
       const {data:events,error}=await sb.from('schedule_events').select('id,type,title,event_date,event_time,location,description,details,tournament,match_id').order('event_date',{ascending:true}).order('event_time',{ascending:true});
       if(error)throw error;
       const matchIds=[...new Set((events||[]).map(x=>x.match_id).filter(Boolean))];
       let matches=[];
       if(matchIds.length){const result=await sb.from('matches').select('id,is_open,score_home,score_away,home_players,away_players,registration_deadline').in('id',matchIds);if(result.error)throw result.error;matches=result.data||[];}
       const matchMap=Object.fromEntries(matches.map(m=>[m.id,m]));
-      return (events||[]).map(e=>({...e,match:matchMap[e.match_id]||null}));
+      const rows=(events||[]).map(e=>({...e,match:matchMap[e.match_id]||null}));offlineWrite('schedule_rows',rows);return rows;
     }
     async function deleteScheduleItem(item,button){
       if(currentProfile?.role!=='admin')return;
@@ -1891,7 +1895,7 @@
         if(!rows.length){root.textContent='Смотрите раздел «Расписание»';return;}
         // Получаем вложения всех событий одним запросом вместо отдельного запроса на каждую карточку.
         if(Date.now()-scheduleAttachmentCacheAt>30000){scheduleAttachmentFilesCache.clear();scheduleAttachmentCacheAt=Date.now();}
-        const missingAttachmentIds=rows.map(x=>x.id).filter(id=>!scheduleAttachmentFilesCache.has(id));
+        const missingAttachmentIds=navigator.onLine?rows.map(x=>x.id).filter(id=>!scheduleAttachmentFilesCache.has(id)):[];
         if(missingAttachmentIds.length){
           const {data:attachmentRows,error:attachmentError}=await sb.from('schedule_event_attachments').select('id,event_id,file_name,file_path,mime_type').in('event_id',missingAttachmentIds).order('created_at');
           if(attachmentError)throw attachmentError;
@@ -2274,8 +2278,7 @@
     async function loadPlayerCard(targetId) {
       $('loadingState').style.display='block'; $('cardContent').style.display='none'; $('errorState').style.display='none';
       try {
-        const response = await fetch(GOOGLE_SHEET_URL); if (!response.ok) throw new Error('sheet');
-        const csvText = await response.text();
+        let csvText='';if(navigator.onLine){const response=await fetch(GOOGLE_SHEET_URL);if(!response.ok)throw new Error('sheet');csvText=await response.text();offlineWrite('player_csv',csvText);}else{csvText=offlineRead('player_csv')||'';if(!csvText)throw new Error('offline-cache-missing');}
         // First CSV row is the header. Fields are found by their column names.
         const rows=parseCSV(csvText);
         if(rows.length<2) throw new Error('В таблице нет строк с данными');
@@ -2618,6 +2621,7 @@
       }
     });
     document.getElementById('refreshAdminUsers')?.addEventListener('click', loadAdminUsers);
+    updateOfflineInterface();
 </script>
   <script type="module">
     // Загружаем Capacitor Push Notifications для Android-приложения.

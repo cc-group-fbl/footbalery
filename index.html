@@ -958,8 +958,8 @@
     function oneOnOneStageFromDate(value){
       const raw=String(value||'').trim();
       let month=0;
-      const iso=raw.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
-      const ru=raw.match(/^(\\d{1,2})[./-](\\d{1,2})[./-](\\d{4})$/);
+      const iso=raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      const ru=raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
       if(iso)month=Number(iso[2]);else if(ru)month=Number(ru[2]);else return null;
       if(month>=9&&month<=11)return 'autumn';
       if(month===12||month<=2&&month>=1)return 'winter';
@@ -967,7 +967,7 @@
       return null;
     }
     function oneOnOneNormalizeName(value){
-      return String(value||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\\s+/g,' ');
+      return String(value||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ');
     }
     function oneOnOneScheduleNames(value){
       if(Array.isArray(value))return value.map(x=>String(x||'').trim()).filter(Boolean);
@@ -978,7 +978,7 @@
     async function loadOneOnOneScheduleMatches(){
       const rows=await getScheduleRows();
       oneOnOneScheduleMatchesCache=(rows||[]).filter(item=>
-        item.type==='match'&&/турнир\\s*1\\s*на\\s*1|1\\s*на\\s*1/i.test(String(item.tournament||''))&&item.match
+        item.type==='match'&&/турнир\s*1\s*на\s*1|1\s*на\s*1/i.test(String(item.tournament||''))&&item.match
       ).map(item=>({
         id:item.id,date:item.event_date,stage:oneOnOneStageFromDate(item.event_date),
         home:oneOnOneScheduleNames(item.match.home_players),

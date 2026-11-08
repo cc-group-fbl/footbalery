@@ -1253,6 +1253,7 @@
       if(activeTournamentKey==='one')query=query.eq('stage',activeTournamentStage);
       const {data,error}=await query;
       if(error){root.textContent='Не удалось загрузить сетки: '+error.message+' Проверьте SQL-миграцию турниров в Supabase.';return;}
+      offlineWrite('one_brackets',data||[]);
       if(activeTournamentKey==='one')oneOnOneStageBracketsCache=data||[];
       tournamentBrackets=activeTournamentKey==='one'?(data||[]).filter(b=>b.phase===activeTournamentPhase):(data||[]);
       if(activeTournamentKey==='one'&&!oneOnOnePlayoffEnabled()&&activeTournamentPhase==='playoff'){

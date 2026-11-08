@@ -1162,7 +1162,7 @@
               const score=document.createElement('span');score.className='bracket-view-score';score.textContent=(displayMatch.homeScore!==''&&displayMatch.awayScore!=='')?displayMatch.homeScore+' : '+displayMatch.awayScore:'vs';
               const away=document.createElement('span');away.textContent=match.away||'—';
               row.append(home,score,away);
-              if(displayMatch.winner){const result=document.createElement('div');result.className='muted';result.style.cssText='grid-column:1/-1;text-align:center;color:var(--accent-text)';result.textContent='Победитель: '+(displayMatch.winner==='home'?(match.home||'Участник 1'):displayMatch.winner==='away'?(match.away||'Участник 2'):'Ничья');row.appendChild(result);}
+
             }
             if(scheduleResult?.result){
               if(tournamentIsAdmin()){
@@ -1185,8 +1185,7 @@
                 section.appendChild(pending);
               }
             }
-            appendOneOnOneStats(section,match.home);
-            appendOneOnOneStats(section,match.away);
+
           });
           if(tournamentIsAdmin()){
             const add=document.createElement('button');add.type='button';add.className='small-btn';add.dataset.action='add-match';add.textContent='＋ Добавить матч';section.appendChild(add);

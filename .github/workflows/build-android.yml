@@ -62,13 +62,30 @@ jobs:
               app.write_text(text)
           PY
 
-      - name: Generate Android app icons
+      - name: Prepare launcher icon
         run: |
-          if [ -f assets/icon.png ]; then
-            npx capacitor-assets generate --android
-          else
-            echo "assets/icon.png not found; keeping default Android launcher icons"
-          fi
+          python3 -m pip install --user Pillow
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+
+          source = Path("assets/1794096538714.jpg")
+          target = Path("assets/icon.png")
+          if not source.exists():
+              raise SystemExit(f"Icon source not found: {source}")
+          image = Image.open(source).convert("RGB")
+          width, height = image.size
+          side = min(width, height)
+          left = (width - side) // 2
+          top = (height - side) // 2
+          image = image.crop((left, top, left + side, top + side))
+          image = image.resize((1024, 1024), Image.Resampling.LANCZOS)
+          image.save(target, format="PNG", optimize=True)
+          print(f"Prepared {target} from {source}: {image.size}")
+          PY
+
+      - name: Generate Android app icons
+        run: npx capacitor-assets generate --android
 
       - name: Sync Capacitor
         run: npx cap sync android

@@ -1030,26 +1030,40 @@
       const rounds=Array.isArray(data.rounds)?data.rounds:[];
       const winnerName=match=>match?.winner==='home'?String(match.home||'').trim():match?.winner==='away'?String(match.away||'').trim():'';
       const loserName=match=>match?.winner==='home'?String(match.away||'').trim():match?.winner==='away'?String(match.home||'').trim():'';
-      // Победители каждого раунда автоматически занимают места в следующем раунде.
+      // Если указан счёт, победитель определяется автоматически.
+      rounds.forEach(round=>(round.matches||[]).forEach(match=>{
+        const homeScore=Number(match.homeScore),awayScore=Number(match.awayScore);
+        if(match.homeScore!==''&&match.awayScore!==''&&Number.isFinite(homeScore)&&Number.isFinite(awayScore)&&homeScore!==awayScore){
+          match.winner=homeScore>awayScore?'home':'away';
+        }
+      }));
+      const semiIndex=rounds.findIndex(r=>/полуфинал|1\s*\/\s*2\s*финала/i.test(String(r.name||'')));
+      // Победители обычных раундов автоматически переходят в следующий.
       rounds.forEach((round,ri)=>{
+        if(ri===semiIndex)return;
         const next=rounds[ri+1];if(!next)return;
         (round.matches||[]).forEach((match,mi)=>{
-          const winner=winnerName(match);if(!winner)return;
           const target=next.matches?.[Math.floor(mi/2)];if(!target)return;
-          const slot=mi%2===0?'home':'away';
-          target[slot]=winner;
+          target[mi%2===0?'home':'away']=winnerName(match);
         });
       });
-      // Проигравшие двух полуфиналов переходят в матч за третье место.
-      const semiIndex=rounds.findIndex(r=>/полуфинал/i.test(String(r.name||'')));
-      const bronzeIndex=rounds.findIndex(r=>/3\s*[-–]?\s*е\s*место|бронз/i.test(String(r.name||'')));
-      if(semiIndex>=0&&bronzeIndex>=0){
-        const bronzeRound=rounds[bronzeIndex];bronzeRound.matches=bronzeRound.matches||[];
-        while(bronzeRound.matches.length<1)bronzeRound.matches.push({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''});
-        (rounds[semiIndex].matches||[]).slice(0,2).forEach((match,mi)=>{
-          const loser=loserName(match);if(!loser)return;
-          const target=bronzeRound.matches[0];target[mi===0?'home':'away']=loser;
-        });
+      if(semiIndex>=0){
+        const finalIndex=rounds.findIndex((r,i)=>i!==semiIndex&&/финал/i.test(String(r.name||''))&&!/3\s*[-–]?\s*е\s*место|третье место|бронз/i.test(String(r.name||'')));
+        const bronzeIndex=rounds.findIndex(r=>/3\s*[-–]?\s*е\s*место|третье место|бронз/i.test(String(r.name||'')));
+        if(finalIndex>=0){
+          const finalRound=rounds[finalIndex];finalRound.matches=finalRound.matches||[];
+          if(!finalRound.matches.length)finalRound.matches.push({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''});
+          (rounds[semiIndex].matches||[]).slice(0,2).forEach((match,mi)=>{
+            finalRound.matches[0][mi===0?'home':'away']=winnerName(match);
+          });
+        }
+        if(bronzeIndex>=0){
+          const bronzeRound=rounds[bronzeIndex];bronzeRound.matches=bronzeRound.matches||[];
+          if(!bronzeRound.matches.length)bronzeRound.matches.push({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''});
+          (rounds[semiIndex].matches||[]).slice(0,2).forEach((match,mi)=>{
+            bronzeRound.matches[0][mi===0?'home':'away']=loserName(match);
+          });
+        }
       }
     }
     function readBracketEditor(card,bracket){

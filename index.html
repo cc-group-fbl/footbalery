@@ -2792,7 +2792,7 @@
       const labels={spring:'весна',summer:'лето',autumn:'осень',winter:'зима'};
       const status=$('seasonThemeStatus');
       if(status && !status.dataset.editing) status.textContent='Сейчас активно оформление: '+(labels[theme]||'осень')+'.';
-      document.querySelectorAll('.theme-control').forEach(el=>el.classList.toggle('hidden',currentProfile?.role!=='admin'));
+      // Раздел уже находится внутри закрытой админ-панели; не скрываем его до авторизации.
     }
     function toLocalDateTimeValue(iso) {
       if(!iso) return '';

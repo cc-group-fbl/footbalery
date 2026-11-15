@@ -306,7 +306,7 @@
       const active=Object.entries(schedule).map(([season,value])=>({season,time:new Date(value).getTime()}))
         .filter(x=>["spring","summer","autumn","winter"].includes(x.season)&&Number.isFinite(x.time)&&x.time<=now)
         .sort((a,b)=>b.time-a.time)[0]?.season;
-      if(active){document.body.classList.add(active+"-theme");document.body.classList.remove("theme-loading");}
+      if(active) document.body.classList.add(active+"-theme");
     } catch(error) { console.warn("Не удалось применить сохранённый сезон:",error); }
   })();
 </script>
@@ -2877,7 +2877,6 @@
     function applySeasonTheme(theme) {
       const themes=['spring','summer','autumn','winter'];
       themes.forEach(name=>document.body.classList.toggle(name+'-theme',name===theme));
-      document.body.classList.remove('theme-loading');
       const labels={spring:'весна',summer:'лето',autumn:'осень',winter:'зима'};
       const status=$('seasonThemeStatus');
       if(status && !status.dataset.editing) status.textContent='Сейчас активно оформление: '+(labels[theme]||'осень')+'.';
@@ -2956,7 +2955,7 @@
     });
     // Загружаем общую тему и до авторизации, чтобы посетители не видели осень по умолчанию.
     if(sb) loadSharedSeasonTheme();
-    else { let cached={};try{cached=JSON.parse(localStorage.getItem('futbolerySeasonSchedule')||'{}');}catch(_){} applySeasonTheme(getActiveSeason(cached)||'autumn'); }
+    else { let cached={};try{cached=JSON.parse(localStorage.getItem('futbolerySeasonSchedule')||'{}');}catch(_){} applySeasonTheme(getActiveSeason(cached)||'autumn'); document.body.classList.remove('theme-loading'); }
     $('createPollForm')?.addEventListener('submit',createPoll);
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('refreshLoginHistory')?.addEventListener('click',loadLoginHistory);

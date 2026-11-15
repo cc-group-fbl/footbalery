@@ -943,7 +943,7 @@
       const [{data:conversations,error:convError},{data:members,error:memberError},{data:messages,error:messageError}]=await Promise.all([
         sb.from('chat_conversations').select('id,type,title,updated_at').in('id',ids).order('updated_at',{ascending:false}),
         sb.from('chat_members').select('conversation_id,user_id').in('conversation_id',ids),
-        sb.from('chat_messages').select('conversation_id,body,sender_id,created_at').in('conversation_id',ids).order('created_at',{ascending:false}).limit(100)
+        sb.from('chat_messages').select('conversation_id,body,sender_id,created_at').in('conversation_id',ids).order('created_at',{ascending:false}).limit(250)
       ]);
       const err=convError||memberError||messageError;if(err)throw err;
       const profileUserIds=[...new Set((members||[]).map(m=>m.user_id))];const {data:profiles,error:profileError}=await sb.rpc('get_chat_profiles',{p_user_ids:profileUserIds});if(profileError)throw profileError;
@@ -969,7 +969,7 @@
       const ids=(members||[]).map(x=>x.user_id);
       const [{data:conversation,error:convError},{data:profiles,error:profileError},{data:recentMessages,error:messageError}]=await Promise.all([
         sb.from('chat_conversations').select('id,type,title').eq('id',chatId).single(),sb.rpc('get_chat_profiles',{p_user_ids:ids}),
-        sb.from('chat_messages').select('id,sender_id,body,created_at').eq('conversation_id',chatId).order('created_at',{ascending:false}).limit(35)
+        sb.from('chat_messages').select('id,sender_id,body,created_at').eq('conversation_id',chatId).order('created_at',{ascending:false}).limit(60)
       ]);
       const err=convError||profileError||messageError;if(err)throw err;const messages=(recentMessages||[]).reverse();const messageIds=messages.map(m=>m.id);
       const {data:attachments,error:attachmentError}=messageIds.length?await sb.from('chat_attachments').select('id,message_id,file_name,file_path,mime_type,file_size').in('message_id',messageIds).order('created_at'):{data:[],error:null};

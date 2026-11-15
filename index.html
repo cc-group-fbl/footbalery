@@ -670,23 +670,27 @@
       if (error) console.error('Не удалось сохранить push-токен:', error.message);
     };
 
+    const APP_BASE_PATH = (window.location.pathname === '/footbalery' || window.location.pathname.startsWith('/footbalery/')) ? '/footbalery' : '';
+    const APP_ROUTE = path => APP_BASE_PATH + path;
     const SECTION_ROUTES = {
-      homeScreen:'/',
-      statsCard:'/stats/',
-      chatsPanel:'/chats/',
-      newsPanel:'/news/',
-      financePanel:'/finance/',
-      schedulePanel:'/schedule/',
-      matchesPanel:'/matches/',
-      captainPanel:'/captain/',
-      tournamentsPanel:'/tournaments/',
-      votePanel:'/votes/',
-      adminPanel:'/admin/'
+      homeScreen:APP_ROUTE('/'),
+      statsCard:APP_ROUTE('/stats/'),
+      chatsPanel:APP_ROUTE('/chats/'),
+      newsPanel:APP_ROUTE('/news/'),
+      financePanel:APP_ROUTE('/finance/'),
+      schedulePanel:APP_ROUTE('/schedule/'),
+      matchesPanel:APP_ROUTE('/matches/'),
+      captainPanel:APP_ROUTE('/captain/'),
+      tournamentsPanel:APP_ROUTE('/tournaments/'),
+      votePanel:APP_ROUTE('/votes/'),
+      adminPanel:APP_ROUTE('/admin/')
     };
     const ROUTE_SECTIONS = Object.fromEntries(Object.entries(SECTION_ROUTES).map(([panel,path])=>[path,panel]));
     function panelFromCurrentPath(){
-      const path=window.location.pathname.replace(/\/+$/,'/')||'/';
-      return ROUTE_SECTIONS[path]||'homeScreen';
+      let path=window.location.pathname.replace(/\/+$/,'/')||'/';
+      if(APP_BASE_PATH && path.startsWith(APP_BASE_PATH+'/')) path=path.slice(APP_BASE_PATH.length);
+      else if(APP_BASE_PATH && path===APP_BASE_PATH) path='/';
+      return ROUTE_SECTIONS[APP_ROUTE(path)]||ROUTE_SECTIONS[path]||'homeScreen';
     }
     function showSection(sectionId,updateUrl=true) {
       if(updateUrl && SECTION_ROUTES[sectionId]){
@@ -1555,7 +1559,7 @@
       });
       return data;
     }
-    async function saveBracketAsImage(card,bracket){
+    function saveBracketAsImage(card,bracket){
       const data=readBracketEditor(card,bracket),rounds=(data.rounds||[]).filter(round=>!round.hidden);
       if(!rounds.length)throw new Error('Нет включённых раундов.');
       const colWidth=280,width=rounds.length*colWidth+40,maxMatches=Math.max(1,...rounds.map(round=>(round.matches||[]).length));
@@ -1575,10 +1579,13 @@
           ctx.fillText(match.homeScore!==''?String(match.homeScore):'—',x+colWidth-25,y+27);ctx.fillText(match.awayScore!==''?String(match.awayScore):'—',x+colWidth-25,y+61);
         });
       });
-      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('Не удалось сформировать PNG.');
-      const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;
+      let dataUrl;
+      try{dataUrl=canvas.toDataURL('image/png');}catch(error){throw new Error('Браузер не смог сформировать PNG: '+error.message);}
+      if(!dataUrl||dataUrl==='data:,')throw new Error('Не удалось сформировать PNG.');
+      const link=document.createElement('a');link.href=dataUrl;
       link.download=(String(bracket.title||'bracket').replace(/[^a-zа-яё0-9_-]+/gi,'_')||'bracket')+'.png';
-      document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+      document.body.appendChild(link);link.click();link.remove();
+      if(!link.download)window.open(dataUrl,'_blank','noopener');
     }
     async function saveTournamentBracket(card,bracket){
       const status=card.querySelector('[data-status]');const button=card.querySelector('[data-action="save-bracket"]');

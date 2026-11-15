@@ -642,7 +642,30 @@
       if (error) console.error('Не удалось сохранить push-токен:', error.message);
     };
 
-    function showSection(sectionId) {
+    const SECTION_ROUTES = {
+      homeScreen:'/',
+      statsCard:'/stats/',
+      chatsPanel:'/chats/',
+      newsPanel:'/news/',
+      financePanel:'/finance/',
+      schedulePanel:'/schedule/',
+      matchesPanel:'/matches/',
+      captainPanel:'/captain/',
+      tournamentsPanel:'/tournaments/',
+      votePanel:'/votes/',
+      adminPanel:'/admin/'
+    };
+    const ROUTE_SECTIONS = Object.fromEntries(Object.entries(SECTION_ROUTES).map(([panel,path])=>[path,panel]));
+    function panelFromCurrentPath(){
+      const path=window.location.pathname.replace(/\\/+$/,'/')||'/';
+      return ROUTE_SECTIONS[path]||'homeScreen';
+    }
+    function showSection(sectionId,updateUrl=true) {
+      if(updateUrl && SECTION_ROUTES[sectionId]){
+        const target=SECTION_ROUTES[sectionId]+(sectionId==='newsPanel'?'#новости':'');
+        const current=window.location.pathname+window.location.hash;
+        if(current!==target) history.pushState({sectionId},'',target);
+      }
       $('accountPanel')?.classList.toggle('main-menu-open',sectionId==='homeScreen');
       ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel','chatsPanel','financePanel','tournamentsPanel'].forEach(id => {
         const panel=$(id); if(panel) panel.classList.toggle('hidden', id !== sectionId);
@@ -651,6 +674,19 @@
       Object.entries(backButtons).forEach(([panelId,buttonId])=>{const button=$(buttonId);if(button)button.classList.toggle('hidden',sectionId!==panelId);});
       window.scrollTo({top:0,behavior:'smooth'});
     }
+
+    window.addEventListener('popstate',async()=>{
+      if(!currentUser)return;
+      const panel=panelFromCurrentPath();
+      showSection(panel,false);
+      try{
+        if(panel==='newsPanel')await loadNews();
+        else if(panel==='chatsPanel')await loadChats();
+        else if(panel==='schedulePanel')await loadSchedule();
+        else if(panel==='financePanel')await loadFinance();
+        else if(panel==='tournamentsPanel')await loadTournamentBrackets();
+      }catch(error){console.error('Не удалось открыть раздел по ссылке:',error);}
+    });
 
     let adminPanelLoaded=false, adminPanelLoading=false;
     async function loadAdminPanelData(){
@@ -1666,19 +1702,38 @@
       });
     }
 
-    function renderBirthdayGreeting(birthDate){
+    function renderBirthdayGreeting(birthDate,serverConfirmed=false){
       const banner=$('birthdayGreeting');if(!banner)return;
-      const raw=String(birthDate||'').slice(0,10),match=raw.match(/^\d{4}-(\d{2})-(\d{2})$/),today=new Date();
-      const isBirthday=!!match&&Number(match[1])===today.getMonth()+1&&Number(match[2])===today.getDate();
-      banner.classList.toggle('visible',isBirthday);banner.setAttribute('aria-hidden',isBirthday?'false':'true');
+      const raw=String(birthDate||'').slice(0,10),match=raw.match(/^\\d{4}-(\\d{2})-(\\d{2})$/),today=new Date();
+      const localMatch=!!match&&Number(match[1])===today.getMonth()+1&&Number(match[2])===today.getDate();
+      const isBirthday=localMatch||serverConfirmed;
+      banner.classList.toggle('visible',isBirthday);
+      banner.setAttribute('aria-hidden',isBirthday?'false':'true');
+      banner.style.display=isBirthday?'block':'none';
+    }
+    async function refreshBirthdayGreeting(profile){
+      renderBirthdayGreeting(profile?.birth_date,false);
+      if(!currentUser?.id||!navigator.onLine||!sb)return;
+      try{
+        const {data,error}=await sb.rpc('get_today_birthdays');
+        if(error)throw error;
+        const confirmed=Array.isArray(data)&&data.some(row=>String(row.user_id)===String(currentUser.id));
+        renderBirthdayGreeting(profile?.birth_date,confirmed);
+      }catch(error){console.warn('Не удалось проверить список именинников:',error?.message||error);}
     }
     async function showAccount() {
       let profile=null,error=null;if(navigator.onLine){const result=await sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team, birth_date').eq('user_id', currentUser.id).maybeSingle();profile=result.data;error=result.error;if(profile)offlineWrite('profile_'+currentUser.id,profile);}else profile=offlineRead('profile_'+currentUser.id);
       if(error||!profile){if(navigator.onLine)await sb.auth.signOut();$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');return setMessage('loginMessage',navigator.onLine?'Для аккаунта не назначена карточка игрока. Обратитесь к администратору.':'Нет сохранённого профиля. Сначала войдите с интернетом на этом устройстве.',true);}
-      currentProfile = profile; renderBirthdayGreeting(profile.birth_date); window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
+      currentProfile = profile; await refreshBirthdayGreeting(profile); window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
-      showSection('homeScreen');
+      const initialPanel=panelFromCurrentPath();
+      showSection(initialPanel,false);
+      if(initialPanel==='newsPanel') await loadNews();
+      else if(initialPanel==='chatsPanel') await loadChats();
+      else if(initialPanel==='schedulePanel') await loadSchedule();
+      else if(initialPanel==='financePanel') await loadFinance();
+      else if(initialPanel==='tournamentsPanel') await loadTournamentBrackets();
       // При входе загружаем только то, что действительно отображается на главной.
       // Остальные тяжёлые разделы подгружаются при первом открытии.
       const homeLoads = navigator.onLine ? await Promise.allSettled([loadPlayerCard(profile.player_id),loadMatchOptions(),loadMyApplications(),loadPoll()]) : await Promise.allSettled([loadPlayerCard(profile.player_id)]);

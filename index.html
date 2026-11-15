@@ -791,7 +791,7 @@
       if(list.childNodes.length)container.appendChild(list);
     }
     async function loadNews() {
-      const root=$('newsFeed');if(!root||!sb||!currentUser)return;root.replaceChildren();
+      const root=$('newsFeed');if(!root||!sb||!currentUser)return;root.replaceChildren();$('newsTabs')?.replaceChildren();
       const {data:news,error}=await sb.from('news').select('id,title,body,image_url,author_id,visibility,created_at').order('created_at',{ascending:false}).limit(50);
       if(error){root.textContent='Новости пока не настроены. Администратору нужно выполнить SQL из архива.';$('newsUnreadBadge').classList.add('hidden');return;}
       if(!news?.length){root.textContent='Новостей пока нет.';$('newsUnreadBadge').classList.add('hidden');return;}
@@ -1829,10 +1829,10 @@
         const row=rows.slice(1).find(r=>String(r[idIndex]||'').trim().toLowerCase()===playerId.toLowerCase());
         if(!row)return;
         const raw=String(row[birthIndex]||'').trim();
-        let month=0,day=0,match=raw.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
+        let month=0,day=0,match=raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
         if(match){month=Number(match[2]);day=Number(match[3]);}
-        else if((match=raw.match(/^(\\d{1,2})[./-](\\d{1,2})[./-](\\d{4})$/))){day=Number(match[1]);month=Number(match[2]);}
-        else if(/^\\d+(?:\\.\\d+)?$/.test(raw)){const serial=Number(raw);if(serial>20000&&serial<80000){const date=new Date(Date.UTC(1899,11,30)+serial*86400000);month=date.getUTCMonth()+1;day=date.getUTCDate();}}
+        else if((match=raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/))){day=Number(match[1]);month=Number(match[2]);}
+        else if(/^\d+(?:\\.\d+)?$/.test(raw)){const serial=Number(raw);if(serial>20000&&serial<80000){const date=new Date(Date.UTC(1899,11,30)+serial*86400000);month=date.getUTCMonth()+1;day=date.getUTCDate();}}
         const today=new Date();
         const dateValue=month&&day?String(today.getFullYear())+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0'):'';
         renderBirthdayGreeting(dateValue,false);

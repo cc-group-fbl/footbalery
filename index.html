@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ИССД «Футболёры»</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=JetBrains+Mono:wght@700&display=swap');
+  /* System fonts keep first paint fast on mobile and in the installed APK. */
 
   :root {
     --bg-dark: #07090e;
@@ -20,7 +20,7 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body.theme-loading { visibility:hidden; }
   body {
-    font-family: 'Montserrat', sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: var(--bg-dark);
     color: #f0f4fc;
     min-height: 100vh;
@@ -80,18 +80,18 @@
   .auth-box,.vote-box { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; padding: 24px 22px; backdrop-filter: blur(15px); box-shadow: 0 20px 50px rgba(0,0,0,.55); margin-bottom: 16px; }
   .auth-box h2,.vote-box h2 { font-size: 16px; margin-bottom: 14px; text-align:center; }
   .field { display:block; width:100%; margin:10px 0; padding:13px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.16); background:#0d1118; color:#fff; font:inherit; outline:none; }
-  .action-btn { width:100%; border:0; border-radius:10px; padding:13px 14px; margin-top:8px; color:#141414; background:linear-gradient(90deg,#ff5b00,#ffd21f); font:800 13px Montserrat,sans-serif; cursor:pointer; }
+  .action-btn { width:100%; border:0; border-radius:10px; padding:13px 14px; margin-top:8px; color:#141414; background:linear-gradient(90deg,#ff5b00,#ffd21f); font:800 13px system-ui,sans-serif; cursor:pointer; }
   .action-btn:disabled { opacity:.45; cursor:not-allowed; }
   .muted { color:#8b99ad; font-size:12px; line-height:1.5; text-align:center; margin-top:10px; }
   .message { font-size:12px; line-height:1.5; margin-top:12px; text-align:center; color:#ffd21f; overflow-wrap:anywhere; }
   .candidate { display:flex; gap:10px; align-items:center; padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,.1); background:rgba(13,17,24,.8); margin:8px 0; }
   .candidate input { accent-color:#ff8c00; } .candidate label { flex:1; font-size:13px; cursor:pointer; }
   .topline { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
-  .small-btn { border:1px solid rgba(255,255,255,.2); background:#111722; color:#fff; padding:8px 10px; border-radius:8px; font:600 11px Montserrat,sans-serif; cursor:pointer; }
+  .small-btn { border:1px solid rgba(255,255,255,.2); background:#111722; color:#fff; padding:8px 10px; border-radius:8px; font:600 11px system-ui,sans-serif; cursor:pointer; }
   .hidden { display:none !important; }
   .home-intro { text-align:center; margin:8px 0 16px; color:#8b99ad; font-size:12px; line-height:1.5; }
   .dashboard-grid { display:grid; grid-template-columns:1fr; gap:12px; margin-bottom:16px; }
-  .dashboard-card { display:flex; align-items:center; gap:14px; width:100%; padding:17px; text-align:left; border:1px solid rgba(255,255,255,.14); border-radius:16px; color:#f0f4fc; background:linear-gradient(135deg,rgba(25,31,43,.97),rgba(12,16,24,.96)); cursor:pointer; font-family:Montserrat,sans-serif; box-shadow:0 10px 26px rgba(0,0,0,.25); }
+  .dashboard-card { display:flex; align-items:center; gap:14px; width:100%; padding:17px; text-align:left; border:1px solid rgba(255,255,255,.14); border-radius:16px; color:#f0f4fc; background:linear-gradient(135deg,rgba(25,31,43,.97),rgba(12,16,24,.96)); cursor:pointer; font-family:system-ui,sans-serif; box-shadow:0 10px 26px rgba(0,0,0,.25); }
   .dashboard-card:active { transform:scale(.99); }
   .dashboard-icon { width:48px; height:48px; flex:0 0 48px; display:grid; place-items:center; border-radius:13px; font-size:25px; background:rgba(255,145,0,.13); border:1px solid rgba(255,145,0,.32); }
   .dashboard-title { display:block; font-size:14px; font-weight:900; margin-bottom:5px; }
@@ -144,7 +144,7 @@
   body.winter-theme .dashboard-arrow, body.winter-theme .message { color:#65efff; }
   body.winter-theme .notice-pill { background:#00bfe8; color:#031b56; }
   .schedule-item { padding:16px 0; }
-  .schedule-score { font-family:'JetBrains Mono',monospace; font-size:30px; font-weight:900; text-align:center; letter-spacing:3px; margin:12px 0; color:var(--accent-text); }
+  .schedule-score { font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:30px; font-weight:900; text-align:center; letter-spacing:3px; margin:12px 0; color:var(--accent-text); }
   .schedule-application-form { padding:10px; border:1px solid rgba(255,255,255,.12); border-radius:12px; background:rgba(0,0,0,.16); }
   .theme-control { padding:14px; margin:14px 0 18px; border:1px solid rgba(0,195,255,.35); border-radius:14px; background:linear-gradient(135deg,rgba(0,195,255,.10),rgba(13,17,24,.55)); }
   .theme-control-title { font-size:13px; font-weight:900; margin-bottom:6px; }
@@ -157,7 +157,7 @@
     .stats-setting-row select{width:100%;min-width:0;background:#111827;color:#fff;border:1px solid #ffffff33;border-radius:8px;padding:8px}
 
   .admin-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0 16px;position:sticky;top:6px;z-index:5;padding:8px;border:1px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(9,13,21,.96);backdrop-filter:blur(12px)}
-  .admin-tab{min-width:0;padding:11px 5px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:rgba(255,255,255,.035);color:#dbe4f2;font:800 11px Montserrat,sans-serif;cursor:pointer}
+  .admin-tab{min-width:0;padding:11px 5px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:rgba(255,255,255,.035);color:#dbe4f2;font:800 11px system-ui,sans-serif;cursor:pointer}
   .admin-tab.active{color:#17130a;border-color:var(--gold);background:linear-gradient(100deg,#ff8c00,#ffd21f);box-shadow:0 4px 14px rgba(245,197,24,.18)}
   .admin-tab-panel[hidden]{display:none!important}
   .admin-tab-panel{min-width:0;animation:adminTabIn .18s ease-out}
@@ -185,7 +185,34 @@
   .chat-photo-viewer img{display:block;max-width:100%;max-height:calc(100dvh - 36px);object-fit:contain;border-radius:8px}
   .chat-photo-viewer-close{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));width:42px;height:42px;border:1px solid #ffffff55;border-radius:50%;background:#171b24;color:#fff;font-size:26px;line-height:1;cursor:pointer}
   .chat-file{display:inline-flex;align-items:center;gap:7px;margin-top:7px;padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.1);color:inherit;text-decoration:none;overflow-wrap:anywhere}
-  .chat-messages{height:min(48vh,430px);overflow-y:auto;padding:10px;border:1px solid var(--border-color);border-radius:14px;background:rgba(0,0,0,.16);display:flex;flex-direction:column}
+   .chat-messages{height:min(58vh,560px);min-height:260px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:10px;border:1px solid var(--border-color);border-radius:14px;background:rgba(0,0,0,.16);display:flex;flex-direction:column;contain:content}
+  .chat-message{content-visibility:auto;contain-intrinsic-size:1px 72px}
+  #chatSendForm{position:sticky;bottom:0;padding:8px 0 calc(8px + env(safe-area-inset-bottom));background:var(--card-bg);z-index:3}
+  .birthday-greeting{display:none;margin:0 0 14px;padding:16px 14px;border:1px solid rgba(101,239,255,.48);border-radius:16px;text-align:center;background:linear-gradient(135deg,rgba(0,195,255,.16),rgba(255,255,255,.045));box-shadow:0 8px 22px rgba(0,0,0,.16)}
+  .birthday-greeting.visible{display:block}
+  .birthday-greeting strong{display:block;font-size:18px;font-weight:950;color:var(--accent-text);margin-bottom:5px}
+  .birthday-greeting span{font-size:12px;line-height:1.5;color:#e5f4ff}
+  .playoff-mobile{display:none}
+  @media(max-width:640px){
+    body{padding:10px;justify-content:flex-start}
+    .app-container{max-width:100%;padding-bottom:env(safe-area-inset-bottom)}
+    .header{margin-bottom:12px}
+    .vote-box,.auth-box,.player-card{padding:17px 14px;border-radius:16px;backdrop-filter:none;box-shadow:0 8px 22px rgba(0,0,0,.22)}
+    .dashboard-card{padding:14px;box-shadow:none}
+    .dashboard-icon{width:42px;height:42px;flex-basis:42px}
+    .stripe-inner{animation:none!important;transform:none!important}
+    .stripes-bg{opacity:.17}
+    .playoff-visual-scroll{display:none}
+    .playoff-mobile{display:block}
+    .playoff-mobile-nav{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:8px;align-items:center;margin:8px 0}
+    .playoff-mobile-nav button{min-height:40px;border:1px solid var(--border-color);border-radius:10px;background:rgba(255,255,255,.06);color:#fff;font-size:18px}
+    .playoff-mobile-round-label{text-align:center;font-size:12px;font-weight:900;color:var(--accent-text)}
+    .playoff-mobile-matches{display:grid;gap:9px}
+    .playoff-mobile .playoff-match-card{width:100%;box-shadow:none}
+    .chat-messages{height:calc(100dvh - 250px);min-height:260px;max-height:620px;padding:8px}
+    .chat-message{max-width:92%}
+  }
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
   .chat-user-choice{display:flex;align-items:center;gap:10px;padding:9px;border-bottom:1px solid rgba(255,255,255,.07);text-align:left}
   .chat-user-choice input{width:18px;height:18px;accent-color:var(--cyan)}
   .dg-teams-grid{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);gap:8px;align-items:center}
@@ -202,14 +229,14 @@
   .bracket-round{padding:10px;margin:12px 0;border:1px solid rgba(255,255,255,.12);border-radius:11px;background:rgba(0,0,0,.13)}
   .bracket-match{display:grid;grid-template-columns:minmax(0,1fr) 104px minmax(0,1fr);gap:7px;align-items:center;margin:8px 0;padding:9px;border-radius:9px;background:rgba(255,255,255,.045)}
   .bracket-team{min-width:0;overflow-wrap:anywhere;font-size:12px}
-  .bracket-team input,.bracket-score{width:100%;min-width:0;padding:8px 5px;border:1px solid rgba(255,255,255,.16);border-radius:7px;background:#0d1118;color:#fff;font:600 11px Montserrat,sans-serif}
+  .bracket-team input,.bracket-score{width:100%;min-width:0;padding:8px 5px;border:1px solid rgba(255,255,255,.16);border-radius:7px;background:#0d1118;color:#fff;font:600 11px system-ui,sans-serif}
   .bracket-score{text-align:center}.bracket-score-pair{display:flex;gap:4px;min-width:0}
-  .bracket-winner{grid-column:1/-1;width:100%;padding:8px;border:1px solid rgba(255,255,255,.15);border-radius:7px;background:#111722;color:#fff;font:600 11px Montserrat,sans-serif}
+  .bracket-winner{grid-column:1/-1;width:100%;padding:8px;border:1px solid rgba(255,255,255,.15);border-radius:7px;background:#111722;color:#fff;font:600 11px system-ui,sans-serif}
   .bracket-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
   .bracket-actions .small-btn{flex:1}
   .bracket-view-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;padding:10px;margin:7px 0;border-radius:9px;background:rgba(255,255,255,.045);font-size:12px}
   .bracket-view-match span:last-child{text-align:right}
-  .bracket-view-score{font-family:'JetBrains Mono',monospace;font-weight:900;color:var(--accent-text);white-space:nowrap}
+  .bracket-view-score{font-family:ui-monospace, SFMono-Regular, Consolas, monospace;font-weight:900;color:var(--accent-text);white-space:nowrap}
   .playoff-visual{margin:12px 0 16px}
   .playoff-visual-title{font-size:12px;font-weight:900;margin:0 0 10px;color:var(--accent-text);letter-spacing:.4px}
   .playoff-visual-scroll{overflow-x:auto;padding:4px 2px 14px;overscroll-behavior-x:contain}
@@ -221,7 +248,7 @@
   .playoff-team-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:29px;padding:5px 6px;border-radius:6px;font-size:11px}
   .playoff-team-row+.playoff-team-row{border-top:1px solid rgba(255,255,255,.1)}
   .playoff-team-name{min-width:0;overflow-wrap:anywhere;font-weight:700}
-  .playoff-team-score{flex:0 0 auto;min-width:18px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:900;color:var(--accent-text)}
+  .playoff-team-score{flex:0 0 auto;min-width:18px;text-align:center;font-family:ui-monospace, SFMono-Regular, Consolas, monospace;font-weight:900;color:var(--accent-text)}
   .playoff-team-row.is-winner{background:rgba(0,210,130,.11);color:#b9ffe0}
   .playoff-team-row.is-winner .playoff-team-score{color:#8dffc8}
   .playoff-match-meta{font-size:9px;color:#8492a6;text-align:center;margin-top:5px}
@@ -262,6 +289,7 @@
 
     <section id="accountPanel" class="hidden">
       <div class="topline"><span id="welcomeText" style="font-size:12px;color:#f5c518;font-weight:800"></span></div>
+      <div id="birthdayGreeting" class="birthday-greeting" role="status" aria-live="polite"><strong>🎉 С Днём Рождения!</strong><span>Желаем крепкого здоровья, ярких побед и незабываемых матчей!</span></div>
       <section id="homeScreen" class="vote-box">
         <h2>ГЛАВНОЕ МЕНЮ</h2>
         <div class="home-intro">Выбери нужный раздел личного кабинета</div>
@@ -883,7 +911,7 @@
       const [{data:conversations,error:convError},{data:members,error:memberError},{data:messages,error:messageError}]=await Promise.all([
         sb.from('chat_conversations').select('id,type,title,updated_at').in('id',ids).order('updated_at',{ascending:false}),
         sb.from('chat_members').select('conversation_id,user_id').in('conversation_id',ids),
-        sb.from('chat_messages').select('conversation_id,body,sender_id,created_at').in('conversation_id',ids).order('created_at',{ascending:false}).limit(250)
+        sb.from('chat_messages').select('conversation_id,body,sender_id,created_at').in('conversation_id',ids).order('created_at',{ascending:false}).limit(100)
       ]);
       const err=convError||memberError||messageError;if(err)throw err;
       const profileUserIds=[...new Set((members||[]).map(m=>m.user_id))];const {data:profiles,error:profileError}=await sb.rpc('get_chat_profiles',{p_user_ids:profileUserIds});if(profileError)throw profileError;
@@ -909,7 +937,7 @@
       const ids=(members||[]).map(x=>x.user_id);
       const [{data:conversation,error:convError},{data:profiles,error:profileError},{data:recentMessages,error:messageError}]=await Promise.all([
         sb.from('chat_conversations').select('id,type,title').eq('id',chatId).single(),sb.rpc('get_chat_profiles',{p_user_ids:ids}),
-        sb.from('chat_messages').select('id,sender_id,body,created_at').eq('conversation_id',chatId).order('created_at',{ascending:false}).limit(60)
+        sb.from('chat_messages').select('id,sender_id,body,created_at').eq('conversation_id',chatId).order('created_at',{ascending:false}).limit(35)
       ]);
       const err=convError||profileError||messageError;if(err)throw err;const messages=(recentMessages||[]).reverse();const messageIds=messages.map(m=>m.id);
       const {data:attachments,error:attachmentError}=messageIds.length?await sb.from('chat_attachments').select('id,message_id,file_name,file_path,mime_type,file_size').in('message_id',messageIds).order('created_at'):{data:[],error:null};
@@ -939,7 +967,7 @@
       await sb.from('chat_members').update({last_read_at:new Date().toISOString()}).eq('conversation_id',chatId).eq('user_id',currentUser.id);
       $('chatList').classList.add('hidden');$('chatCreateBox').classList.add('hidden');$('chatThread').classList.remove('hidden');$('accountPanel').classList.add('chat-thread-open');
       if(chatRealtimeChannel)await sb.removeChannel(chatRealtimeChannel);let refreshPending=false;
-      const refreshThread=()=>{if(refreshPending)return;refreshPending=true;setTimeout(()=>{refreshPending=false;if(activeChatId===chatId)openChat(chatId).catch(console.error);loadChats().catch(console.error);},350);};
+      const refreshThread=()=>{if(refreshPending)return;refreshPending=true;setTimeout(()=>{refreshPending=false;if(activeChatId===chatId)openChat(chatId).catch(console.error);},800);};
       chatRealtimeChannel=sb.channel('chat-'+chatId).on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+chatId},refreshThread)
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_attachments',filter:'conversation_id=eq.'+chatId},refreshThread)
         .on('postgres_changes',{event:'DELETE',schema:'public',table:'chat_messages',filter:'conversation_id=eq.'+chatId},refreshThread).subscribe();
@@ -1135,14 +1163,15 @@
       $('tournamentAdminCreate')?.classList.toggle('hidden',!tournamentIsAdmin()||activeTournamentKey==='dg');
     }
     function tournamentSafeText(value){return String(value??'');}
-    let tournamentParticipantProfiles=[];
+    let tournamentParticipantProfiles=[],tournamentParticipantsLoaded=false;
     async function loadTournamentParticipants(){
+      if(tournamentParticipantsLoaded)return;
       const root=$('tournamentParticipantsList');if(!root||!sb||!tournamentIsAdmin())return;
       root.textContent='Загружаем участников…';
       const {data,error}=await sb.from('profiles').select('user_id,username,first_name,last_name').order('last_name');
       root.replaceChildren();
       if(error||!data){root.textContent='Не удалось загрузить участников: '+(error?.message||'нет данных');return;}
-      tournamentParticipantProfiles=data;
+      tournamentParticipantProfiles=data;tournamentParticipantsLoaded=true;
       if(!data.length){root.textContent='В системе пока нет участников.';return;}
       data.forEach(p=>{
         const label=document.createElement('label');label.style.cssText='display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid var(--border-color);cursor:pointer';
@@ -1171,62 +1200,56 @@
     }
     function renderPlayoffBracketVisual(bracket,card,rounds){
       const visibleRounds=(rounds||[]).filter(r=>!r.hidden);
-      const bronzeRound=visibleRounds.find(r=>/3\s*[-–]?\s*е\s*место|третье место|бронз/i.test(String(r.name||'')));
+      const bronzeRound=visibleRounds.find(r=>/3\\s*[-–]?\\s*е\\s*место|третье место|бронз/i.test(String(r.name||'')));
       const mainRounds=visibleRounds.filter(r=>r!==bronzeRound);
       if(!mainRounds.length)return;
+      const allMobileRounds=mainRounds.concat(bronzeRound?[bronzeRound]:[]);
       const visual=document.createElement('section');visual.className='playoff-visual';
       const title=document.createElement('div');title.className='playoff-visual-title';title.textContent='СЕТКА ПЛЕЙ-ОФФ';visual.appendChild(title);
+      const makeCard=(match,isLast)=>{
+        const scheduleResult=oneOnOneScheduleResult(match);
+        const shown=scheduleResult?.result?{...match,homeScore:String(scheduleResult.homeScore),awayScore:String(scheduleResult.awayScore),winner:scheduleResult.winner}:match;
+        let winner=shown.winner||'';
+        if(!winner&&shown.homeScore!==''&&shown.awayScore!==''&&Number.isFinite(Number(shown.homeScore))&&Number.isFinite(Number(shown.awayScore))&&Number(shown.homeScore)!==Number(shown.awayScore))winner=Number(shown.homeScore)>Number(shown.awayScore)?'home':'away';
+        const node=document.createElement('div');node.className='playoff-match-card'+(isLast?' playoff-last-round':'');
+        [['home',match.home,shown.homeScore],['away',match.away,shown.awayScore]].forEach(([side,name,score])=>{
+          const row=document.createElement('div');row.className='playoff-team-row'+(winner===side?' is-winner':'');
+          const team=document.createElement('span');team.className='playoff-team-name';team.textContent=name||'Ожидает участника';
+          const points=document.createElement('span');points.className='playoff-team-score';points.textContent=score!==''&&score!==null&&score!==undefined?String(score):'—';
+          row.append(team,points);node.appendChild(row);
+        });
+        const meta=document.createElement('div');meta.className='playoff-match-meta';meta.textContent=scheduleResult?.result?'Результат из расписания':(winner?'Матч завершён':'Матч не сыгран');node.appendChild(meta);
+        return node;
+      };
       const scroll=document.createElement('div');scroll.className='playoff-visual-scroll';
       const grid=document.createElement('div');grid.className='playoff-grid';
-      const firstCount=Math.max(1,(mainRounds[0].matches||[]).length);
-      const totalRows=Math.max(2,firstCount*2);
+      const firstCount=Math.max(1,(mainRounds[0].matches||[]).length),totalRows=Math.max(2,firstCount*2);
       mainRounds.forEach((round,roundIndex)=>{
-        const column=document.createElement('div');column.className='playoff-round-column';
-        column.style.gridTemplateRows='auto repeat('+totalRows+', minmax(34px, auto))';
+        const column=document.createElement('div');column.className='playoff-round-column';column.style.gridTemplateRows='auto repeat('+totalRows+', minmax(34px, auto))';
         const heading=document.createElement('div');heading.className='playoff-round-heading';heading.textContent=round.name||('Раунд '+(roundIndex+1));column.appendChild(heading);
-        (round.matches||[]).forEach(match=>{
-          const scheduleResult=oneOnOneScheduleResult(match);
-          const shown=scheduleResult?.result?{...match,homeScore:String(scheduleResult.homeScore),awayScore:String(scheduleResult.awayScore),winner:scheduleResult.winner}:match;
-          let winner=shown.winner||'';
-          if(!winner&&shown.homeScore!==''&&shown.awayScore!==''&&Number.isFinite(Number(shown.homeScore))&&Number.isFinite(Number(shown.awayScore))&&Number(shown.homeScore)!==Number(shown.awayScore))winner=Number(shown.homeScore)>Number(shown.awayScore)?'home':'away';
-          const node=document.createElement('div');node.className='playoff-match-card'+(roundIndex===mainRounds.length-1?' playoff-last-round':'');
-          node.style.gridRow='span '+Math.min(totalRows,2*Math.pow(2,roundIndex));
-          const addTeam=(side,label,score)=>{
-            const row=document.createElement('div');row.className='playoff-team-row'+(winner===side?' is-winner':'');
-            const name=document.createElement('span');name.className='playoff-team-name';name.textContent=label||'Ожидает участника';
-            const points=document.createElement('span');points.className='playoff-team-score';points.textContent=score!==''&&score!==null&&score!==undefined?String(score):'—';
-            row.append(name,points);node.appendChild(row);
-          };
-          addTeam('home',match.home,shown.homeScore);
-          addTeam('away',match.away,shown.awayScore);
-          const meta=document.createElement('div');meta.className='playoff-match-meta';
-          meta.textContent=scheduleResult?.result?'Результат из расписания':(winner?'Матч завершён':'Матч не сыгран');
-          node.appendChild(meta);column.appendChild(node);
-        });
+        (round.matches||[]).forEach(match=>{const node=makeCard(match,roundIndex===mainRounds.length-1);node.style.gridRow='span '+Math.min(totalRows,2*Math.pow(2,roundIndex));column.appendChild(node);});
         grid.appendChild(column);
       });
       scroll.appendChild(grid);visual.appendChild(scroll);
-      if(bronzeRound){
-        const bronze=document.createElement('div');bronze.className='playoff-bronze';
-        const bronzeTitle=document.createElement('div');bronzeTitle.className='playoff-round-heading';bronzeTitle.textContent=bronzeRound.name||'Матч за 3-е место';bronze.appendChild(bronzeTitle);
-        const match=(bronzeRound.matches||[])[0];
-        if(match){
-          const scheduleResult=oneOnOneScheduleResult(match);
-          const shown=scheduleResult?.result?{...match,homeScore:String(scheduleResult.homeScore),awayScore:String(scheduleResult.awayScore),winner:scheduleResult.winner}:match;
-          let winner=shown.winner||'';
-          if(!winner&&shown.homeScore!==''&&shown.awayScore!==''&&Number.isFinite(Number(shown.homeScore))&&Number.isFinite(Number(shown.awayScore))&&Number(shown.homeScore)!==Number(shown.awayScore))winner=Number(shown.homeScore)>Number(shown.awayScore)?'home':'away';
-          const node=document.createElement('div');node.className='playoff-match-card';
-          [['home',match.home,shown.homeScore],['away',match.away,shown.awayScore]].forEach(([side,name,score])=>{
-            const row=document.createElement('div');row.className='playoff-team-row'+(winner===side?' is-winner':'');
-            const team=document.createElement('span');team.className='playoff-team-name';team.textContent=name||'Ожидает участника';
-            const points=document.createElement('span');points.className='playoff-team-score';points.textContent=score!==''&&score!==null&&score!==undefined?String(score):'—';
-            row.append(team,points);node.appendChild(row);
-          });
-          bronze.appendChild(node);
-        }
-        visual.appendChild(bronze);
-      }
-      card.appendChild(visual);
+      const mobile=document.createElement('div');mobile.className='playoff-mobile';
+      const nav=document.createElement('div');nav.className='playoff-mobile-nav';
+      const prev=document.createElement('button');prev.type='button';prev.textContent='‹';prev.setAttribute('aria-label','Предыдущий раунд');
+      const label=document.createElement('div');label.className='playoff-mobile-round-label';
+      const next=document.createElement('button');next.type='button';next.textContent='›';next.setAttribute('aria-label','Следующий раунд');
+      const matches=document.createElement('div');matches.className='playoff-mobile-matches';
+      nav.append(prev,label,next);mobile.append(nav,matches);
+      let activeRound=0;
+      const renderMobileRound=()=>{
+        const round=allMobileRounds[activeRound];label.textContent=(round?.name||('Раунд '+(activeRound+1)))+' · '+(activeRound+1)+'/'+allMobileRounds.length;
+        prev.disabled=activeRound===0;next.disabled=activeRound===allMobileRounds.length-1;matches.replaceChildren();
+        (round?.matches||[]).forEach(match=>matches.appendChild(makeCard(match,true)));
+      };
+      prev.addEventListener('click',()=>{if(activeRound>0){activeRound--;renderMobileRound();}});
+      next.addEventListener('click',()=>{if(activeRound<allMobileRounds.length-1){activeRound++;renderMobileRound();}});
+      let touchX=null;
+      matches.addEventListener('touchstart',e=>{touchX=e.touches[0]?.clientX??null;},{passive:true});
+      matches.addEventListener('touchend',e=>{if(touchX===null)return;const delta=e.changedTouches[0].clientX-touchX;touchX=null;if(Math.abs(delta)>55){if(delta<0&&activeRound<allMobileRounds.length-1)activeRound++;else if(delta>0&&activeRound>0)activeRound--;renderMobileRound();}},{passive:true});
+      renderMobileRound();visual.appendChild(mobile);card.appendChild(visual);
     }
     function renderTournamentBrackets(){
       const root=$('tournamentBracketsList');if(!root)return;
@@ -1319,7 +1342,6 @@
     async function loadTournamentBrackets(){
       const root=$('tournamentBracketsList');if(!root||!sb||!currentUser)return;
       renderTournamentSwitch();
-      if(tournamentIsAdmin())await loadTournamentParticipants();
       if(activeTournamentKey==='dg'){tournamentBrackets=[];root.replaceChildren();return;}
       if(!navigator.onLine){
         const saved=offlineRead('one_brackets');
@@ -1328,7 +1350,6 @@
         oneOnOneStageBracketsCache=stageRows;
         tournamentBrackets=stageRows.filter(b=>b.phase===activeTournamentPhase);
         if(!oneOnOnePlayoffEnabled()&&activeTournamentPhase==='playoff'){activeTournamentPhase='qualification';renderTournamentSwitch();tournamentBrackets=stageRows.filter(b=>b.phase==='qualification');}
-        try{await loadOneOnOneSheet();}catch(_){}
         const cachedSchedule=offlineRead('schedule_rows')||[];
         oneOnOneScheduleMatchesCache=cachedSchedule.filter(item=>item.type==='match'&&/турнир\\s*1\\s*на\\s*1|1\\s*на\\s*1/i.test(String(item.tournament||''))&&item.match).map(item=>({id:item.id,date:item.event_date,stage:oneOnOneStageFromDate(item.event_date),home:oneOnOneScheduleNames(item.match.home_players),away:oneOnOneScheduleNames(item.match.away_players),scoreHome:item.match.score_home,scoreAway:item.match.score_away})).filter(item=>item.stage&&item.home.length===1&&item.away.length===1);
         renderTournamentBrackets();renderOneOnOneStandings();return;
@@ -1345,9 +1366,7 @@
         activeTournamentPhase='qualification';renderTournamentSwitch();
         tournamentBrackets=(data||[]).filter(b=>b.phase==='qualification');
       }
-      if(activeTournamentKey==='one'){
-        try{await loadOneOnOneSheet();}
-        catch(sheetError){console.warn('Не удалось загрузить статистику Турнира 1 на 1:',sheetError);}
+      if(activeTournamentKey==='one'&&activeTournamentPhase==='playoff'){
         try{await loadOneOnOneScheduleMatches();}
         catch(scheduleError){oneOnOneScheduleMatchesCache=[];console.warn('Не удалось загрузить результаты из расписания:',scheduleError);}
       }
@@ -1479,8 +1498,13 @@
       // При переходе на другой сезон открываем его с квалификации.
       activeTournamentPhase='qualification';renderTournamentSwitch();await loadTournamentBrackets();
     });
-    document.querySelectorAll('[data-one-view]').forEach(button=>button.addEventListener('click',()=>{
-      activeOneOnOneView=button.dataset.oneView;renderTournamentSwitch();if(activeOneOnOneView==='table')renderOneOnOneStandings();
+    document.querySelectorAll('[data-one-view]').forEach(button=>button.addEventListener('click',async()=>{
+      activeOneOnOneView=button.dataset.oneView;renderTournamentSwitch();
+      if(activeOneOnOneView==='table'){
+        const root=$('oneOnOneStandings');if(root)root.textContent='Загружаем статистику…';
+        try{await loadOneOnOneSheet();renderOneOnOneStandings();}
+        catch(error){if(root)root.textContent='Не удалось загрузить Google Таблицу: '+(error.message||'ошибка');}
+      }
     }));
     document.querySelectorAll('[data-phase]').forEach(button=>button.addEventListener('click',async()=>{
       if(button.dataset.phase==='playoff'&&!oneOnOnePlayoffEnabled())return;
@@ -1501,7 +1525,7 @@
       if(!enabled&&activeTournamentPhase==='playoff')activeTournamentPhase='qualification';
       event.target.disabled=false;renderTournamentSwitch();await loadTournamentBrackets();
     });
-    $('openTournamentsButton')?.addEventListener('click',async()=>{showSection('tournamentsPanel');await loadTournamentBrackets();});
+    $('openTournamentsButton')?.addEventListener('click',async()=>{showSection('tournamentsPanel');await Promise.all([loadTournamentBrackets(),tournamentIsAdmin()?loadTournamentParticipants():Promise.resolve()]);});
     $('tournamentsBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
 
     const financeMoney=value=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(Number(value)||0);
@@ -1610,10 +1634,16 @@
       });
     }
 
+    function renderBirthdayGreeting(birthDate){
+      const banner=$('birthdayGreeting');if(!banner)return;
+      const raw=String(birthDate||'').slice(0,10),match=raw.match(/^\\d{4}-(\\d{2})-(\\d{2})$/),today=new Date();
+      const isBirthday=!!match&&Number(match[1])===today.getMonth()+1&&Number(match[2])===today.getDate();
+      banner.classList.toggle('visible',isBirthday);banner.setAttribute('aria-hidden',isBirthday?'false':'true');
+    }
     async function showAccount() {
-      let profile=null,error=null;if(navigator.onLine){const result=await sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team').eq('user_id', currentUser.id).maybeSingle();profile=result.data;error=result.error;if(profile)offlineWrite('profile_'+currentUser.id,profile);}else profile=offlineRead('profile_'+currentUser.id);
+      let profile=null,error=null;if(navigator.onLine){const result=await sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team, birth_date').eq('user_id', currentUser.id).maybeSingle();profile=result.data;error=result.error;if(profile)offlineWrite('profile_'+currentUser.id,profile);}else profile=offlineRead('profile_'+currentUser.id);
       if(error||!profile){if(navigator.onLine)await sb.auth.signOut();$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');return setMessage('loginMessage',navigator.onLine?'Для аккаунта не назначена карточка игрока. Обратитесь к администратору.':'Нет сохранённого профиля. Сначала войдите с интернетом на этом устройстве.',true);}
-      currentProfile = profile; window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
+      currentProfile = profile; renderBirthdayGreeting(profile.birth_date); window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       showSection('homeScreen');
@@ -1648,7 +1678,7 @@
       if(!root||!sb||currentProfile?.role!=='admin') return;
       root.textContent='Загрузка пользователей…';
       const {data,error}=await sb.from('profiles')
-        .select('user_id,username,player_id,first_name,last_name,role,captain_team').order('username',{ascending:true});
+        .select('user_id,username,player_id,first_name,last_name,role,captain_team,birth_date').order('username',{ascending:true});
       root.replaceChildren();
       if(error||!data){root.textContent='Не удалось загрузить пользователей. Проверьте права чтения таблицы profiles.';return;}
       if(!data.length){root.textContent='Пользователей пока нет.';return;}
@@ -1660,6 +1690,9 @@
         const firstName=document.createElement('input');firstName.className='field';firstName.style.marginTop='8px';firstName.placeholder='Имя';firstName.value=p.first_name||'';
         const lastName=document.createElement('input');lastName.className='field';lastName.style.marginTop='6px';lastName.placeholder='Фамилия';lastName.value=p.last_name||'';
         const saveName=document.createElement('button');saveName.type='button';saveName.className='small-btn';saveName.style.marginTop='4px';saveName.textContent='Сохранить имя и фамилию';
+        const birthDate=document.createElement('input');birthDate.type='date';birthDate.className='field';birthDate.style.marginTop='8px';birthDate.value=p.birth_date||'';birthDate.setAttribute('aria-label','Дата рождения');
+        const saveBirthDate=document.createElement('button');saveBirthDate.type='button';saveBirthDate.className='small-btn';saveBirthDate.style.marginTop='4px';saveBirthDate.textContent='Сохранить дату рождения';
+        saveBirthDate.addEventListener('click',async()=>{saveBirthDate.disabled=true;const {error}=await sb.rpc('admin_set_player_birth_date',{p_user_id:p.user_id,p_birth_date:birthDate.value||null});if(error){alert('Не удалось сохранить дату рождения: '+error.message);saveBirthDate.disabled=false;return;}p.birth_date=birthDate.value||null;saveBirthDate.textContent='Дата сохранена';setTimeout(()=>{saveBirthDate.textContent='Сохранить дату рождения';saveBirthDate.disabled=false;},1400);});
         saveName.addEventListener('click',async()=>{saveName.disabled=true;const {error}=await sb.rpc('update_member_name',{p_user_id:p.user_id,p_first_name:firstName.value,p_last_name:lastName.value});if(error){alert('Не удалось сохранить имя и фамилию: '+error.message);saveName.disabled=false;return;}p.first_name=firstName.value.trim();p.last_name=lastName.value.trim();saveName.textContent='Сохранено';setTimeout(()=>{saveName.textContent='Сохранить имя и фамилию';saveName.disabled=false;},1400);});
         const role=document.createElement('select');role.className='field';role.style.marginTop='6px';
         [['member','Участник'],['captain','Капитан'],['admin','Администратор']].forEach(([v,label])=>{const o=document.createElement('option');o.value=v;o.textContent=label;role.appendChild(o)});
@@ -1667,7 +1700,7 @@
         role.addEventListener('change',async()=>{const {error}=await sb.from('profiles').update({role:role.value}).eq('user_id',p.user_id);if(error){alert('Не удалось изменить роль. Проверьте SQL-права и политики Supabase.');role.value=p.role||'member';}else{p.role=role.value;}});
         const team=document.createElement('select');team.className='field';team.style.marginTop='6px';[['','Не капитан'],['ДЕРЕВЕНСКИЕ','Капитан ФК ДЕРЕВЕНСКИЕ'],['ГОРОДСКИЕ','Капитан ФК ГОРОДСКИЕ']].forEach(([v,label])=>{const o=document.createElement('option');o.value=v;o.textContent=label;team.appendChild(o)});team.value=p.captain_team||'';
         team.addEventListener('change',async()=>{const {error}=await sb.from('profiles').update({captain_team:team.value||null,role:team.value?'captain':role.value}).eq('user_id',p.user_id);if(error){alert('Не удалось назначить команду капитана. Сначала выполните SQL-настройку.');team.value=p.captain_team||'';}else{p.captain_team=team.value||null;if(team.value)role.value='captain';}});
-        item.append(name,meta,firstName,lastName,saveName,role,team);root.appendChild(item);
+        item.append(name,meta,firstName,lastName,saveName,birthDate,saveBirthDate,role,team);root.appendChild(item);
       });
       const note=document.createElement('div');note.className='muted';note.style.marginTop='8px';
       note.textContent='Всего пользователей: '+data.length;root.appendChild(note);
@@ -2543,7 +2576,7 @@
         setMessage('createMemberMessage','Не удалось создать участника: '+(err.message||'ошибка')+'. Проверьте, что функция create-member опубликована и вы вошли как admin.',true);
       } finally { button.disabled=false; }
     }
-    async function logout(){if(!confirm('Вы действительно хотите выйти из своего аккаунта?'))return;const {error}=await sb.auth.signOut();if(error){alert('Не удалось выйти из аккаунта: '+error.message);return;}if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');currentUser=null;currentProfile=null;$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('passwordInput').value='';setMessage('loginMessage','Вы вышли из аккаунта.');}
+    async function logout(){if(!confirm('Вы действительно хотите выйти из своего аккаунта?'))return;const {error}=await sb.auth.signOut();if(error){alert('Не удалось выйти из аккаунта: '+error.message);return;}if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');currentUser=null;currentProfile=null;$('birthdayGreeting')?.classList.remove('visible');$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('passwordInput').value='';setMessage('loginMessage','Вы вышли из аккаунта.');}
 
     $('openChatsButton')?.addEventListener('click',async()=>{showSection('chatsPanel');$('chatThread').classList.add('hidden');$('chatList').classList.remove('hidden');try{await loadChats();}catch(e){$('chatList').textContent='Не удалось загрузить чаты. Сначала необходимо выполнить SQL-настройку чатов в Supabase.';console.error(e);}});
     $('chatsBackButton')?.addEventListener('click',async()=>{if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');$('chatThread').classList.add('hidden');showSection('homeScreen');});

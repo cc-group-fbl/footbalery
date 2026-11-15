@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preload" href="./assets/fonts/Gilroy-Medium.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="./assets/fonts/Gilroy-Black.ttf" as="font" type="font/ttf" crossorigin>
 <script>
   // Restore a deep link after static hosts (for example GitHub Pages) serve 404.html.
   (() => {
@@ -45,8 +47,9 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  /* Never hide the whole app while the shared seasonal theme is loading. */
-  body.theme-loading { visibility:visible; }
+  /* Не показываем базовую осеннюю палитру до применения общего сезона. */
+  html { background:#07090e; }
+  body.theme-loading { visibility:hidden; }
   body {
     font-family: 'Gilroy', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: var(--bg-dark);
@@ -294,6 +297,19 @@
 </style>
 </head>
 <body class="theme-loading">
+<script>
+  // Применяем последний сохранённый сезон синхронно до первой отрисовки.
+  (() => {
+    try {
+      const schedule=JSON.parse(localStorage.getItem("futbolerySeasonSchedule")||"{}");
+      const now=Date.now();
+      const active=Object.entries(schedule).map(([season,value])=>({season,time:new Date(value).getTime()}))
+        .filter(x=>["spring","summer","autumn","winter"].includes(x.season)&&Number.isFinite(x.time)&&x.time<=now)
+        .sort((a,b)=>b.time-a.time)[0]?.season;
+      if(active){document.body.classList.add(active+"-theme");document.body.classList.remove("theme-loading");}
+    } catch(error) { console.warn("Не удалось применить сохранённый сезон:",error); }
+  })();
+</script>
 
   <div class="stripes-bg">
     <div class="stripe"><div class="stripe-inner"></div></div>
@@ -459,6 +475,8 @@
       <button type="button" class="small-btn section-back hidden" id="newsBackButton">← На главный экран</button>
       <section id="newsPanel" class="vote-box hidden">
         <div class="topline"><h2 style="margin:0;text-align:left">НОВОСТИ</h2></div>
+        <input id="newsSearchInput" class="field" type="search" placeholder="Поиск по заголовку и тексту новостей…" autocomplete="off" aria-label="Поиск по новостям">
+        <div id="newsSearchStatus" class="muted" style="text-align:left;min-height:0;margin:0"></div>
         <div id="newsTabs" class="news-tabs" role="tablist" aria-label="Публикации сообщества"></div>
         <div id="newsFeed" style="margin-top:12px"><div class="muted">Загрузка новостей…</div></div>
         <div id="newsMessage" class="message"></div>
@@ -792,6 +810,7 @@
     }
     async function loadNews() {
       const root=$('newsFeed');if(!root||!sb||!currentUser)return;root.replaceChildren();$('newsTabs')?.replaceChildren();
+      const loading=document.createElement('div');loading.className='muted';loading.textContent='Загружаем новости…';root.appendChild(loading);
       const {data:news,error}=await sb.from('news').select('id,title,body,image_url,author_id,visibility,created_at').order('created_at',{ascending:false}).limit(50);
       if(error){root.textContent='Новости пока не настроены. Администратору нужно выполнить SQL из архива.';$('newsUnreadBadge').classList.add('hidden');return;}
       if(!news?.length){root.textContent='Новостей пока нет.';$('newsUnreadBadge').classList.add('hidden');return;}
@@ -842,6 +861,18 @@
         fragment.appendChild(item);
       }
       root.appendChild(fragment);
+      const searchInput=$('newsSearchInput'),searchStatus=$('newsSearchStatus');
+      const applyNewsSearch=()=>{
+        const query=(searchInput?.value||'').trim().toLocaleLowerCase('ru-RU');
+        const matches=news.filter(item=>!query||[item.title,item.body].some(value=>String(value||'').toLocaleLowerCase('ru-RU').includes(query)));
+        if(query&&matches.length&&!matches.some(item=>String(item.id)===String(activeNewsId)))activeNewsId=matches[0].id;
+        const matchIds=new Set(matches.map(item=>String(item.id)));
+        tabs?.querySelectorAll('.news-tab').forEach(tab=>{tab.hidden=!matchIds.has(tab.dataset.newsId);const selected=tab.dataset.newsId===String(activeNewsId)&&matchIds.has(tab.dataset.newsId);tab.classList.toggle('active',selected);tab.setAttribute('aria-selected',selected?'true':'false');});
+        root.querySelectorAll('.news-item').forEach(item=>{item.hidden=!matchIds.has(item.dataset.newsId)||item.dataset.newsId!==String(activeNewsId);});
+        if(searchStatus)searchStatus.textContent=query?(matches.length?'Найдено новостей: '+matches.length:'По запросу ничего не найдено.') : '';
+      };
+      if(searchInput)searchInput.oninput=applyNewsSearch;
+      applyNewsSearch();
       if(activeNewsId){const target=document.getElementById(String(activeNewsId));if(target?.classList.contains('news-item'))target.scrollIntoView({block:'nearest'});}
       const unreadIds=news.filter(n=>!readSet.has(n.id)).map(n=>n.id);
       if(unreadIds.length){const rows=unreadIds.map(news_id=>({user_id:currentUser.id,news_id}));const {error:readError}=await sb.from('news_reads').upsert(rows,{onConflict:'user_id,news_id'});if(readError)console.warn('Не удалось отметить новости прочитанными:',readError.message);}
@@ -1698,6 +1729,7 @@
     $('tournamentsBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
 
     const financeMoney=value=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(Number(value)||0);
+    let activeFinanceGoalId=null;
     async function loadFinance() {
       const balanceEl=$('financeBalanceValue'),goalsEl=$('financeGoalsList');
       if(!sb||!currentUser||!balanceEl||!goalsEl)return;
@@ -1718,10 +1750,14 @@
       if(goalsError){goalsEl.textContent='Не удалось загрузить цели: '+goalsError.message;return;}
       goalsEl.replaceChildren();
       if(!goals?.length){goalsEl.textContent='Пока нет финансовых целей.';return;}
-      goals.forEach(goal=>{
+      const hashGoalId=decodeURIComponent(window.location.hash.slice(1));
+      const initialGoal=goals.find(goal=>String(goal.id)===hashGoalId);
+      activeFinanceGoalId=String(initialGoal?.id??goals[0].id);
+      let goalCards=[];
+      goals.forEach((goal,goalIndex)=>{
         const target=Math.max(0,Number(goal.target_amount)||0),current=Math.max(0,Number(goal.current_amount)||0);
         const percent=target>0?Math.min(100,Math.round(current/target*100)):0;
-        const card=document.createElement('div');card.style.cssText='padding:14px;margin:10px 0;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,.025)';
+        const card=document.createElement('div');card.dataset.financeGoalId=String(goal.id);card.hidden=String(goal.id)!==activeFinanceGoalId;card.style.cssText='padding:14px;margin:10px 0;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,.025)';
         const title=document.createElement('div');title.style.cssText='font-weight:900;font-size:15px';title.textContent=goal.title;
         const desc=document.createElement('div');desc.className='muted';desc.style.cssText='text-align:left;margin-top:6px;white-space:pre-wrap';desc.textContent=goal.description||'Описание не добавлено';
         const stats=document.createElement('div');stats.style.cssText='display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;margin:12px 0 7px;font-weight:800';
@@ -1731,7 +1767,8 @@
         const track=document.createElement('div');track.style.cssText='height:12px;background:rgba(255,255,255,.12);border-radius:20px;overflow:hidden';
         const fill=document.createElement('div');fill.style.cssText='height:100%;width:'+percent+'%;background:linear-gradient(90deg,#ff8c00,#ffd21f);border-radius:20px;transition:width .25s';track.appendChild(fill);
         const pct=document.createElement('div');pct.className='muted';pct.style.cssText='text-align:right;margin-top:5px;font-weight:800';pct.textContent=percent+'%';
-        card.append(title,desc,stats,track,pct);
+        const goalLink=document.createElement('a');goalLink.href=SECTION_ROUTES.financePanel+'#'+encodeURIComponent(goal.id);goalLink.textContent='ОТКРЫТЬ ЦЕЛЬ ↗';goalLink.style.cssText='display:inline-block;margin-top:12px;color:var(--accent-text);font-size:11px;font-weight:900;text-decoration:none';
+        card.append(title,desc,stats,track,pct,goalLink);
         if(isAdmin){
           const editor=document.createElement('div');editor.style.cssText='display:grid;gap:7px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-color)';
           const name=document.createElement('input');name.className='field';name.maxLength=120;name.value=goal.title;name.placeholder='Название';
@@ -1756,8 +1793,16 @@
           });
           actions.append(save,remove);editor.append(name,description,amounts,actions);card.appendChild(editor);
         }
-        goalsEl.appendChild(card);
+        goalsEl.appendChild(card);goalCards.push(card);
       });
+      const nav=document.createElement('div');nav.style.cssText='display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:9px;align-items:center;margin:10px 0';
+      const previous=document.createElement('button');previous.type='button';previous.className='small-btn';previous.textContent='←';previous.setAttribute('aria-label','Предыдущая цель');
+      const counter=document.createElement('div');counter.style.cssText='text-align:center;font-size:12px;font-weight:900;color:var(--accent-text)';counter.setAttribute('aria-live','polite');
+      const next=document.createElement('button');next.type='button';next.className='small-btn';next.textContent='→';next.setAttribute('aria-label','Следующая цель');
+      const selectGoal=index=>{const safeIndex=(index+goalCards.length)%goalCards.length;activeFinanceGoalId=String(goals[safeIndex].id);goalCards.forEach((card,i)=>card.hidden=i!==safeIndex);counter.textContent=(safeIndex+1)+' / '+goals.length+' · '+(goals[safeIndex].title||'Цель');history.replaceState(history.state,'',SECTION_ROUTES.financePanel+'#'+encodeURIComponent(activeFinanceGoalId));};
+      previous.addEventListener('click',()=>selectGoal(goals.findIndex(goal=>String(goal.id)===activeFinanceGoalId)-1));
+      next.addEventListener('click',()=>selectGoal(goals.findIndex(goal=>String(goal.id)===activeFinanceGoalId)+1));
+      nav.append(previous,counter,next);goalsEl.prepend(nav);selectGoal(goals.findIndex(goal=>String(goal.id)===activeFinanceGoalId));
     }
     $('saveFinanceBalance')?.addEventListener('click',async()=>{
       if(currentProfile?.role!=='admin')return;
@@ -2831,6 +2876,7 @@
     function applySeasonTheme(theme) {
       const themes=['spring','summer','autumn','winter'];
       themes.forEach(name=>document.body.classList.toggle(name+'-theme',name===theme));
+      document.body.classList.remove('theme-loading');
       const labels={spring:'весна',summer:'лето',autumn:'осень',winter:'зима'};
       const status=$('seasonThemeStatus');
       if(status && !status.dataset.editing) status.textContent='Сейчас активно оформление: '+(labels[theme]||'осень')+'.';
@@ -2852,8 +2898,10 @@
     async function loadSharedSeasonTheme() {
       let cachedSchedule={};
       try { cachedSchedule=JSON.parse(localStorage.getItem('futbolerySeasonSchedule')||'{}'); } catch(_) {}
-      // Apply the last known theme immediately; never leave the app waiting for Supabase.
-      applySeasonTheme(getActiveSeason(cachedSchedule)||'autumn');
+      // Сначала применяем кэш; если его нет, скрываем интерфейс до ответа Supabase,
+      // чтобы пользователь не видел осеннюю палитру до загрузки своего сезона.
+      const cachedSeason=getActiveSeason(cachedSchedule);
+      if(cachedSeason) applySeasonTheme(cachedSeason);
       try {
         if(!sb) return;
         const [scheduleResult,legacyResult]=await Promise.all([
@@ -2907,7 +2955,7 @@
     });
     // Загружаем общую тему и до авторизации, чтобы посетители не видели осень по умолчанию.
     if(sb) loadSharedSeasonTheme();
-    else { applySeasonTheme('autumn'); document.body.classList.remove('theme-loading'); }
+    else { let cached={};try{cached=JSON.parse(localStorage.getItem('futbolerySeasonSchedule')||'{}');}catch(_){} applySeasonTheme(getActiveSeason(cached)||'autumn'); }
     $('createPollForm')?.addEventListener('submit',createPoll);
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('refreshLoginHistory')?.addEventListener('click',loadLoginHistory);

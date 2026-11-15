@@ -1200,7 +1200,7 @@
     }
     function renderPlayoffBracketVisual(bracket,card,rounds){
       const visibleRounds=(rounds||[]).filter(r=>!r.hidden);
-      const bronzeRound=visibleRounds.find(r=>/3\\s*[-–]?\\s*е\\s*место|третье место|бронз/i.test(String(r.name||'')));
+      const bronzeRound=visibleRounds.find(r=>/3\s*[-–]?\s*е\s*место|третье место|бронз/i.test(String(r.name||'')));
       const mainRounds=visibleRounds.filter(r=>r!==bronzeRound);
       if(!mainRounds.length)return;
       const allMobileRounds=mainRounds.concat(bronzeRound?[bronzeRound]:[]);
@@ -1636,7 +1636,7 @@
 
     function renderBirthdayGreeting(birthDate){
       const banner=$('birthdayGreeting');if(!banner)return;
-      const raw=String(birthDate||'').slice(0,10),match=raw.match(/^\\d{4}-(\\d{2})-(\\d{2})$/),today=new Date();
+      const raw=String(birthDate||'').slice(0,10),match=raw.match(/^\d{4}-(\d{2})-(\d{2})$/),today=new Date();
       const isBirthday=!!match&&Number(match[1])===today.getMonth()+1&&Number(match[2])===today.getDate();
       banner.classList.toggle('visible',isBirthday);banner.setAttribute('aria-hidden',isBirthday?'false':'true');
     }

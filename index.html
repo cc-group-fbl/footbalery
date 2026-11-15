@@ -1438,6 +1438,16 @@
         if(editorDetails)card.appendChild(editorDetails);
         if(tournamentIsAdmin()){
           const actions=document.createElement('div');actions.className='bracket-actions';
+          if(playoffVisual){
+            const stages=document.createElement('div');stages.style.cssText='display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-bottom:8px';
+            rounds.forEach((round,ri)=>{
+              const toggle=document.createElement('button');toggle.type='button';toggle.className='small-btn';
+              toggle.dataset.action=round.hidden?'show-round':'hide-round';toggle.dataset.roundIndex=String(ri);
+              toggle.textContent=(round.hidden?'＋ Включить: ':'− Отключить: ')+(round.name||('Раунд '+(ri+1)));
+              stages.appendChild(toggle);
+            });
+            actions.appendChild(stages);
+          }
           rounds.forEach((round,ri)=>{if(round.hidden){const show=document.createElement('button');show.type='button';show.className='small-btn';show.dataset.action='show-round';show.dataset.roundIndex=String(ri);show.textContent='Показать: '+(round.name||('Раунд '+(ri+1)));actions.appendChild(show);}});
           const addRound=document.createElement('button');addRound.type='button';addRound.className='small-btn';addRound.dataset.action='add-round';addRound.textContent='＋ Добавить раунд';
           if(bracket.phase==='playoff'){const preset=document.createElement('button');preset.type='button';preset.className='small-btn';preset.dataset.action='add-standard-rounds';preset.textContent='＋ Добавить стандартные раунды';actions.appendChild(preset);}
@@ -1578,7 +1588,7 @@
         if(error){const s=card.querySelector('[data-status]');if(s)s.textContent='Ошибка удаления: '+error.message;return;}
         tournamentBrackets=tournamentBrackets.filter(x=>x.id!==bracket.id);renderTournamentBrackets();return;
       }
-      const ri=Number(button.closest('.bracket-round')?.dataset.roundIndex);
+      const ri=Number(button.dataset.roundIndex??button.closest('.bracket-round')?.dataset.roundIndex);
       if(action==='add-round'){rounds.push(blankTournamentRound('Раунд '+(rounds.length+1)));}
       if(action==='add-standard-rounds'){
         const preset=[['1/16',16],['1/8',8],['1/4',4],['Полуфинал',2],['Финал',1],['Матч за 3-е место',1]];
@@ -1598,7 +1608,7 @@
         if(rounds[ri].matches.length===1)rounds[ri].matches[0]={id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''};
         else rounds[ri].matches.splice(mi,1);
       }
-      bracket.bracket_data={rounds};renderTournamentBrackets();
+      bracket.bracket_data={...bracket.bracket_data,rounds};renderTournamentBrackets();
     });
     document.querySelectorAll('[data-tournament]').forEach(button=>button.addEventListener('click',async()=>{
       activeTournamentKey=button.dataset.tournament;await loadTournamentBrackets();

@@ -21,16 +21,19 @@
 <style>
   @font-face {
     font-family: 'Gilroy';
-    src: url('./assets/fonts/Gilroy-Medium.woff2') format('woff2');
+    src: url('./assets/fonts/Gilroy-Medium.ttf') format('truetype');
     font-style: normal;
-    font-weight: 400 600;
+    font-weight: 500;
     font-display: swap;
   }
+  /* EOT is retained for legacy Internet Explorer; modern browsers use the
+     installed system bold face until a WOFF2/TTF Black file is available. */
   @font-face {
     font-family: 'Gilroy';
-    src: url('./assets/fonts/Gilroy-Black.woff2') format('woff2');
+    src: url('./assets/fonts/Gilroy-Black.eot');
+    src: url('./assets/fonts/Gilroy-Black.eot?#iefix') format('embedded-opentype');
     font-style: normal;
-    font-weight: 700 900;
+    font-weight: 900;
     font-display: swap;
   }
   /* Gilroy is the primary typeface; system fonts remain a fallback. */

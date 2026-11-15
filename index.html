@@ -808,7 +808,7 @@
       const fragment=document.createDocumentFragment();
       for(const n of news){
         const item=document.createElement('article');item.className='news-item';item.id=String(n.id);item.dataset.newsId=String(n.id);
-        const title=document.createElement('div');title.className='news-title';title.textContent=n.title;item.appendChild(title);
+        const title=document.createElement('a');title.className='news-title';title.href=SECTION_ROUTES.newsPanel+'#'+encodeURIComponent(n.id);title.style.cssText='display:block;color:inherit;text-decoration:none';title.textContent=n.title;item.appendChild(title);
         const meta=document.createElement('div');meta.className='news-meta';meta.textContent='От: '+(names[n.author_id]||'ФУТБОЛЁРЫ')+' · '+new Date(n.created_at).toLocaleString('ru-RU')+(readSet.has(n.id)?'':' · НОВОЕ');item.appendChild(meta);
         if(n.image_url){const img=document.createElement('img');img.className='news-image';img.src=n.image_url;img.alt='Изображение к новости';img.loading='lazy';img.onerror=()=>img.remove();item.appendChild(img);}
         const body=document.createElement('div');body.className='news-body';body.textContent=n.body;item.appendChild(body);
@@ -830,6 +830,11 @@
         fragment.appendChild(item);
       }
       root.appendChild(fragment);
+      if(window.location.hash){
+        const newsId=decodeURIComponent(window.location.hash.slice(1));
+        const target=document.getElementById(newsId);
+        if(target?.classList.contains('news-item'))setTimeout(()=>target.scrollIntoView({behavior:'smooth',block:'start'}),80);
+      }
       const unreadIds=news.filter(n=>!readSet.has(n.id)).map(n=>n.id);
       if(unreadIds.length){const rows=unreadIds.map(news_id=>({user_id:currentUser.id,news_id}));const {error:readError}=await sb.from('news_reads').upsert(rows,{onConflict:'user_id,news_id'});if(readError)console.warn('Не удалось отметить новости прочитанными:',readError.message);}
       $('newsUnreadBadge').classList.add('hidden');

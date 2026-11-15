@@ -2550,7 +2550,7 @@
       const saved=Array.isArray(sharedStatSettings?.categories)?sharedStatSettings.categories:[];
       return STAT_CATEGORIES.map(def=>{
         const previous=saved.find(c=>c.key===def.key||normalizeHeader(c.column||'')===normalizeHeader(def.column)||normalizeHeader(c.label||'')===normalizeHeader(def.label));
-        return {...def,...(previous||{}),key:def.key,column:previous?.column||def.column,enabled:previous?.enabled===true};
+        return {...def,...(previous||{}),key:def.key,column:previous?.column||def.column,enabled:previous?previous.enabled!==false:true};
       });
     }
     function renderStatSettings(){

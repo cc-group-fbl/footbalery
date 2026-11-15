@@ -21,14 +21,14 @@
 <style>
   @font-face {
     font-family: 'Gilroy';
-    src: url('/assets/fonts/Gilroy-Medium.woff2') format('woff2');
+    src: url('./assets/fonts/Gilroy-Medium.woff2') format('woff2');
     font-style: normal;
     font-weight: 400 600;
     font-display: swap;
   }
   @font-face {
     font-family: 'Gilroy';
-    src: url('/assets/fonts/Gilroy-Black.woff2') format('woff2');
+    src: url('./assets/fonts/Gilroy-Black.woff2') format('woff2');
     font-style: normal;
     font-weight: 700 900;
     font-display: swap;
@@ -946,8 +946,10 @@
           const device=/Android|iPhone|iPad|iPod/i.test(ua)?'Мобильное устройство':(/Windows|Macintosh|Linux/i.test(ua)?'Компьютер':'Устройство');
           const os=/Android/i.test(ua)?'Android':(/iPhone|iPad|iPod/i.test(ua)?'iOS':(/Windows/i.test(ua)?'Windows':(/Mac OS X|Macintosh/i.test(ua)?'macOS':(/Linux/i.test(ua)?'Linux':'Неизвестная ОС'))));
           const browser=/Edg\//i.test(ua)?'Microsoft Edge':(/Firefox\//i.test(ua)?'Firefox':(/CriOS\//i.test(ua)?'Chrome (iOS)':(/Chrome\//i.test(ua)?'Chrome':(/Safari\//i.test(ua)?'Safari':'Другой браузер'))));
-          const {error:loginLogError}=await sb.rpc('log_my_login',{p_device_label:device,p_browser_label:browser,p_os_label:os,p_user_agent:ua});
-          if(loginLogError) console.warn('Не удалось записать вход в историю:',loginLogError);
+          // Login history is auxiliary: do not delay opening the account if this RPC is slow.
+          sb.rpc('log_my_login',{p_device_label:device,p_browser_label:browser,p_os_label:os,p_user_agent:ua})
+            .then(({error:loginLogError})=>{if(loginLogError)console.warn('Не удалось записать вход в историю:',loginLogError);})
+            .catch(logError=>console.warn('Ошибка журнала входов:',logError));
         } catch(logError) { console.warn('Ошибка журнала входов:',logError); }
         await showAccount();
       } catch(err) {
@@ -2739,34 +2741,41 @@
       return starts[0]?.season || null;
     }
     async function loadSharedSeasonTheme() {
-      if(!sb) { document.body.classList.remove('theme-loading'); return; }
-      const [{data:scheduleRow,error:scheduleError},{data:legacyRow}]=await Promise.all([
-        sb.from('site_settings').select('value').eq('key','season_schedule').maybeSingle(),
-        sb.from('site_settings').select('value').eq('key','season_theme').maybeSingle()
-      ]);
-      if(scheduleError) {
-        const cached=localStorage.getItem('futbolerySeasonSchedule');
-        let cachedSchedule={};
-        try { cachedSchedule=JSON.parse(cached||'{}'); } catch(_) {}
-        const cachedActive=getActiveSeason(cachedSchedule);
-        applySeasonTheme(cachedActive || (legacyRow?.value==='winter'?'winter':'autumn'));
+      let cachedSchedule={};
+      try { cachedSchedule=JSON.parse(localStorage.getItem('futbolerySeasonSchedule')||'{}'); } catch(_) {}
+      // Apply the last known theme immediately; never leave the app waiting for Supabase.
+      applySeasonTheme(getActiveSeason(cachedSchedule)||'autumn');
+      try {
+        if(!sb) return;
+        const [scheduleResult,legacyResult]=await Promise.all([
+          sb.from('site_settings').select('value').eq('key','season_schedule').maybeSingle(),
+          sb.from('site_settings').select('value').eq('key','season_theme').maybeSingle()
+        ]);
+        const scheduleError=scheduleResult.error;
+        if(scheduleError) {
+          const legacyTheme=legacyResult.data?.value==='winter'?'winter':(getActiveSeason(cachedSchedule)||'autumn');
+          applySeasonTheme(legacyTheme);
+          const status=$('seasonThemeStatus');
+          if(status && currentProfile?.role==='admin') status.textContent='Не удалось прочитать общее расписание: '+scheduleError.message;
+          return;
+        }
+        let schedule={};
+        try { schedule=JSON.parse(scheduleResult.data?.value||'{}'); } catch(_) {}
+        try { localStorage.setItem('futbolerySeasonSchedule',JSON.stringify(schedule)); } catch(_) {}
+        const active=getActiveSeason(schedule);
+        applySeasonTheme(active || (legacyResult.data?.value==='winter'?'winter':'autumn'));
+        ['spring','summer','autumn','winter'].forEach(season=>{
+          const input=$('season'+season[0].toUpperCase()+season.slice(1)+'Start');
+          if(input) input.value=toLocalDateTimeValue(schedule[season]);
+        });
         const status=$('seasonThemeStatus');
-        if(status && currentProfile?.role==='admin') status.textContent='Не удалось прочитать общее расписание (проверьте разрешение SELECT для посетителей в Supabase): '+scheduleError.message;
+        if(status && currentProfile?.role==='admin' && !active && Object.keys(schedule).length) status.textContent='В расписании пока нет наступившего сезона. Временно используется прежнее оформление.';
+      } catch(error) {
+        console.warn('Не удалось загрузить сезонное оформление:',error);
+        applySeasonTheme(getActiveSeason(cachedSchedule)||'autumn');
+      } finally {
         document.body.classList.remove('theme-loading');
-        return;
       }
-      let schedule={};
-      try { schedule=JSON.parse(scheduleRow?.value||'{}'); } catch(_) {}
-      localStorage.setItem('futbolerySeasonSchedule',JSON.stringify(schedule));
-      const active=getActiveSeason(schedule);
-      applySeasonTheme(active || (legacyRow?.value==='winter'?'winter':'autumn'));
-      ['spring','summer','autumn','winter'].forEach(season=>{
-        const input=$('season'+season[0].toUpperCase()+season.slice(1)+'Start');
-        if(input) input.value=toLocalDateTimeValue(schedule[season]);
-      });
-      const status=$('seasonThemeStatus');
-      if(status && currentProfile?.role==='admin' && !active && Object.keys(schedule).length) status.textContent='В расписании пока нет наступившего сезона. Временно используется прежнее оформление.';
-      document.body.classList.remove('theme-loading');
     }
     $('saveSeasonSchedule')?.addEventListener('click',async()=>{
       if(!sb||!currentUser||currentProfile?.role!=='admin') return;

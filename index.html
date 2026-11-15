@@ -2654,7 +2654,7 @@
         $('cardContent').style.display='block';
         $('playerIdTag').textContent='ID: '+(row[idCol]||'');
         $('playerName').textContent=playerName||'Имя не указано';
-        const nameEnabled=currentUser?.user_metadata?.futbolery_stat_name_enabled;
+        const nameEnabled=sharedStatSettings?.name_enabled;
         $('playerName').style.display=nameEnabled===false?'none':'';
         $('playerCity').textContent=city||'';
         $('statGoals').textContent=goals||'0';$('statMVP').textContent=mvp||'0';

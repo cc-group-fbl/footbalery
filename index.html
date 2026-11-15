@@ -1238,6 +1238,18 @@
     const tournamentIsAdmin=()=>currentProfile?.role==='admin';
     const makeTournamentId=()=>window.crypto?.randomUUID?.()||('m'+Date.now()+Math.random().toString(36).slice(2,8));
     function blankTournamentRound(name){return {id:makeTournamentId(),name:name||'Раунд 1',matches:[{id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}]};}
+    function buildPlayoffRounds(participantCount){
+      const count=Math.max(2,Math.min(32,Number(participantCount)||0));
+      const power=Math.pow(2,Math.floor(Math.log2(count)));
+      const stages=[];
+      const add=(name,matches)=>stages.push({id:makeTournamentId(),name,matches:Array.from({length:matches},()=>({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}))});
+      if(count!==power)add('Предварительный раунд',count-power);
+      const names={2:['Финал'],4:['Полуфинал','Финал'],8:['Четвертьфинал','Полуфинал','Финал'],16:['1/8 финала','Четвертьфинал','Полуфинал','Финал'],32:['1/16 финала','1/8 финала','Четвертьфинал','Полуфинал','Финал']};
+      const rounds=names[power]||names[32];
+      rounds.forEach((name,index)=>add(name,Math.pow(2,rounds.length-index-1)));
+      if(count>=4)add('Матч за 3-е место',1);
+      return stages;
+    }
     function renderTournamentSwitch(){
       document.querySelectorAll('[data-tournament]').forEach(b=>b.classList.toggle('active',b.dataset.tournament===activeTournamentKey));
       $('tournamentStageWrap')?.classList.toggle('hidden',activeTournamentKey!=='one');
@@ -1544,8 +1556,8 @@
       const selectedIds=[...document.querySelectorAll('[data-tournament-participant]:checked')].map(x=>x.value);
       if(isRoundRobin&&selectedIds.length<2){$('tournamentCreateMessage').textContent='Для кругового турнира выбери минимум двух участников.';return;}
       const selectedProfiles=tournamentParticipantProfiles.filter(p=>selectedIds.includes(p.user_id));
-      const playoffTemplate=[['1/16',16],['1/8',8],['1/4',4],['Полуфинал',2],['Финал',1],['Матч за 3-е место',1]];
-      const initialRounds=isRoundRobin?generateRoundRobinRounds(selectedProfiles):activeTournamentPhase==='playoff'?playoffTemplate.map(([name,count])=>{const round=blankTournamentRound(name);round.matches=Array.from({length:count},()=>({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}));return round;}):[blankTournamentRound('Квалификационный раунд')];
+      if(!isRoundRobin&&activeTournamentPhase==='playoff'&&selectedProfiles.length<2){$('tournamentCreateMessage').textContent='Для плей-офф выбери минимум двух участников.';return;}
+      const initialRounds=isRoundRobin?generateRoundRobinRounds(selectedProfiles):activeTournamentPhase==='playoff'?buildPlayoffRounds(selectedProfiles.length):[blankTournamentRound('Квалификационный раунд')];
       const bracketData={rounds:initialRounds,...(activeTournamentKey==='one'&&activeTournamentPhase==='qualification'?{playoffEnabled:oneOnOnePlayoffEnabled()}: {})};
       if(isRoundRobin){bracketData.format='round_robin';bracketData.participants=selectedProfiles.map(p=>({user_id:p.user_id,name:([p.first_name,p.last_name].filter(Boolean).join(' ').trim()||p.username||'Участник')}));}
       const payload={tournament_key:activeTournamentKey,stage:activeTournamentKey==='one'?activeTournamentStage:null,phase:activeTournamentKey==='one'?activeTournamentPhase:null,title,bracket_data:bracketData,created_by:currentUser.id};

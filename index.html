@@ -1451,6 +1451,7 @@
           rounds.forEach((round,ri)=>{if(round.hidden){const show=document.createElement('button');show.type='button';show.className='small-btn';show.dataset.action='show-round';show.dataset.roundIndex=String(ri);show.textContent='Показать: '+(round.name||('Раунд '+(ri+1)));actions.appendChild(show);}});
           const addRound=document.createElement('button');addRound.type='button';addRound.className='small-btn';addRound.dataset.action='add-round';addRound.textContent='＋ Добавить раунд';
           if(bracket.phase==='playoff'){const preset=document.createElement('button');preset.type='button';preset.className='small-btn';preset.dataset.action='add-standard-rounds';preset.textContent='＋ Добавить стандартные раунды';actions.appendChild(preset);}
+          if(playoffVisual){const imageButton=document.createElement('button');imageButton.type='button';imageButton.className='small-btn';imageButton.dataset.action='save-bracket-image';imageButton.textContent='Скачать сетку PNG';actions.appendChild(imageButton);}
           const save=document.createElement('button');save.type='button';save.className='action-btn';save.style.marginTop='0';save.dataset.action='save-bracket';save.textContent='СОХРАНИТЬ ИЗМЕНЕНИЯ';
           const del=document.createElement('button');del.type='button';del.className='small-btn';del.dataset.action='delete-bracket';del.textContent='Удалить сетку';
           actions.append(addRound,save,del);card.appendChild(actions);
@@ -1549,6 +1550,31 @@
       });
       return data;
     }
+    async function saveBracketAsImage(card,bracket){
+      const data=readBracketEditor(card,bracket),rounds=(data.rounds||[]).filter(round=>!round.hidden);
+      if(!rounds.length)throw new Error('Нет включённых раундов.');
+      const colWidth=280,width=rounds.length*colWidth+40,maxMatches=Math.max(1,...rounds.map(round=>(round.matches||[]).length));
+      const height=142+maxMatches*104,canvas=document.createElement('canvas');canvas.width=width*2;canvas.height=height*2;
+      const ctx=canvas.getContext('2d');ctx.scale(2,2);ctx.fillStyle='#080d18';ctx.fillRect(0,0,width,height);
+      ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='900 24px Gilroy,Arial,sans-serif';ctx.fillText(String(bracket.title||'ТУРНИРНАЯ СЕТКА'),width/2,38);
+      ctx.fillStyle='#9aabc4';ctx.font='700 11px Gilroy,Arial,sans-serif';ctx.fillText('СС «ФУТБОЛЁРЫ» · ПЛЕЙ-ОФФ',width/2,60);
+      rounds.forEach((round,ri)=>{
+        const x=20+ri*colWidth;ctx.fillStyle='#f5c518';ctx.font='900 14px Gilroy,Arial,sans-serif';ctx.fillText(String(round.name||('Раунд '+(ri+1))).toUpperCase(),x+colWidth/2,94);
+        (round.matches||[]).forEach((match,mi)=>{
+          const y=112+mi*104;ctx.fillStyle='#151e2d';ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;
+          ctx.fillRect(x+5,y,colWidth-20,82);ctx.strokeRect(x+5,y,colWidth-20,82);
+          ctx.textAlign='left';ctx.fillStyle='#f2f5fb';ctx.font='700 13px Gilroy,Arial,sans-serif';
+          const home=String(match.home||'Ожидает участника'),away=String(match.away||'Ожидает участника');
+          ctx.fillText(home.length>25?home.slice(0,23)+'…':home,x+15,y+27);ctx.fillText(away.length>25?away.slice(0,23)+'…':away,x+15,y+61);
+          ctx.textAlign='right';ctx.fillStyle='#f5c518';ctx.font='900 13px Gilroy,Arial,sans-serif';
+          ctx.fillText(match.homeScore!==''?String(match.homeScore):'—',x+colWidth-25,y+27);ctx.fillText(match.awayScore!==''?String(match.awayScore):'—',x+colWidth-25,y+61);
+        });
+      });
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('Не удалось сформировать PNG.');
+      const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;
+      link.download=(String(bracket.title||'bracket').replace(/[^a-zа-яё0-9_-]+/gi,'_')||'bracket')+'.png';
+      document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+    }
     async function saveTournamentBracket(card,bracket){
       const status=card.querySelector('[data-status]');const button=card.querySelector('[data-action="save-bracket"]');
       const bracketData=readBracketEditor(card,bracket);
@@ -1580,6 +1606,12 @@
       const card=button.closest('[data-bracket-id]');const bracket=tournamentBrackets.find(x=>x.id===card?.dataset.bracketId);if(!bracket)return;
       const action=button.dataset.action;
       if(action==='save-bracket'){await saveTournamentBracket(card,bracket);return;}
+      if(action==='save-bracket-image'){
+        const status=card.querySelector('[data-status]');
+        try{await saveBracketAsImage(card,bracket);if(status)status.textContent='Изображение сетки скачано.';}
+        catch(error){if(status)status.textContent='Ошибка экспорта: '+error.message;}
+        return;
+      }
       bracket.bracket_data=readBracketEditor(card,bracket);
       const rounds=bracket.bracket_data.rounds||[];
       if(action==='delete-bracket'){

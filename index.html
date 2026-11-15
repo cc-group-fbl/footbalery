@@ -830,7 +830,7 @@
           const type=(file.mime_type||'').toLowerCase(),name=(file.file_name||'').toLowerCase();
           const sizeLabel=file.file_size<1024*1024?Math.max(1,Math.round(file.file_size/1024))+' КБ':(file.file_size/1024/1024).toFixed(1)+' МБ';
           const preview=document.createElement('div');preview.style.cssText='display:grid;gap:6px;min-width:0;margin-top:10px';
-          const isImage=type.startsWith('image/')||/\\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(name);
+          const isImage=type.startsWith('image/')||/\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(name);
           const caption=document.createElement('div');caption.style.cssText='font-size:12px;color:var(--muted);overflow-wrap:anywhere';caption.textContent=(isImage?'':'📎 ')+file.file_name+' · '+sizeLabel;preview.appendChild(caption);
           if(isImage){const img=document.createElement('img');img.src=url;img.alt=file.file_name;img.loading='lazy';img.decoding='async';img.style.cssText='display:block;width:100%;max-height:520px;object-fit:contain;border-radius:10px;background:rgba(0,0,0,.12)';preview.appendChild(img);}
           else if(type==='application/pdf'||name.endsWith('.pdf')){const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.className='chat-file';link.textContent='Открыть PDF: '+file.file_name;preview.appendChild(link);}
@@ -1832,7 +1832,7 @@
         let month=0,day=0,match=raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
         if(match){month=Number(match[2]);day=Number(match[3]);}
         else if((match=raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/))){day=Number(match[1]);month=Number(match[2]);}
-        else if(/^\d+(?:\\.\d+)?$/.test(raw)){const serial=Number(raw);if(serial>20000&&serial<80000){const date=new Date(Date.UTC(1899,11,30)+serial*86400000);month=date.getUTCMonth()+1;day=date.getUTCDate();}}
+        else if(/^\d+(?:\.\d+)?$/.test(raw)){const serial=Number(raw);if(serial>20000&&serial<80000){const date=new Date(Date.UTC(1899,11,30)+serial*86400000);month=date.getUTCMonth()+1;day=date.getUTCDate();}}
         const today=new Date();
         const dateValue=month&&day?String(today.getFullYear())+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0'):'';
         renderBirthdayGreeting(dateValue,false);

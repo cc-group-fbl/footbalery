@@ -518,7 +518,7 @@
           <div id="adminMatchesList" style="margin-top:10px"></div>
         </details></div><div class="admin-tab-panel" data-admin-panel="stats" hidden><details class="admin-section" open>
           <summary>📊 Настройка категорий статистики</summary>
-          <p class="muted">По умолчанию доступны все статистические столбцы Google Таблицы. Отметь галочками то, что нужно показывать в карточке игрока.</p>
+          <p class="muted">Общие настройки для всех пользователей. Изменять их может только администратор.</p>
           <label class="candidate"><input type="checkbox" id="statNameEnabled" checked><span style="font-size:13px">Показывать имя игрока</span></label>
           <div id="statsCategorySettings" style="display:grid;gap:10px;margin-top:12px">
             <div class="muted">Загрузка заголовков Google Таблицы…</div>
@@ -1841,7 +1841,9 @@
     async function showAccount() {
       let profile=null,error=null;if(navigator.onLine){const result=await sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team, birth_date').eq('user_id', currentUser.id).maybeSingle();profile=result.data;error=result.error;if(profile)offlineWrite('profile_'+currentUser.id,profile);}else profile=offlineRead('profile_'+currentUser.id);
       if(error||!profile){if(navigator.onLine)await sb.auth.signOut();$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');return setMessage('loginMessage',navigator.onLine?'Для аккаунта не назначена карточка игрока. Обратитесь к администратору.':'Нет сохранённого профиля. Сначала войдите с интернетом на этом устройстве.',true);}
-      currentProfile = profile; renderBirthdayGreeting(profile?.birth_date,false); window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); refreshBirthdayGreeting(profile).catch(error=>console.warn('Проверка поздравления пропущена:',error)); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
+      currentProfile = profile;
+      try{await loadSharedStatSettings();}catch(statError){console.error('Не удалось загрузить общие настройки статистики:',statError);sharedStatSettings=null;sharedStatSettingsLoaded=false;}
+      renderBirthdayGreeting(profile?.birth_date,false); window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); refreshBirthdayGreeting(profile).catch(error=>console.warn('Проверка поздравления пропущена:',error)); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
       const initialPanel=panelFromCurrentPath();
@@ -2531,18 +2533,30 @@
         label:header,aliases:[header],element:null,enabled:true,suffix:'',column:header
       }));
     }
+    let sharedStatSettings=null;
+    let sharedStatSettingsLoaded=false;
+    async function loadSharedStatSettings(){
+      if(!sb||!currentUser)return false;
+      sharedStatSettingsLoaded=false;
+      const {data,error}=await sb.from('statistics_settings')
+        .select('id,categories,name_enabled,updated_at')
+        .eq('id',1).maybeSingle();
+      if(error)throw error;
+      sharedStatSettings=data||{categories:[],name_enabled:true};
+      sharedStatSettingsLoaded=true;
+      return true;
+    }
     function readStatConfig(){
-      const remote=currentUser?.user_metadata?.futbolery_stat_config;
-      const saved=Array.isArray(remote)?remote:[];
+      const saved=Array.isArray(sharedStatSettings?.categories)?sharedStatSettings.categories:[];
       return STAT_CATEGORIES.map(def=>{
         const previous=saved.find(c=>c.key===def.key||normalizeHeader(c.column||'')===normalizeHeader(def.column)||normalizeHeader(c.label||'')===normalizeHeader(def.label));
-        return {...def,...(previous||{}),key:def.key,column:def.column,enabled:previous?.enabled!==false};
+        return {...def,...(previous||{}),key:def.key,column:previous?.column||def.column,enabled:previous?.enabled===true};
       });
     }
     function renderStatSettings(){
       const root=$('statsCategorySettings'); if(!root)return;
       root.replaceChildren();
-      const savedName=currentUser?.user_metadata?.futbolery_stat_name_enabled;
+      const savedName=sharedStatSettings?.name_enabled;
       if($('statNameEnabled'))$('statNameEnabled').checked=savedName!==false;
       STAT_CATEGORIES.forEach(def=>{
         const saved=readStatConfig().find(c=>c.key===def.key)||def;
@@ -2568,6 +2582,7 @@
     }
     async function saveStatSettings(){
       if(!sb||!currentUser){setMessage('statsSettingsMessage','Войдите в аккаунт, чтобы сохранить настройки.',true);return;}
+      if(currentProfile?.role!=='admin'){setMessage('statsSettingsMessage','Изменять общие настройки может только администратор.',true);return;}
       const config=STAT_CATEGORIES.map(def=>{
         const check=document.querySelector(`[data-stat-enabled="${def.key}"]`);
         const select=document.querySelector(`[data-stat-column="${def.key}"]`);
@@ -2576,14 +2591,14 @@
       const nameEnabled=$('statNameEnabled')?.checked!==false;
       const button=$('saveStatsCategorySettings');if(button)button.disabled=true;
       try{
-        const metadata={...(currentUser.user_metadata||{}),futbolery_stat_config:config,futbolery_stat_name_enabled:nameEnabled};
-        const {data,error}=await sb.auth.updateUser({data:metadata});
+        const payload={id:1,categories:config,name_enabled:nameEnabled,updated_by:currentUser.id,updated_at:new Date().toISOString()};
+        const {error}=await sb.from('statistics_settings').upsert(payload,{onConflict:'id'});
         if(error)throw error;
-        if(data?.user)currentUser=data.user;
-        setMessage('statsSettingsMessage','Настройки сохранены в аккаунте. Они не зависят от других аккаунтов на этом устройстве.');
+        sharedStatSettings=payload;sharedStatSettingsLoaded=true;
+        setMessage('statsSettingsMessage','Общие настройки сохранены. Они применяются ко всем пользователям.');
         if(currentProfile?.player_id)await loadPlayerCard(currentProfile.player_id);
       }catch(error){
-        setMessage('statsSettingsMessage','Не удалось сохранить настройки в аккаунте: '+(error.message||'ошибка Supabase'),true);
+        setMessage('statsSettingsMessage','Не удалось сохранить общие настройки: '+(error.message||'ошибка Supabase'),true);
       }finally{if(button)button.disabled=false;}
     }
     function applyStatSettings(row, headers){
@@ -2592,6 +2607,12 @@
       // Старые фиксированные карточки заменяются единым списком колонок из таблицы.
       grid.querySelectorAll('.stat-box').forEach(el=>el.style.display='none');
       grid.querySelectorAll('[data-sheet-stat]').forEach(el=>el.remove());
+      if(!sharedStatSettingsLoaded){
+        grid.querySelectorAll('.stat-box').forEach(el=>el.style.display='none');
+        $('playerCity').style.display='none';
+        $('awardsList').parentElement.style.display='none';
+        return;
+      }
       readStatConfig().forEach(c=>{
         const def=STAT_CATEGORIES.find(d=>d.key===c.key);if(!def)return;
         const idx=headers.findIndex(h=>normalizeHeader(h)===normalizeHeader(def.column||def.label));

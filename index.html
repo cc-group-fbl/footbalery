@@ -126,6 +126,9 @@
   .dashboard-description { display:block; color:#8b99ad; font-size:11px; line-height:1.5; }
   .dashboard-arrow { margin-left:auto; color:#ffd21f; font-size:23px; }
   .section-back { margin-bottom:12px; width:100%; }
+  .news-tabs{display:flex;gap:7px;overflow-x:auto;padding:4px 1px 10px;margin:10px 0 4px;scrollbar-width:thin}
+  .news-tab{flex:0 0 auto;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:9px 12px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:rgba(255,255,255,.045);color:#dbe4f2;font:800 11px 'Gilroy',system-ui,sans-serif}
+  .news-tab.active{color:#07111d;border-color:var(--accent);background:var(--accent-text)}
   .news-item { padding:14px 0; border-top:1px solid rgba(255,255,255,.12); }
   .news-item:first-child { border-top:0; }
   .news-title { font-size:15px; font-weight:900; margin-bottom:7px; overflow-wrap:anywhere; }
@@ -456,6 +459,7 @@
       <button type="button" class="small-btn section-back hidden" id="newsBackButton">← На главный экран</button>
       <section id="newsPanel" class="vote-box hidden">
         <div class="topline"><h2 style="margin:0;text-align:left">НОВОСТИ</h2></div>
+        <div id="newsTabs" class="news-tabs" role="tablist" aria-label="Публикации сообщества"></div>
         <div id="newsFeed" style="margin-top:12px"><div class="muted">Загрузка новостей…</div></div>
         <div id="newsMessage" class="message"></div>
       </section>
@@ -810,8 +814,12 @@
         (signed||[]).forEach(item=>{if(item.path&&item.signedUrl)signedByPath.set(item.path,item.signedUrl);});
       }
       const fragment=document.createDocumentFragment();
+      const tabs=$('newsTabs');if(tabs)tabs.replaceChildren();
+      let activeNewsId=news[0]?.id;
+      if(window.location.hash){const requested=decodeURIComponent(window.location.hash.slice(1));if(news.some(n=>String(n.id)===requested))activeNewsId=news.find(n=>String(n.id)===requested).id;}
       for(const n of news){
-        const item=document.createElement('article');item.className='news-item';item.id=String(n.id);item.dataset.newsId=String(n.id);
+        const item=document.createElement('article');item.className='news-item';item.id=String(n.id);item.dataset.newsId=String(n.id);item.hidden=String(n.id)!==String(activeNewsId);
+        if(tabs){const tab=document.createElement('button');tab.type='button';tab.className='news-tab'+(String(n.id)===String(activeNewsId)?' active':'');tab.setAttribute('role','tab');tab.setAttribute('aria-selected',String(n.id)===String(activeNewsId)?'true':'false');tab.textContent=n.title||'Без названия';tab.title=n.title||'Без названия';tab.dataset.newsId=String(n.id);tab.addEventListener('click',()=>{activeNewsId=n.id;root.querySelectorAll('.news-item').forEach(el=>el.hidden=el.dataset.newsId!==String(n.id));tabs.querySelectorAll('.news-tab').forEach(el=>{const selected=el.dataset.newsId===String(n.id);el.classList.toggle('active',selected);el.setAttribute('aria-selected',selected?'true':'false');});history.replaceState(history.state,'',SECTION_ROUTES.newsPanel+'#'+encodeURIComponent(n.id));});tabs.appendChild(tab);}
         const title=document.createElement('a');title.className='news-title';title.href=SECTION_ROUTES.newsPanel+'#'+encodeURIComponent(n.id);title.style.cssText='display:block;color:inherit;text-decoration:none';title.textContent=n.title;item.appendChild(title);
         const meta=document.createElement('div');meta.className='news-meta';meta.textContent='От: '+(names[n.author_id]||'ФУТБОЛЁРЫ')+' · '+new Date(n.created_at).toLocaleString('ru-RU')+(readSet.has(n.id)?'':' · НОВОЕ');item.appendChild(meta);
         if(n.image_url){const img=document.createElement('img');img.className='news-image';img.src=n.image_url;img.alt='Изображение к новости';img.loading='lazy';img.onerror=()=>img.remove();item.appendChild(img);}
@@ -834,11 +842,7 @@
         fragment.appendChild(item);
       }
       root.appendChild(fragment);
-      if(window.location.hash){
-        const newsId=decodeURIComponent(window.location.hash.slice(1));
-        const target=document.getElementById(newsId);
-        if(target?.classList.contains('news-item'))setTimeout(()=>target.scrollIntoView({behavior:'smooth',block:'start'}),80);
-      }
+      if(activeNewsId){const target=document.getElementById(String(activeNewsId));if(target?.classList.contains('news-item'))target.scrollIntoView({block:'nearest'});}
       const unreadIds=news.filter(n=>!readSet.has(n.id)).map(n=>n.id);
       if(unreadIds.length){const rows=unreadIds.map(news_id=>({user_id:currentUser.id,news_id}));const {error:readError}=await sb.from('news_reads').upsert(rows,{onConflict:'user_id,news_id'});if(readError)console.warn('Не удалось отметить новости прочитанными:',readError.message);}
       $('newsUnreadBadge').classList.add('hidden');
@@ -1809,14 +1813,30 @@
       banner.style.display=isBirthday?'block':'none';
     }
     async function refreshBirthdayGreeting(profile){
-      renderBirthdayGreeting(profile?.birth_date,false);
-      if(!currentUser?.id||!navigator.onLine||!sb)return;
+      renderBirthdayGreeting('',false);
+      const playerId=String(profile?.player_id||'').trim();
+      if(!playerId)return;
       try{
-        const {data,error}=await sb.rpc('get_today_birthdays');
-        if(error)throw error;
-        const confirmed=Array.isArray(data)&&data.some(row=>String(row.user_id)===String(currentUser.id));
-        renderBirthdayGreeting(profile?.birth_date,confirmed);
-      }catch(error){console.warn('Не удалось проверить список именинников:',error?.message||error);}
+        let csvText='';
+        if(navigator.onLine){const response=await fetch(GOOGLE_SHEET_URL,{cache:'no-store'});if(!response.ok)throw new Error('Не удалось прочитать Google Таблицу');csvText=await response.text();offlineWrite('player_csv',csvText);}
+        else csvText=offlineRead('player_csv')||'';
+        if(!csvText)return;
+        const rows=parseCSV(csvText);if(rows.length<2)return;
+        const headers=rows[0].map(normalizeHeader);
+        const idIndex=headers.findIndex(h=>['id','player id','id игрока','идентификатор','код игрока'].includes(h));
+        const birthIndex=headers.findIndex(h=>h==='дата рождения');
+        if(idIndex<0||birthIndex<0){console.warn('В статистике не найден столбец ID или «Дата Рождения».');return;}
+        const row=rows.slice(1).find(r=>String(r[idIndex]||'').trim().toLowerCase()===playerId.toLowerCase());
+        if(!row)return;
+        const raw=String(row[birthIndex]||'').trim();
+        let month=0,day=0,match=raw.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
+        if(match){month=Number(match[2]);day=Number(match[3]);}
+        else if((match=raw.match(/^(\\d{1,2})[./-](\\d{1,2})[./-](\\d{4})$/))){day=Number(match[1]);month=Number(match[2]);}
+        else if(/^\\d+(?:\\.\\d+)?$/.test(raw)){const serial=Number(raw);if(serial>20000&&serial<80000){const date=new Date(Date.UTC(1899,11,30)+serial*86400000);month=date.getUTCMonth()+1;day=date.getUTCDate();}}
+        const today=new Date();
+        const dateValue=month&&day?String(today.getFullYear())+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0'):'';
+        renderBirthdayGreeting(dateValue,false);
+      }catch(error){console.warn('Не удалось получить дату рождения из статистики:',error?.message||error);}
     }
     async function showAccount() {
       let profile=null,error=null;if(navigator.onLine){const result=await sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team, birth_date').eq('user_id', currentUser.id).maybeSingle();profile=result.data;error=result.error;if(profile)offlineWrite('profile_'+currentUser.id,profile);}else profile=offlineRead('profile_'+currentUser.id);
@@ -2505,22 +2525,25 @@
     let sheetHeaders = [];
     let STAT_CATEGORIES = DEFAULT_STAT_CATEGORIES.slice();
     function buildStatCategories(){
-      // Каждая колонка таблицы получает собственный переключатель в панели администратора.
-      STAT_CATEGORIES=sheetHeaders.map((header,index)=>({
-        key:'sheet_'+index,label:header,aliases:[header],element:null,enabled:true,suffix:'',column:header
+      // Стабильные ключи по названию столбца не ломаются при перестановке колонок в Google Таблице.
+      STAT_CATEGORIES=sheetHeaders.map(header=>({
+        key:'sheet_'+normalizeHeader(header).replace(/[^a-z0-9а-я]+/gi,'_').replace(/^_+|_+$/g,''),
+        label:header,aliases:[header],element:null,enabled:true,suffix:'',column:header
       }));
     }
     function readStatConfig(){
       const remote=currentUser?.user_metadata?.futbolery_stat_config;
-      if(Array.isArray(remote)) return STAT_CATEGORIES.map(def=>({...def,...(remote.find(c=>c.key===def.key)||{}),column:(remote.find(c=>c.key===def.key)||{}).column||''}));
-      try { const parsed=JSON.parse(localStorage.getItem('futboleryStatConfig')||'null'); if(Array.isArray(parsed)) return STAT_CATEGORIES.map(def=>({...def,...(parsed.find(c=>c.key===def.key)||{}),column:(parsed.find(c=>c.key===def.key)||{}).column||''})); } catch(e){}
-      return STAT_CATEGORIES.map(c=>({...c, column:''}));
+      const saved=Array.isArray(remote)?remote:[];
+      return STAT_CATEGORIES.map(def=>{
+        const previous=saved.find(c=>c.key===def.key||normalizeHeader(c.column||'')===normalizeHeader(def.column)||normalizeHeader(c.label||'')===normalizeHeader(def.label));
+        return {...def,...(previous||{}),key:def.key,column:def.column,enabled:previous?.enabled!==false};
+      });
     }
     function renderStatSettings(){
       const root=$('statsCategorySettings'); if(!root)return;
       root.replaceChildren();
       const savedName=currentUser?.user_metadata?.futbolery_stat_name_enabled;
-      if($('statNameEnabled'))$('statNameEnabled').checked=savedName===undefined?localStorage.getItem('futboleryStatNameEnabled')!=='false':savedName!==false;
+      if($('statNameEnabled'))$('statNameEnabled').checked=savedName!==false;
       STAT_CATEGORIES.forEach(def=>{
         const saved=readStatConfig().find(c=>c.key===def.key)||def;
         const row=document.createElement('div');row.className='stats-setting-row';
@@ -2557,9 +2580,7 @@
         const {data,error}=await sb.auth.updateUser({data:metadata});
         if(error)throw error;
         if(data?.user)currentUser=data.user;
-        localStorage.setItem('futboleryStatConfig',JSON.stringify(config));
-        localStorage.setItem('futboleryStatNameEnabled',nameEnabled?'true':'false');
-        setMessage('statsSettingsMessage','Настройки сохранены в аккаунте. Они будут доступны на других устройствах при входе в этот аккаунт.');
+        setMessage('statsSettingsMessage','Настройки сохранены в аккаунте. Они не зависят от других аккаунтов на этом устройстве.');
         if(currentProfile?.player_id)await loadPlayerCard(currentProfile.player_id);
       }catch(error){
         setMessage('statsSettingsMessage','Не удалось сохранить настройки в аккаунте: '+(error.message||'ошибка Supabase'),true);
@@ -2613,7 +2634,7 @@
         $('playerIdTag').textContent='ID: '+(row[idCol]||'');
         $('playerName').textContent=playerName||'Имя не указано';
         const nameEnabled=currentUser?.user_metadata?.futbolery_stat_name_enabled;
-        $('playerName').style.display=(nameEnabled===undefined?localStorage.getItem('futboleryStatNameEnabled')==='false':nameEnabled===false)?'none':'';
+        $('playerName').style.display=nameEnabled===false?'none':'';
         $('playerCity').textContent=city||'';
         $('statGoals').textContent=goals||'0';$('statMVP').textContent=mvp||'0';
         $('statSHB').textContent=shb||'0';$('statJK').textContent=yellow||'0';

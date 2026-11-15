@@ -1171,7 +1171,7 @@
     }
     function renderPlayoffBracketVisual(bracket,card,rounds){
       const visibleRounds=(rounds||[]).filter(r=>!r.hidden);
-      const bronzeRound=visibleRounds.find(r=>/3\s*[-–]?\\s*е\\s*место|третье место|бронз/i.test(String(r.name||'')));
+      const bronzeRound=visibleRounds.find(r=>/3\s*[-–]?\s*е\s*место|третье место|бронз/i.test(String(r.name||'')));
       const mainRounds=visibleRounds.filter(r=>r!==bronzeRound);
       if(!mainRounds.length)return;
       const visual=document.createElement('section');visual.className='playoff-visual';

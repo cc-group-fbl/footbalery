@@ -45,7 +45,8 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body.theme-loading { visibility:hidden; }
+  /* Never hide the whole app while the shared seasonal theme is loading. */
+  body.theme-loading { visibility:visible; }
   body {
     font-family: 'Gilroy', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: var(--bg-dark);

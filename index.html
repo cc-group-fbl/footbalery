@@ -690,7 +690,7 @@
     }
     function showSection(sectionId,updateUrl=true) {
       if(updateUrl && SECTION_ROUTES[sectionId]){
-        const target=SECTION_ROUTES[sectionId]+(sectionId==='newsPanel'?'#новости':'');
+        const target=SECTION_ROUTES[sectionId];
         const current=window.location.pathname+window.location.hash;
         if(current!==target) history.pushState({sectionId},'',target);
       }
@@ -807,7 +807,7 @@
       }
       const fragment=document.createDocumentFragment();
       for(const n of news){
-        const item=document.createElement('article');item.className='news-item';
+        const item=document.createElement('article');item.className='news-item';item.id=String(n.id);item.dataset.newsId=String(n.id);
         const title=document.createElement('div');title.className='news-title';title.textContent=n.title;item.appendChild(title);
         const meta=document.createElement('div');meta.className='news-meta';meta.textContent='От: '+(names[n.author_id]||'ФУТБОЛЁРЫ')+' · '+new Date(n.created_at).toLocaleString('ru-RU')+(readSet.has(n.id)?'':' · НОВОЕ');item.appendChild(meta);
         if(n.image_url){const img=document.createElement('img');img.className='news-image';img.src=n.image_url;img.alt='Изображение к новости';img.loading='lazy';img.onerror=()=>img.remove();item.appendChild(img);}

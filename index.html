@@ -434,7 +434,7 @@
             <label class="muted" for="tournamentBracketTitle">Название сетки</label>
             <input id="tournamentBracketTitle" class="field" maxlength="120" placeholder="Например, Основная сетка" required>
             <label class="muted" style="display:flex;gap:9px;align-items:center;margin:12px 0"><input id="tournamentRoundRobin" type="checkbox" style="width:18px;height:18px;accent-color:var(--gold)"> Создать по круговой системе</label>
-            <div class="muted" style="margin:0 0 8px">Выбери участников — каждый сыграет с каждым по одному разу.</div>
+            <div class="muted" style="margin:0 0 8px">Выбери участников турнира. Для плей-офф число участников автоматически определит нужные раунды; пары можно будет отредактировать в сетке.</div>
             <div id="tournamentParticipantsList" style="max-height:260px;overflow:auto;padding:8px;border:1px solid var(--border-color);border-radius:10px;margin-bottom:12px"><div class="muted">Загрузка участников…</div></div>
             <button type="submit" class="action-btn">СОЗДАТЬ СЕТКУ</button>
           </form>
@@ -1598,6 +1598,7 @@
       if(isRoundRobin&&selectedIds.length<2){$('tournamentCreateMessage').textContent='Для кругового турнира выбери минимум двух участников.';return;}
       const selectedProfiles=tournamentParticipantProfiles.filter(p=>selectedIds.includes(p.user_id));
       if(!isRoundRobin&&activeTournamentPhase==='playoff'&&selectedProfiles.length<2){$('tournamentCreateMessage').textContent='Для плей-офф выбери минимум двух участников.';return;}
+      if(!isRoundRobin&&activeTournamentPhase==='playoff'&&selectedProfiles.length>32){$('tournamentCreateMessage').textContent='Для этой сетки можно выбрать не более 32 участников.';return;}
       const initialRounds=isRoundRobin?generateRoundRobinRounds(selectedProfiles):activeTournamentPhase==='playoff'?buildPlayoffRounds(selectedProfiles.length):[blankTournamentRound('Квалификационный раунд')];
       const bracketData={rounds:initialRounds,...(activeTournamentKey==='one'&&activeTournamentPhase==='qualification'?{playoffEnabled:oneOnOnePlayoffEnabled()}: {})};
       if(isRoundRobin){bracketData.format='round_robin';bracketData.participants=selectedProfiles.map(p=>({user_id:p.user_id,name:([p.first_name,p.last_name].filter(Boolean).join(' ').trim()||p.username||'Участник')}));}

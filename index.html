@@ -1453,7 +1453,12 @@
       if(action==='add-round'){rounds.push(blankTournamentRound('Раунд '+(rounds.length+1)));}
       if(action==='add-standard-rounds'){
         const preset=[['1/16',16],['1/8',8],['1/4',4],['Полуфинал',2],['Финал',1],['Матч за 3-е место',1]];
-        preset.forEach(([name,count])=>{if(rounds.some(r=>String(r.name||'').toLowerCase()===name.toLowerCase()))return;const round=blankTournamentRound(name);round.matches=Array.from({length:count},()=>({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}));rounds.push(round);});
+        preset.forEach(([name,count])=>{
+          let round=rounds.find(r=>String(r.name||'').trim().toLowerCase()===name.toLowerCase());
+          if(!round){round=blankTournamentRound(name);round.matches=[];rounds.push(round);}
+          round.matches=round.matches||[];
+          while(round.matches.length<count)round.matches.push({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''});
+        });
       }
       if(action==='hide-round'&&rounds[ri])rounds[ri].hidden=true;
       if(action==='show-round'){const showIndex=Number(button.dataset.roundIndex);if(rounds[showIndex])rounds[showIndex].hidden=false;}

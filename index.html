@@ -3,6 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+  // Restore a deep link after static hosts (for example GitHub Pages) serve 404.html.
+  (() => {
+    try {
+      const params=new URLSearchParams(window.location.search);
+      const route=params.get('__route');
+      if(route && route.startsWith('/')){
+        params.delete('__route');
+        const query=params.toString();
+        history.replaceState({restoredRoute:true},'',route+(query?'?'+query:''));
+      }
+    } catch(error) { console.warn('Не удалось восстановить адрес раздела:',error); }
+  })();
+</script>
 <title>ИССД «Футболёры»</title>
 <style>
   /* System fonts keep first paint fast on mobile and in the installed APK. */

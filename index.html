@@ -685,7 +685,7 @@
     };
     const ROUTE_SECTIONS = Object.fromEntries(Object.entries(SECTION_ROUTES).map(([panel,path])=>[path,panel]));
     function panelFromCurrentPath(){
-      const path=window.location.pathname.replace(/\\/+$/,'/')||'/';
+      const path=window.location.pathname.replace(/\/+$/,'/')||'/';
       return ROUTE_SECTIONS[path]||'homeScreen';
     }
     function showSection(sectionId,updateUrl=true) {

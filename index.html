@@ -210,6 +210,26 @@
   .bracket-view-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;padding:10px;margin:7px 0;border-radius:9px;background:rgba(255,255,255,.045);font-size:12px}
   .bracket-view-match span:last-child{text-align:right}
   .bracket-view-score{font-family:'JetBrains Mono',monospace;font-weight:900;color:var(--accent-text);white-space:nowrap}
+  .playoff-visual{margin:12px 0 16px}
+  .playoff-visual-title{font-size:12px;font-weight:900;margin:0 0 10px;color:var(--accent-text);letter-spacing:.4px}
+  .playoff-visual-scroll{overflow-x:auto;padding:4px 2px 14px;overscroll-behavior-x:contain}
+  .playoff-grid{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(190px,220px);gap:20px;min-width:max-content;align-items:stretch}
+  .playoff-round-column{display:grid;gap:8px;position:relative;align-items:center}
+  .playoff-round-heading{font-size:11px;font-weight:900;text-align:center;color:var(--accent-text);padding:8px 6px;border:1px solid var(--border-color);border-radius:9px;background:rgba(255,255,255,.045)}
+  .playoff-match-card{position:relative;align-self:center;min-width:0;padding:8px;border:1px solid var(--border-color);border-radius:11px;background:linear-gradient(145deg,rgba(28,37,52,.96),rgba(10,15,24,.96));box-shadow:0 6px 16px rgba(0,0,0,.2)}
+  .playoff-match-card:not(.playoff-last-round)::after{content:"";position:absolute;left:100%;top:50%;width:20px;border-top:1px solid var(--accent);opacity:.65}
+  .playoff-team-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:29px;padding:5px 6px;border-radius:6px;font-size:11px}
+  .playoff-team-row+.playoff-team-row{border-top:1px solid rgba(255,255,255,.1)}
+  .playoff-team-name{min-width:0;overflow-wrap:anywhere;font-weight:700}
+  .playoff-team-score{flex:0 0 auto;min-width:18px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:900;color:var(--accent-text)}
+  .playoff-team-row.is-winner{background:rgba(0,210,130,.11);color:#b9ffe0}
+  .playoff-team-row.is-winner .playoff-team-score{color:#8dffc8}
+  .playoff-match-meta{font-size:9px;color:#8492a6;text-align:center;margin-top:5px}
+  .playoff-bronze{max-width:460px;margin:12px auto 0}
+  .playoff-bronze .playoff-match-card::after{display:none}
+  .bracket-editor-details{margin-top:14px;border-top:1px solid var(--border-color);padding-top:10px}
+  .bracket-editor-details>summary{cursor:pointer;font-size:11px;font-weight:900;color:var(--accent-text);padding:8px 2px}
+  @media(max-width:420px){.playoff-grid{grid-auto-columns:190px;gap:16px}.playoff-team-row{font-size:10px}}
   @media(max-width:360px){.bracket-match{grid-template-columns:minmax(0,1fr) 88px minmax(0,1fr);gap:4px}.bracket-team input,.bracket-score{font-size:10px}}
 
 
@@ -1149,6 +1169,65 @@
       }
       return rounds;
     }
+    function renderPlayoffBracketVisual(bracket,card,rounds){
+      const visibleRounds=(rounds||[]).filter(r=>!r.hidden);
+      const bronzeRound=visibleRounds.find(r=>/3\\s*[-–]?\\s*е\\s*место|третье место|бронз/i.test(String(r.name||'')));
+      const mainRounds=visibleRounds.filter(r=>r!==bronzeRound);
+      if(!mainRounds.length)return;
+      const visual=document.createElement('section');visual.className='playoff-visual';
+      const title=document.createElement('div');title.className='playoff-visual-title';title.textContent='СЕТКА ПЛЕЙ-ОФФ';visual.appendChild(title);
+      const scroll=document.createElement('div');scroll.className='playoff-visual-scroll';
+      const grid=document.createElement('div');grid.className='playoff-grid';
+      const firstCount=Math.max(1,(mainRounds[0].matches||[]).length);
+      const totalRows=Math.max(2,firstCount*2);
+      mainRounds.forEach((round,roundIndex)=>{
+        const column=document.createElement('div');column.className='playoff-round-column';
+        column.style.gridTemplateRows='auto repeat('+totalRows+', minmax(34px, auto))';
+        const heading=document.createElement('div');heading.className='playoff-round-heading';heading.textContent=round.name||('Раунд '+(roundIndex+1));column.appendChild(heading);
+        (round.matches||[]).forEach(match=>{
+          const scheduleResult=oneOnOneScheduleResult(match);
+          const shown=scheduleResult?.result?{...match,homeScore:String(scheduleResult.homeScore),awayScore:String(scheduleResult.awayScore),winner:scheduleResult.winner}:match;
+          let winner=shown.winner||'';
+          if(!winner&&shown.homeScore!==''&&shown.awayScore!==''&&Number.isFinite(Number(shown.homeScore))&&Number.isFinite(Number(shown.awayScore))&&Number(shown.homeScore)!==Number(shown.awayScore))winner=Number(shown.homeScore)>Number(shown.awayScore)?'home':'away';
+          const node=document.createElement('div');node.className='playoff-match-card'+(roundIndex===mainRounds.length-1?' playoff-last-round':'');
+          node.style.gridRow='span '+Math.min(totalRows,2*Math.pow(2,roundIndex));
+          const addTeam=(side,label,score)=>{
+            const row=document.createElement('div');row.className='playoff-team-row'+(winner===side?' is-winner':'');
+            const name=document.createElement('span');name.className='playoff-team-name';name.textContent=label||'Ожидает участника';
+            const points=document.createElement('span');points.className='playoff-team-score';points.textContent=score!==''&&score!==null&&score!==undefined?String(score):'—';
+            row.append(name,points);node.appendChild(row);
+          };
+          addTeam('home',match.home,shown.homeScore);
+          addTeam('away',match.away,shown.awayScore);
+          const meta=document.createElement('div');meta.className='playoff-match-meta';
+          meta.textContent=scheduleResult?.result?'Результат из расписания':(winner?'Матч завершён':'Матч не сыгран');
+          node.appendChild(meta);column.appendChild(node);
+        });
+        grid.appendChild(column);
+      });
+      scroll.appendChild(grid);visual.appendChild(scroll);
+      if(bronzeRound){
+        const bronze=document.createElement('div');bronze.className='playoff-bronze';
+        const bronzeTitle=document.createElement('div');bronzeTitle.className='playoff-round-heading';bronzeTitle.textContent=bronzeRound.name||'Матч за 3-е место';bronze.appendChild(bronzeTitle);
+        const match=(bronzeRound.matches||[])[0];
+        if(match){
+          const scheduleResult=oneOnOneScheduleResult(match);
+          const shown=scheduleResult?.result?{...match,homeScore:String(scheduleResult.homeScore),awayScore:String(scheduleResult.awayScore),winner:scheduleResult.winner}:match;
+          let winner=shown.winner||'';
+          if(!winner&&shown.homeScore!==''&&shown.awayScore!==''&&Number.isFinite(Number(shown.homeScore))&&Number.isFinite(Number(shown.awayScore))&&Number(shown.homeScore)!==Number(shown.awayScore))winner=Number(shown.homeScore)>Number(shown.awayScore)?'home':'away';
+          const node=document.createElement('div');node.className='playoff-match-card';
+          [['home',match.home,shown.homeScore],['away',match.away,shown.awayScore]].forEach(([side,name,score])=>{
+            const row=document.createElement('div');row.className='playoff-team-row'+(winner===side?' is-winner':'');
+            const team=document.createElement('span');team.className='playoff-team-name';team.textContent=name||'Ожидает участника';
+            const points=document.createElement('span');points.className='playoff-team-score';points.textContent=score!==''&&score!==null&&score!==undefined?String(score):'—';
+            row.append(team,points);node.appendChild(row);
+          });
+          bronze.appendChild(node);
+        }
+        visual.appendChild(bronze);
+      }
+      card.appendChild(visual);
+    }
     function renderTournamentBrackets(){
       const root=$('tournamentBracketsList');if(!root)return;
       root.replaceChildren();
@@ -1161,8 +1240,13 @@
           const heading=document.createElement('div');heading.style.cssText='font-weight:900;font-size:15px;margin-bottom:8px';heading.textContent=bracket.title;card.appendChild(heading);
         }
         const rounds=Array.isArray(bracket.bracket_data?.rounds)?bracket.bracket_data.rounds:[];
+        const playoffVisual=bracket.phase==='playoff'&&bracket.bracket_data?.format!=='round_robin';
+        if(playoffVisual)renderPlayoffBracketVisual(bracket,card,rounds);
+        const editorDetails=playoffVisual&&tournamentIsAdmin()?document.createElement('details'):null;
+        if(editorDetails){editorDetails.className='bracket-editor-details';const summary=document.createElement('summary');summary.textContent='РЕДАКТИРОВАТЬ УЧАСТНИКОВ И РЕЗУЛЬТАТЫ';editorDetails.appendChild(summary);}
         rounds.forEach((round,ri)=>{
           if(round.hidden) return;
+          if(playoffVisual&&!tournamentIsAdmin()) return;
           const section=document.createElement('section');section.className='bracket-round';section.dataset.roundIndex=String(ri);
           const roundTitle=document.createElement('div');roundTitle.style.cssText='font-size:12px;font-weight:900;margin-bottom:8px';roundTitle.textContent=round.name||('Раунд '+(ri+1));section.appendChild(roundTitle);
           (round.matches||[]).forEach((match,mi)=>{
@@ -1216,8 +1300,9 @@
             const hideRound=document.createElement('button');hideRound.type='button';hideRound.className='small-btn';hideRound.dataset.action='hide-round';hideRound.textContent='Скрыть раунд';section.appendChild(hideRound);
             const removeRound=document.createElement('button');removeRound.type='button';removeRound.className='small-btn';removeRound.dataset.action='remove-round';removeRound.textContent='Удалить раунд';section.appendChild(removeRound);
           }
-          card.appendChild(section);
+          (editorDetails||card).appendChild(section);
         });
+        if(editorDetails)card.appendChild(editorDetails);
         if(tournamentIsAdmin()){
           const actions=document.createElement('div');actions.className='bracket-actions';
           rounds.forEach((round,ri)=>{if(round.hidden){const show=document.createElement('button');show.type='button';show.className='small-btn';show.dataset.action='show-round';show.dataset.roundIndex=String(ri);show.textContent='Показать: '+(round.name||('Раунд '+(ri+1)));actions.appendChild(show);}});
@@ -1342,7 +1427,7 @@
       const selectedIds=[...document.querySelectorAll('[data-tournament-participant]:checked')].map(x=>x.value);
       if(isRoundRobin&&selectedIds.length<2){$('tournamentCreateMessage').textContent='Для кругового турнира выбери минимум двух участников.';return;}
       const selectedProfiles=tournamentParticipantProfiles.filter(p=>selectedIds.includes(p.user_id));
-      const playoffTemplate=[['1/16',8],['1/8',4],['1/4',2],['Полуфинал',2],['Финал',1],['Матч за 3-е место',1]];
+      const playoffTemplate=[['1/16',16],['1/8',8],['1/4',4],['Полуфинал',2],['Финал',1],['Матч за 3-е место',1]];
       const initialRounds=isRoundRobin?generateRoundRobinRounds(selectedProfiles):activeTournamentPhase==='playoff'?playoffTemplate.map(([name,count])=>{const round=blankTournamentRound(name);round.matches=Array.from({length:count},()=>({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}));return round;}):[blankTournamentRound('Квалификационный раунд')];
       const bracketData={rounds:initialRounds,...(activeTournamentKey==='one'&&activeTournamentPhase==='qualification'?{playoffEnabled:oneOnOnePlayoffEnabled()}: {})};
       if(isRoundRobin){bracketData.format='round_robin';bracketData.participants=selectedProfiles.map(p=>({user_id:p.user_id,name:([p.first_name,p.last_name].filter(Boolean).join(' ').trim()||p.username||'Участник')}));}
@@ -1367,7 +1452,7 @@
       const ri=Number(button.closest('.bracket-round')?.dataset.roundIndex);
       if(action==='add-round'){rounds.push(blankTournamentRound('Раунд '+(rounds.length+1)));}
       if(action==='add-standard-rounds'){
-        const preset=[['1/16',8],['1/8',4],['1/4',2],['Полуфинал',2],['Финал',1],['Матч за 3-е место',1]];
+        const preset=[['1/16',16],['1/8',8],['1/4',4],['Полуфинал',2],['Финал',1],['Матч за 3-е место',1]];
         preset.forEach(([name,count])=>{if(rounds.some(r=>String(r.name||'').toLowerCase()===name.toLowerCase()))return;const round=blankTournamentRound(name);round.matches=Array.from({length:count},()=>({id:makeTournamentId(),home:'',away:'',homeScore:'',awayScore:'',winner:''}));rounds.push(round);});
       }
       if(action==='hide-round'&&rounds[ri])rounds[ri].hidden=true;

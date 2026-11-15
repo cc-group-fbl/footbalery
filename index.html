@@ -1804,6 +1804,7 @@
       next.addEventListener('click',()=>selectGoal(goals.findIndex(goal=>String(goal.id)===activeFinanceGoalId)+1));
       nav.append(previous,counter,next);goalsEl.prepend(nav);selectGoal(goals.findIndex(goal=>String(goal.id)===activeFinanceGoalId));
     }
+    window.addEventListener('hashchange',()=>{if(!currentUser)return;const panel=panelFromCurrentPath();if(panel==='financePanel')loadFinance();else if(panel==='newsPanel')loadNews();});
     $('saveFinanceBalance')?.addEventListener('click',async()=>{
       if(currentProfile?.role!=='admin')return;
       const amount=Number($('financeBalanceInput')?.value);

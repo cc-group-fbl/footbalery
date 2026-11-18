@@ -332,7 +332,8 @@
         Запомнить меня на этом устройстве
       </label>
       <button id="loginButton" class="action-btn" type="button">ВОЙТИ</button>
-      <div class="muted">Вход по логину и паролю. Учётные записи выдаёт администратор.</div>
+      <button id="biometricLoginButton" class="action-btn hidden" type="button" style="background:linear-gradient(90deg,#147de0,#48c8ff);color:#fff">☝️ ВОЙТИ ПО ОТПЕЧАТКУ</button>
+      <div class="muted">Вход по логину и паролю. После первого входа можно включить быстрый вход по отпечатку пальца.</div>
       <div id="loginMessage" class="message"></div>
     </section>
 
@@ -649,7 +650,13 @@
           <div id="chatSendMessage" class="message"></div>
         </div>
       </section>
-      <div class="account-logout-row"><button id="logoutButton" type="button" class="small-btn">Выйти из аккаунта</button></div>
+      <div class="account-logout-row" style="flex-direction:column;align-items:center;gap:9px">
+        <div id="biometricSettingsRow" class="hidden" style="width:100%;text-align:center">
+          <button id="biometricSettingsButton" type="button" class="small-btn" style="width:100%;padding:11px">☝️ Настроить вход по отпечатку</button>
+          <div id="biometricSettingsStatus" class="muted">Быстрый вход защищён биометрией этого устройства.</div>
+        </div>
+        <button id="logoutButton" type="button" class="small-btn">Выйти из аккаунта</button>
+      </div>
     </section>
   </div>
 
@@ -974,11 +981,11 @@
         setMessage('createNewsMessage','Ошибка: '+(err.message||'не удалось сохранить новость')+'. Если ошибка связана с таблицей или хранилищем, сначала выполните SQL-файл миграции.',true);
       } finally {btn.disabled=false;}
     }
-    async function signIn() {
+    async function signIn(credentialsOverride=null) {
       const button=$('loginButton');
       try {
-        const username = $('usernameInput')?.value.trim() || '';
-        const password = $('passwordInput')?.value || '';
+        const username = credentialsOverride?.username || $('usernameInput')?.value.trim() || '';
+        const password = credentialsOverride?.password || $('passwordInput')?.value || '';
         if (!username || !password) return setMessage('loginMessage','Введите логин и пароль.',true);
         if (!sb) return setMessage('loginMessage', !window.supabase ? 'Не загрузилась библиотека Supabase. Проверьте интернет и обновите страницу.' : 'Подключение к Supabase не инициализировано. Обновите страницу.', true);
         if(button) button.disabled = true;
@@ -987,6 +994,24 @@
         if (error) throw error;
         try { localStorage.setItem('futbolery_remember_session', $('rememberMeCheckbox')?.checked ? 'true' : 'false'); } catch (_) {}
         currentUser = data.user;offlineWrite('user_snapshot',currentUser);
+        if (window.Capacitor?.isNativePlatform?.() && !credentialsOverride?.fromBiometric) {
+          try {
+            const api = await getNativeBiometric();
+            const saved = api ? await hasBiometricCredentials() : false;
+            if (api && saved) {
+              // Обновляем сохранённый пароль, если пользователь сменил его и вошёл вручную.
+              await api.setCredentials({ username, password, server: BIOMETRIC_SERVER });
+            } else if (api && !localStorage.getItem('futbolery_biometric_declined') && confirm('Включить быстрый вход в «ФУТБОЛЁРЫ» по отпечатку пальца на этом устройстве?')) {
+              await saveBiometricCredentials(username, password);
+              setMessage('loginMessage','Быстрый вход по отпечатку включён.');
+            } else if (api) {
+              try { localStorage.setItem('futbolery_biometric_declined','true'); } catch (_) {}
+            }
+          } catch (biometricError) {
+            console.warn('Не удалось настроить быстрый вход:', biometricError);
+            setMessage('loginMessage','Вход выполнен. Быстрый вход пока не включён: '+(biometricError?.message||'ошибка настройки'));
+          }
+        }
         try {
           const ua=navigator.userAgent||'';
           const device=/Android|iPhone|iPad|iPod/i.test(ua)?'Мобильное устройство':(/Windows|Macintosh|Linux/i.test(ua)?'Компьютер':'Устройство');
@@ -998,10 +1023,105 @@
             .catch(logError=>console.warn('Ошибка журнала входов:',logError));
         } catch(logError) { console.warn('Ошибка журнала входов:',logError); }
         await showAccount();
+        await updateBiometricControls();
       } catch(err) {
         setMessage('loginMessage','Не удалось войти: '+(err?.message || 'ошибка соединения'),true);
       } finally {
         if(button) button.disabled = false;
+      }
+    }
+
+    // Быстрый вход: нативная биометрия Capacitor + защищённое хранилище устройства.
+    const BIOMETRIC_SERVER = SUPABASE_URL;
+    let nativeBiometricApi = null;
+    async function getNativeBiometric() {
+      if (!window.Capacitor?.isNativePlatform?.()) return null;
+      if (!nativeBiometricApi) {
+        const module = await import('https://esm.sh/@capgo/capacitor-native-biometric@7?bundle');
+        nativeBiometricApi = module.NativeBiometric;
+      }
+      return nativeBiometricApi;
+    }
+    async function hasBiometricCredentials() {
+      try {
+        const api = await getNativeBiometric();
+        if (!api) return false;
+        const result = await api.isCredentialsSaved({ server: BIOMETRIC_SERVER });
+        return !!result?.isSaved;
+      } catch (error) {
+        console.warn('Проверка быстрого входа не удалась:', error);
+        return false;
+      }
+    }
+    async function saveBiometricCredentials(username, password) {
+      const api = await getNativeBiometric();
+      if (!api) throw new Error('Быстрый вход доступен только в установленном приложении Android.');
+      const availability = await api.isAvailable({ useFallback: false });
+      if (!availability?.isAvailable) throw new Error('На устройстве не настроена доступная биометрия. Сначала добавьте отпечаток в настройках телефона.');
+      await api.verifyIdentity({
+        title: 'ФУТБОЛЁРЫ',
+        subtitle: 'Включение быстрого входа',
+        reason: 'Подтвердите личность, чтобы включить вход по отпечатку'
+      });
+      await api.setCredentials({ username, password, server: BIOMETRIC_SERVER });
+      try { localStorage.removeItem('futbolery_biometric_declined'); } catch (_) {}
+      return true;
+    }
+    async function updateBiometricControls() {
+      const row = $('biometricSettingsRow');
+      if (!row) return;
+      if (!window.Capacitor?.isNativePlatform?.()) { row.classList.add('hidden'); return; }
+      row.classList.remove('hidden');
+      const saved = await hasBiometricCredentials();
+      const button = $('biometricSettingsButton');
+      if (button) button.textContent = saved ? 'ОТКЛЮЧИТЬ ВХОД ПО ОТПЕЧАТКУ' : '☝️ ВКЛЮЧИТЬ ВХОД ПО ОТПЕЧАТКУ';
+      const status = $('biometricSettingsStatus');
+      if (status) status.textContent = saved ? 'Быстрый вход включён на этом устройстве.' : 'Быстрый вход пока не настроен на этом устройстве.';
+    }
+    async function biometricSignIn() {
+      const button = $('biometricLoginButton');
+      if (button) button.disabled = true;
+      try {
+        const api = await getNativeBiometric();
+        if (!api) throw new Error('Биометрический вход доступен только в приложении Android.');
+        await api.verifyIdentity({
+          title: 'ФУТБОЛЁРЫ',
+          subtitle: 'Быстрый вход',
+          reason: 'Подтвердите отпечаток пальца для входа в приложение'
+        });
+        const credentials = await api.getCredentials({ server: BIOMETRIC_SERVER });
+        if (!credentials?.username || !credentials?.password) throw new Error('Сохранённые данные не найдены. Войдите по паролю и настройте быстрый вход заново.');
+        $('usernameInput').value = credentials.username;
+        if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = true;
+        await signIn({ username: credentials.username, password: credentials.password, fromBiometric: true });
+      } catch (error) {
+        setMessage('loginMessage', error?.message || 'Не удалось выполнить вход по отпечатку.', true);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    async function toggleBiometricLogin() {
+      const button = $('biometricSettingsButton');
+      if (button) button.disabled = true;
+      try {
+        const api = await getNativeBiometric();
+        if (!api) return;
+        const saved = await hasBiometricCredentials();
+        if (saved) {
+          if (!confirm('Отключить вход по отпечатку на этом устройстве?')) return;
+          await api.deleteCredentials({ server: BIOMETRIC_SERVER });
+          setMessage('biometricSettingsStatus', 'Быстрый вход отключён. Можно входить по логину и паролю.');
+        } else {
+          const password = prompt('Для включения быстрого входа введите текущий пароль от аккаунта:');
+          if (!password) return;
+          await saveBiometricCredentials(currentProfile?.username || $('usernameInput')?.value.trim(), password);
+          setMessage('biometricSettingsStatus', 'Быстрый вход по отпечатку включён!');
+        }
+        await updateBiometricControls();
+      } catch (error) {
+        setMessage('biometricSettingsStatus', error?.message || 'Не удалось изменить настройку быстрого входа.', true);
+      } finally {
+        if (button) button.disabled = false;
       }
     }
 
@@ -2961,7 +3081,7 @@
     $('createPollForm')?.addEventListener('submit',createPoll);
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('refreshLoginHistory')?.addEventListener('click',loadLoginHistory);
-    $('loginButton').addEventListener('click',signIn);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
+    $('loginButton').addEventListener('click',()=>signIn());$('biometricLoginButton')?.addEventListener('click',biometricSignIn);$('biometricSettingsButton')?.addEventListener('click',toggleBiometricLogin);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
     $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();});
     $('statsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('newsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('voteBackButton').addEventListener('click',()=>showSection('homeScreen'));$('adminBackButton').addEventListener('click',()=>showSection('homeScreen'));
     $('saveStatsCategorySettings')?.addEventListener('click', saveStatSettings);
@@ -2978,10 +3098,18 @@
       sb.auth.getSession().then(async ({data})=>{
         let rememberSession = true;
         try { rememberSession = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
+        const biometricEnabled = await hasBiometricCredentials();
+        if (biometricEnabled) {
+          if ($('biometricLoginButton')) $('biometricLoginButton').classList.remove('hidden');
+          if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = true;
+          setMessage('loginMessage','Быстрый вход включён. Подтвердите отпечаток пальца или войдите обычным способом.');
+          return;
+        }
         if (data.session && rememberSession) {
           if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = true;
           currentUser = data.session.user;offlineWrite('user_snapshot',currentUser);
           await showAccount();
+          await updateBiometricControls();
         } else if (data.session && !rememberSession) {
           await sb.auth.signOut();
           if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = false;

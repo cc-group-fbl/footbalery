@@ -90,6 +90,22 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Ensure Android biometric permission
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+          permission = '<uses-permission android:name="android.permission.USE_BIOMETRIC" />'
+          if permission not in text:
+              marker = '<application'
+              if marker not in text:
+                  raise SystemExit("Could not find application tag in AndroidManifest.xml")
+              text = text.replace(marker, permission + "\\n    " + marker, 1)
+              manifest.write_text(text)
+          PY
+
       - name: Build debug APK
         run: |
           cd android

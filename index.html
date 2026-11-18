@@ -3100,6 +3100,9 @@
         try { rememberSession = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
         const biometricEnabled = await hasBiometricCredentials();
         if (biometricEnabled) {
+          // Удаляем обычную сохранённую сессию из WebView: до биометрической проверки
+          // приложение не должно использовать прежний токен Supabase.
+          if (data.session) await sb.auth.signOut({ scope: 'local' });
           if ($('biometricLoginButton')) $('biometricLoginButton').classList.remove('hidden');
           if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = true;
           setMessage('loginMessage','Быстрый вход включён. Подтвердите отпечаток пальца или войдите обычным способом.');

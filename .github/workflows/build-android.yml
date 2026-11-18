@@ -102,7 +102,7 @@ jobs:
               marker = '<application'
               if marker not in text:
                   raise SystemExit("Could not find application tag in AndroidManifest.xml")
-              text = text.replace(marker, permission + "\\n    " + marker, 1)
+              text = text.replace(marker, permission + "\n    " + marker, 1)
               manifest.write_text(text)
           PY
 

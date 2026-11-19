@@ -132,11 +132,11 @@ jobs:
                   }
               }
           """
-              text = text.replace("    buildTypes {", block + "\\n    buildTypes {", 1)
-          pattern = r"(buildTypes\\s*\\{\\s*release\\s*\\{)"
+              text = text.replace("    buildTypes {", block + "\n    buildTypes {", 1)
+          pattern = r"(buildTypes\s*\{\s*release\s*\{)"
           if not re.search(pattern, text):
               raise SystemExit("Could not locate release build type in android/app/build.gradle")
-          text = re.sub(pattern, r"\\1\\n            signingConfig signingConfigs.release", text, count=1)
+          text = re.sub(pattern, r"\1\n            signingConfig signingConfigs.release", text, count=1)
           app.write_text(text)
           PY
 

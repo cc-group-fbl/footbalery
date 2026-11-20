@@ -447,6 +447,7 @@
         <div id="oneOnOneViewTabs" class="tournament-switch hidden" style="margin-top:10px">
           <button type="button" class="admin-tab active" data-one-view="matches">СЕТКА МАТЧЕЙ</button>
           <button type="button" class="admin-tab" data-one-view="table">ТУРНИРНАЯ ТАБЛИЦА</button>
+          <button type="button" class="admin-tab" data-one-view="overall">ИТОГИ ТУРНИРА</button>
         </div>
         <div id="dgTeamsView" class="hidden" style="margin-top:16px">
           <div class="muted" style="margin-bottom:10px">ДВА СОПЕРНИЧАЮЩИХ КОЛЛЕКТИВА</div>
@@ -458,6 +459,7 @@
         </div>
         <div id="tournamentBracketsList" style="margin-top:14px"><div class="muted">Загрузка турнирных сеток…</div></div>
         <div id="oneOnOneStandings" class="hidden" style="margin-top:14px"></div>
+        <div id="oneOnOneOverall" class="hidden" style="margin-top:14px"></div>
         <div id="tournamentAdminCreate" class="hidden" style="padding:14px;border:1px solid var(--border-color);border-radius:14px;margin-top:18px">
           <h3 style="font-size:14px;margin-bottom:8px">＋ Создать турнирную сетку</h3>
           <form id="tournamentCreateForm">
@@ -1470,6 +1472,47 @@
       players.forEach((p,i)=>{const tr=document.createElement('tr');tr.style.borderTop='1px solid var(--border-color)';[p.place||i+1,p.name,p.played,p.wins,p.draws,p.losses,p.scored,p.conceded,p.diff,p.yellow,p.red,p.points].forEach((v,j)=>{const td=document.createElement('td');td.textContent=j===1?compactParticipantName(p.name):String(v);td.style.cssText='padding:9px 6px;white-space:nowrap';if(j===1){td.title=p.name;td.style.textAlign='left';td.style.fontWeight='700';td.style.cssText+=';'+stickyStyle;}if(j===11){td.style.fontWeight='900';td.style.color='var(--accent-text)';}tr.appendChild(td);});body.appendChild(tr);});
       table.appendChild(body);wrap.appendChild(table);root.appendChild(wrap);
     }
+    function renderOneOnOneOverall(){
+      const root=$('oneOnOneOverall');if(!root)return;root.replaceChildren();
+      if(!oneOnOneSheetCache){root.textContent='Не удалось загрузить данные Google Таблицы. Обновите страницу.';return;}
+      const stageColumns=[
+        {key:'Очков за осенний этап',label:'Осень'},
+        {key:'Очков за зимний этап',label:'Зима'},
+        {key:'Очков за весенний этап',label:'Весна'},
+        {key:'Очков за летний плей-офф',label:'Летний плей-офф'}
+      ].filter(column=>oneOnOneSheetCache.some(player=>Object.prototype.hasOwnProperty.call(player.values,normalizeHeader(column.key))));
+      const num=value=>{const n=Number(String(value??'').replace(',','.'));return Number.isFinite(n)?n:0;};
+      const rows=oneOnOneSheetCache.map(player=>{
+        const stages=stageColumns.map(column=>num(player.values[normalizeHeader(column.key)]));
+        return {name:player.name,stages,total:stages.reduce((sum,value)=>sum+value,0)};
+      }).filter(player=>player.total>0||player.stages.some(value=>value>0));
+      rows.sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name,'ru'));
+      const heading=document.createElement('div');heading.style.cssText='font-weight:900;margin:0 0 6px';heading.textContent='ИТОГОВЫЙ ЗАЧЁТ · ТУРНИР 1 НА 1';root.appendChild(heading);
+      const hint=document.createElement('div');hint.className='muted';hint.style.cssText='font-size:11px;margin-bottom:10px';hint.textContent='Очки за каждый этап загружаются из соответствующих столбцов общей Google Таблицы. Итог — сумма очков всех этапов.';root.appendChild(hint);
+      if(!rows.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='В таблице пока нет начисленных очков за этапы.';root.appendChild(empty);return;}
+      const wrap=document.createElement('div');wrap.style.cssText='overflow-x:auto;border:1px solid var(--border-color);border-radius:12px';
+      const table=document.createElement('table');table.style.cssText='width:100%;border-collapse:separate;border-spacing:0;min-width:420px;font-size:12px;text-align:center';
+      const head=document.createElement('tr');
+      ['#','Участник',...stageColumns.map(column=>column.label),'ИТОГО'].forEach((label,index)=>{
+        const th=document.createElement('th');th.textContent=label;th.style.cssText='padding:10px 7px;background:rgba(255,255,255,.07);white-space:nowrap';
+        if(index===1)th.style.textAlign='left';if(index===stageColumns.length+2){th.style.color='var(--accent-text)';th.style.fontWeight='900';}
+        head.appendChild(th);
+      });
+      const thead=document.createElement('thead');thead.appendChild(head);table.appendChild(thead);
+      const body=document.createElement('tbody');
+      rows.forEach((player,index)=>{
+        const tr=document.createElement('tr');tr.style.borderTop='1px solid var(--border-color)';
+        [index+1,player.name,...player.stages,player.total].forEach((value,columnIndex)=>{
+          const td=document.createElement('td');td.textContent=String(value);td.style.cssText='padding:10px 7px;white-space:nowrap';
+          if(columnIndex===1){td.style.textAlign='left';td.style.fontWeight='700';}
+          if(columnIndex===player.stages.length+2){td.style.fontWeight='900';td.style.color='var(--accent-text)';}
+          if(columnIndex===0&&index===0)td.style.fontWeight='900';
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+      table.appendChild(body);wrap.appendChild(table);root.appendChild(wrap);
+    }
     function appendOneOnOneStats(container,name){
       const stats=oneOnOnePlayerStats(name);if(!stats)return;
       const line=document.createElement('div');
@@ -1515,6 +1558,7 @@
       $('tournamentBracketsList')?.classList.toggle('hidden',activeTournamentKey==='dg'||activeOneOnOneView!=='matches');
       $('oneOnOneViewTabs')?.classList.toggle('hidden',activeTournamentKey!=='one');
       $('oneOnOneStandings')?.classList.toggle('hidden',activeTournamentKey!=='one'||activeOneOnOneView!=='table');
+      $('oneOnOneOverall')?.classList.toggle('hidden',activeTournamentKey!=='one'||activeOneOnOneView!=='overall');
       document.querySelectorAll('[data-one-view]').forEach(b=>b.classList.toggle('active',b.dataset.oneView===activeOneOnOneView));
       document.querySelectorAll('[data-stage]').forEach(b=>b.classList.toggle('active',b.dataset.stage===activeTournamentStage));
       $('tournamentAdminCreate')?.classList.toggle('hidden',!tournamentIsAdmin()||activeTournamentKey==='dg');
@@ -1903,9 +1947,9 @@
     });
     document.querySelectorAll('[data-one-view]').forEach(button=>button.addEventListener('click',async()=>{
       activeOneOnOneView=button.dataset.oneView;renderTournamentSwitch();
-      if(activeOneOnOneView==='table'){
-        const root=$('oneOnOneStandings');if(root)root.textContent='Загружаем статистику…';
-        try{await loadOneOnOneSheet();renderOneOnOneStandings();}
+      if(activeOneOnOneView==='table'||activeOneOnOneView==='overall'){
+        const root=$(activeOneOnOneView==='table'?'oneOnOneStandings':'oneOnOneOverall');if(root)root.textContent='Загружаем данные Google Таблицы…';
+        try{await loadOneOnOneSheet();if(activeOneOnOneView==='table')renderOneOnOneStandings();else renderOneOnOneOverall();}
         catch(error){if(root)root.textContent='Не удалось загрузить Google Таблицу: '+(error.message||'ошибка');}
       }
     }));

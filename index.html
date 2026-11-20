@@ -2029,27 +2029,65 @@
       }catch(error){console.warn('Не удалось получить дату рождения из статистики:',error?.message||error);}
     }
     async function showAccount() {
-      let profile=null,error=null;if(navigator.onLine){const result=await sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team, birth_date').eq('user_id', currentUser.id).maybeSingle();profile=result.data;error=result.error;if(profile)offlineWrite('profile_'+currentUser.id,profile);}else profile=offlineRead('profile_'+currentUser.id);
-      if(error){console.error('Не удалось проверить профиль; сессия сохранена:',error);$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');return setMessage('loginMessage','Не удалось загрузить профиль. Авторизация сохранена — проверьте подключение и повторите попытку позже.',true);}
-      if(!profile){if(navigator.onLine)await sb.auth.signOut();$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');return setMessage('loginMessage',navigator.onLine?'Для аккаунта не назначена карточка игрока. Обратитесь к администратору.':'Нет сохранённого профиля. Сначала войдите с интернетом на этом устройстве.',true);}
-      currentProfile = profile;
-      loadSharedStatSettings().then(()=>{renderStatSettings();}).catch(statError=>{console.error('Не удалось загрузить общие настройки статистики:',statError);sharedStatSettings=null;sharedStatSettingsLoaded=false;renderStatSettings();});
-      renderBirthdayGreeting(profile?.birth_date,false); window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); refreshBirthdayGreeting(profile).catch(error=>console.warn('Проверка поздравления пропущена:',error)); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
-      $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
-      $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
-      const initialPanel=panelFromCurrentPath();
+      const cachedProfile=offlineRead('profile_'+currentUser.id);
+      let profile=cachedProfile||null,error=null;
+      // Если профиль уже сохранён, открываем кабинет сразу, не заставляя пользователя
+      // ждать повторного сетевого запроса. Права администратора до проверки скрыты.
+      if(!profile&&navigator.onLine){
+        const result=await sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team, birth_date').eq('user_id',currentUser.id).maybeSingle();
+        profile=result.data;error=result.error;
+        if(profile)offlineWrite('profile_'+currentUser.id,profile);
+      }
+      if(error){
+        console.error('Не удалось проверить профиль; сессия сохранена:',error);
+        $('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');
+        return setMessage('loginMessage','Не удалось загрузить профиль. Авторизация сохранена — проверьте подключение и повторите попытку позже.',true);
+      }
+      if(!profile){
+        if(navigator.onLine)await sb.auth.signOut();
+        $('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');
+        return setMessage('loginMessage',navigator.onLine?'Для аккаунта не назначена карточка игрока. Обратитесь к администратору.':'Нет сохранённого профиля. Сначала войдите с интернетом на этом устройстве.',true);
+      }
+      const renderAccount=(p,verified)=>{
+        currentProfile=p;
+        loadSharedStatSettings().then(()=>{renderStatSettings();}).catch(statError=>{console.error('Не удалось загрузить общие настройки статистики:',statError);sharedStatSettings=null;sharedStatSettingsLoaded=false;renderStatSettings();});
+        renderBirthdayGreeting(p?.birth_date,false);window.footbaleryCurrentUserId=currentUser.id;window.dispatchEvent(new Event('footbalery-user-ready'));renderStatSettings();
+        $('loginPanel').classList.add('hidden');$('accountPanel').classList.remove('hidden');
+        refreshBirthdayGreeting(p).catch(refreshError=>console.warn('Проверка поздравления пропущена:',refreshError));
+        $('welcomeText').textContent='ЛИЧНЫЙ КАБИНЕТ: '+String(p.username||'УЧАСТНИК').toUpperCase();
+        $('openAdminButton').classList.toggle('hidden',!verified||p.role!=='admin');
+        $('openCaptainButton').classList.toggle('hidden',!verified||p.role!=='captain');
+      };
+      renderAccount(profile,!cachedProfile);
+      const initialPanel=cachedProfile?'homeScreen':panelFromCurrentPath();
       showSection(initialPanel,false);
-      if(initialPanel==='newsPanel') await loadNews();
-      else if(initialPanel==='chatsPanel') await loadChats();
-      else if(initialPanel==='schedulePanel') await loadSchedule();
-      else if(initialPanel==='financePanel') await loadFinance();
-      else if(initialPanel==='tournamentsPanel') await loadTournamentBrackets();
-      else if(initialPanel==='protocolsPanel') await loadRefereeProtocols();
-      // При входе загружаем только то, что действительно отображается на главной.
-      // Остальные тяжёлые разделы подгружаются при первом открытии.
-      const homeLoads = navigator.onLine ? [loadPlayerCard(profile.player_id),loadMatchOptions(),loadMyApplications(),loadPoll()] : [loadPlayerCard(profile.player_id)];
+      const loadInitialSection=async()=>{
+        if(initialPanel==='newsPanel')await loadNews();
+        else if(initialPanel==='chatsPanel')await loadChats();
+        else if(initialPanel==='schedulePanel')await loadSchedule();
+        else if(initialPanel==='financePanel')await loadFinance();
+        else if(initialPanel==='tournamentsPanel')await loadTournamentBrackets();
+        else if(initialPanel==='protocolsPanel')await loadRefereeProtocols();
+      };
+      if(!cachedProfile){
+        await loadInitialSection();
+        const homeLoads=navigator.onLine?[loadPlayerCard(profile.player_id),loadMatchOptions(),loadMyApplications(),loadPoll()]:[loadPlayerCard(profile.player_id)];
+        Promise.allSettled(homeLoads).then(results=>results.filter(x=>x.status==='rejected').forEach(x=>console.warn('Ошибка загрузки главной:',x.reason)));
+        return;
+      }
+      // Фоновая сверка актуального профиля: не блокирует показ личного кабинета.
+      if(navigator.onLine){
+        sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team, birth_date').eq('user_id',currentUser.id).maybeSingle()
+          .then(async result=>{
+            if(result.error){console.warn('Не удалось обновить профиль в фоне:',result.error);return;}
+            if(!result.data){await sb.auth.signOut();currentProfile=null;$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');setMessage('loginMessage','Профиль аккаунта не найден. Обратитесь к администратору.',true);return;}
+            offlineWrite('profile_'+currentUser.id,result.data);renderAccount(result.data,true);
+            const requestedPanel=panelFromCurrentPath();
+            if(requestedPanel!=='homeScreen'){showSection(requestedPanel,false);loadInitialSection().catch(e=>console.warn('Не удалось загрузить раздел:',e));}
+          }).catch(refreshError=>console.warn('Ошибка фоновой проверки профиля:',refreshError));
+      }
+      const homeLoads=navigator.onLine?[loadPlayerCard(profile.player_id),loadMatchOptions(),loadMyApplications(),loadPoll()]:[loadPlayerCard(profile.player_id)];
       Promise.allSettled(homeLoads).then(results=>results.filter(x=>x.status==='rejected').forEach(x=>console.warn('Ошибка загрузки главной:',x.reason)));
-      // Список чатов обновляется при открытии раздела; активный чат использует отдельную realtime-подписку.
     }
     function normalizeHeader(v) {
       return String(v || '').replace(/^\uFEFF/, '').trim().toLowerCase()

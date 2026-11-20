@@ -2102,9 +2102,9 @@
         return setMessage('loginMessage','Не удалось загрузить профиль. Авторизация сохранена — проверьте подключение и повторите попытку позже.',true);
       }
       if(!profile){
-        if(navigator.onLine)await sb.auth.signOut();
+        // Отсутствие карточки в ответе профиля не должно уничтожать действующую сессию.
         $('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');
-        return setMessage('loginMessage',navigator.onLine?'Для аккаунта не назначена карточка игрока. Обратитесь к администратору.':'Нет сохранённого профиля. Сначала войдите с интернетом на этом устройстве.',true);
+        return setMessage('loginMessage',navigator.onLine?'Не удалось получить карточку игрока. Сессия сохранена — проверьте подключение и повторите попытку. Если ошибка повторяется, обратитесь к администратору.':'Нет сохранённого профиля. Подключитесь к интернету и повторите попытку.',true);
       }
       const renderAccount=(p,verified)=>{
         currentProfile=p;
@@ -2141,7 +2141,7 @@
         sb.from('profiles').select('user_id, username, first_name, last_name, player_id, role, captain_team, birth_date').eq('user_id',currentUser.id).maybeSingle()
           .then(async result=>{
             if(result.error){console.warn('Не удалось обновить профиль в фоне:',result.error);return;}
-            if(!result.data){await sb.auth.signOut();currentProfile=null;$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');setMessage('loginMessage','Профиль аккаунта не найден. Обратитесь к администратору.',true);return;}
+            if(!result.data){console.warn('Профиль не вернулся при фоновой проверке; действующая сессия сохранена.');return;}
             offlineWrite('profile_'+currentUser.id,result.data);renderAccount(result.data,true);
             const requestedPanel=panelFromCurrentPath();
             if(requestedPanel!=='homeScreen'){showSection(requestedPanel,false);loadInitialSection(requestedPanel).catch(e=>console.warn('Не удалось загрузить раздел:',e));}

@@ -701,6 +701,61 @@
     try {
       if (window.supabase && SUPABASE_URL.startsWith('https://') && !SUPABASE_KEY.startsWith('ВСТАВЬТЕ_')) {
         sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+        // Резервная копия сессии в IndexedDB: на некоторых Android WebView
+        // localStorage может оказаться недоступен после пересоздания процесса.
+        const AUTH_BACKUP_DB='footbalery_auth_backup_v1';
+        function openAuthBackupDb(){
+          return new Promise((resolve,reject)=>{
+            if(!window.indexedDB)return reject(new Error('IndexedDB недоступен'));
+            const request=indexedDB.open(AUTH_BACKUP_DB,1);
+            request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains('sessions'))request.result.createObjectStore('sessions');};
+            request.onsuccess=()=>resolve(request.result);
+            request.onerror=()=>reject(request.error||new Error('Не удалось открыть IndexedDB'));
+          });
+        }
+        async function saveAuthSessionBackup(session){
+          if(!session?.access_token||!session?.refresh_token)return;
+          let remember=true;
+          try{remember=localStorage.getItem('futbolery_remember_session')!=='false';}catch(_){}
+          if(!remember)return;
+          const db=await openAuthBackupDb();
+          await new Promise((resolve,reject)=>{
+            const tx=db.transaction('sessions','readwrite');
+            tx.objectStore('sessions').put({access_token:session.access_token,refresh_token:session.refresh_token},'supabase');
+            tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Не удалось сохранить сессию'));
+          });
+          db.close();
+        }
+        async function readAuthSessionBackup(){
+          const db=await openAuthBackupDb();
+          const value=await new Promise((resolve,reject)=>{
+            const request=db.transaction('sessions','readonly').objectStore('sessions').get('supabase');
+            request.onsuccess=()=>resolve(request.result||null);
+            request.onerror=()=>reject(request.error||new Error('Не удалось прочитать сессию'));
+          });
+          db.close();return value;
+        }
+        async function clearAuthSessionBackup(){
+          try{
+            const db=await openAuthBackupDb();
+            await new Promise((resolve,reject)=>{
+              const tx=db.transaction('sessions','readwrite');
+              tx.objectStore('sessions').delete('supabase');
+              tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Не удалось удалить резервную сессию'));
+            });
+            db.close();
+          }catch(error){console.warn('Не удалось очистить резервную сессию:',error);}
+        }
+        window.footbalerySaveAuthBackup=saveAuthSessionBackup;
+        window.footbaleryReadAuthBackup=readAuthSessionBackup;
+        window.footbaleryClearAuthBackup=clearAuthSessionBackup;
+        sb.auth.onAuthStateChange((event,session)=>{
+          if(session)saveAuthSessionBackup(session).catch(error=>console.warn('Не удалось обновить резервную сессию:',error));
+        });
+        $('rememberMeCheckbox')?.addEventListener('change',event=>{
+          try{localStorage.setItem('futbolery_remember_session',event.target.checked?'true':'false');}catch(_){}
+          if(!event.target.checked)clearAuthSessionBackup();
+        });
       }
     } catch (connectionInitError) {
       console.error('Supabase init error:', connectionInitError);
@@ -1013,7 +1068,10 @@
         setMessage('loginMessage','Проверяем данные…');
         const { data, error } = await sb.auth.signInWithPassword({ email: usernameEmail(username), password });
         if (error) throw error;
-        try { localStorage.setItem('futbolery_remember_session', $('rememberMeCheckbox')?.checked ? 'true' : 'false'); } catch (_) {}
+        const rememberThisDevice=!!$('rememberMeCheckbox')?.checked;
+        try { localStorage.setItem('futbolery_remember_session', rememberThisDevice ? 'true' : 'false'); } catch (_) {}
+        if(rememberThisDevice)window.footbalerySaveAuthBackup?.(data.session).catch(error=>console.warn('Не удалось сохранить резервную сессию:',error));
+        else window.footbaleryClearAuthBackup?.();
         currentUser = data.user;offlineWrite('user_snapshot',currentUser);
         if (window.Capacitor?.isNativePlatform?.() && !credentialsOverride?.fromBiometric) {
           // Настройка биометрии не должна задерживать уже подтверждённый вход.
@@ -3235,7 +3293,7 @@
         setMessage('createMemberMessage','Не удалось создать участника: '+(err.message||'ошибка')+'. Проверьте, что функция create-member опубликована и вы вошли как admin.',true);
       } finally { button.disabled=false; }
     }
-    async function logout(){if(!confirm('Вы действительно хотите выйти из своего аккаунта?'))return;const {error}=await sb.auth.signOut();if(error){alert('Не удалось выйти из аккаунта: '+error.message);return;}if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');currentUser=null;currentProfile=null;$('birthdayGreeting')?.classList.remove('visible');$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('passwordInput').value='';$('biometricLoginButton')?.classList.add('hidden');if(await hasBiometricCredentials()) $('biometricLoginButton')?.classList.remove('hidden');setMessage('loginMessage','Вы вышли из аккаунта.');}
+    async function logout(){if(!confirm('Вы действительно хотите выйти из своего аккаунта?'))return;const {error}=await sb.auth.signOut();if(error){alert('Не удалось выйти из аккаунта: '+error.message);return;}await window.footbaleryClearAuthBackup?.();if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');currentUser=null;currentProfile=null;$('birthdayGreeting')?.classList.remove('visible');$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('passwordInput').value='';$('biometricLoginButton')?.classList.add('hidden');if(await hasBiometricCredentials()) $('biometricLoginButton')?.classList.remove('hidden');setMessage('loginMessage','Вы вышли из аккаунта.');}
 
     $('openChatsButton')?.addEventListener('click',async()=>{showSection('chatsPanel');$('chatThread').classList.add('hidden');$('chatList').classList.remove('hidden');try{await loadChats();}catch(e){$('chatList').textContent='Не удалось загрузить чаты. Сначала необходимо выполнить SQL-настройку чатов в Supabase.';console.error(e);}});
     $('chatsBackButton')?.addEventListener('click',async()=>{if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');$('chatThread').classList.add('hidden');showSection('homeScreen');});
@@ -3368,6 +3426,18 @@
       sb.auth.getSession().then(async ({data})=>{
         let rememberSession = true;
         try { rememberSession = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
+        if($('rememberMeCheckbox'))$('rememberMeCheckbox').checked=rememberSession;
+        // Если WebView потерял localStorage-сессию, восстанавливаем её из IndexedDB.
+        if(!data.session&&rememberSession&&window.footbaleryReadAuthBackup){
+          try{
+            const backup=await window.footbaleryReadAuthBackup();
+            if(backup?.access_token&&backup?.refresh_token){
+              const restored=await sb.auth.setSession(backup);
+              if(!restored.error&&restored.data?.session)data.session=restored.data.session;
+              else{console.warn('Резервная сессия Supabase не восстановилась:',restored.error);await window.footbaleryClearAuthBackup?.();}
+            }
+          }catch(backupError){console.warn('Не удалось восстановить резервную сессию:',backupError);}
+        }
         // Галочка «Запомнить меня» одинаково работает в браузере и Android.
         const biometricEnabled = await hasBiometricCredentials();
         if (biometricEnabled && $('biometricLoginButton')) {
@@ -3381,6 +3451,7 @@
           await updateBiometricControls();
         } else if (data.session && !rememberSession) {
           await sb.auth.signOut();
+          await window.footbaleryClearAuthBackup?.();
           if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = false;
         } else if ($('rememberMeCheckbox')) {
           try { $('rememberMeCheckbox').checked = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}

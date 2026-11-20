@@ -2055,8 +2055,11 @@
         $('loginPanel').classList.add('hidden');$('accountPanel').classList.remove('hidden');
         refreshBirthdayGreeting(p).catch(refreshError=>console.warn('Проверка поздравления пропущена:',refreshError));
         $('welcomeText').textContent='ЛИЧНЫЙ КАБИНЕТ: '+String(p.username||'УЧАСТНИК').toUpperCase();
-        $('openAdminButton').classList.toggle('hidden',!verified||p.role!=='admin');
-        $('openCaptainButton').classList.toggle('hidden',!verified||p.role!=='captain');
+        // Показываем доступные разделы по сохранённой роли, чтобы временный сбой
+        // фоновой проверки профиля не лишал пользователя кнопки админки.
+        // Реальные права на операции по-прежнему контролируются RLS в Supabase.
+        $('openAdminButton').classList.toggle('hidden',p.role!=='admin');
+        $('openCaptainButton').classList.toggle('hidden',p.role!=='captain');
       };
       renderAccount(profile,!cachedProfile);
       const initialPanel=cachedProfile?'homeScreen':panelFromCurrentPath();

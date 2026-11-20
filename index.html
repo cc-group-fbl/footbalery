@@ -2061,13 +2061,13 @@
       renderAccount(profile,!cachedProfile);
       const initialPanel=cachedProfile?'homeScreen':panelFromCurrentPath();
       showSection(initialPanel,false);
-      const loadInitialSection=async()=>{
-        if(initialPanel==='newsPanel')await loadNews();
-        else if(initialPanel==='chatsPanel')await loadChats();
-        else if(initialPanel==='schedulePanel')await loadSchedule();
-        else if(initialPanel==='financePanel')await loadFinance();
-        else if(initialPanel==='tournamentsPanel')await loadTournamentBrackets();
-        else if(initialPanel==='protocolsPanel')await loadRefereeProtocols();
+      const loadInitialSection=async(panel=initialPanel)=>{
+        if(panel==='newsPanel')await loadNews();
+        else if(panel==='chatsPanel')await loadChats();
+        else if(panel==='schedulePanel')await loadSchedule();
+        else if(panel==='financePanel')await loadFinance();
+        else if(panel==='tournamentsPanel')await loadTournamentBrackets();
+        else if(panel==='protocolsPanel')await loadRefereeProtocols();
       };
       if(!cachedProfile){
         await loadInitialSection();
@@ -2083,7 +2083,7 @@
             if(!result.data){await sb.auth.signOut();currentProfile=null;$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');setMessage('loginMessage','Профиль аккаунта не найден. Обратитесь к администратору.',true);return;}
             offlineWrite('profile_'+currentUser.id,result.data);renderAccount(result.data,true);
             const requestedPanel=panelFromCurrentPath();
-            if(requestedPanel!=='homeScreen'){showSection(requestedPanel,false);loadInitialSection().catch(e=>console.warn('Не удалось загрузить раздел:',e));}
+            if(requestedPanel!=='homeScreen'){showSection(requestedPanel,false);loadInitialSection(requestedPanel).catch(e=>console.warn('Не удалось загрузить раздел:',e));}
           }).catch(refreshError=>console.warn('Ошибка фоновой проверки профиля:',refreshError));
       }
       const homeLoads=navigator.onLine?[loadPlayerCard(profile.player_id),loadMatchOptions(),loadMyApplications(),loadPoll()]:[loadPlayerCard(profile.player_id)];

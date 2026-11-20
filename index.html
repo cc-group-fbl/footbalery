@@ -437,6 +437,7 @@
             <option value="overall">🏆 Итоги турнира</option>
           </select>
           <div id="tournamentStageHint" class="muted" style="font-size:12px;margin-top:6px">Выберите сезон, чтобы открыть его матчи и турнирную таблицу.</div>
+          <button type="button" id="tournamentOverallButton" class="admin-tab" style="width:100%;margin-top:9px;text-align:center">🏆 ИТОГИ ТУРНИРА</button>
         </div>
         <div id="tournamentPhaseWrap" class="tournament-switch hidden" style="margin-top:6px">
           <button type="button" class="admin-tab active" data-phase="qualification">КВАЛИФИКАЦИЯ</button>
@@ -1942,6 +1943,14 @@
     document.querySelectorAll('[data-tournament]').forEach(button=>button.addEventListener('click',async()=>{
       activeTournamentKey=button.dataset.tournament;await loadTournamentBrackets();
     }));
+    $('tournamentOverallButton')?.addEventListener('click',async()=>{
+      activeTournamentStage='overall';
+      const stageSelect=$('tournamentStageSelect');if(stageSelect)stageSelect.value='overall';
+      activeOneOnOneView='overall';renderTournamentSwitch();
+      const root=$('oneOnOneOverall');if(root)root.textContent='Загружаем общий зачёт из Google Таблицы…';
+      try{await loadOneOnOneSheet();renderOneOnOneOverall();}
+      catch(error){if(root)root.textContent='Не удалось загрузить Google Таблицу: '+(error.message||'ошибка');}
+    });
     $('tournamentStageSelect')?.addEventListener('change',async event=>{
       activeTournamentStage=event.target.value;
       if(activeTournamentStage==='overall'){

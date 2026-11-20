@@ -353,6 +353,7 @@
           <button type="button" class="dashboard-card hidden" id="openCaptainButton"><span class="dashboard-icon">🧢</span><span><span class="dashboard-title">КАПИТАН</span><span class="dashboard-description">Состав заявленных в твою команду</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openVoteButton"><span class="dashboard-icon">🗳️</span><span><span class="dashboard-title">ГОЛОСОВАНИЕ</span><span class="dashboard-description">Участвуй в активных опросах сообщества</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openTournamentsButton"><span class="dashboard-icon">🏆</span><span><span class="dashboard-title">ТУРНИРЫ</span><span class="dashboard-description">Д×Г и Турнир 1 на 1 · турнирные сетки</span></span><span class="dashboard-arrow">›</span></button>
+          <button type="button" class="dashboard-card" id="openProtocolsButton"><span class="dashboard-icon">📋</span><span><span class="dashboard-title">ЭЛЕКТРОННЫЕ ПРОТОКОЛЫ</span><span class="dashboard-description">Назначенные матчи и заполнение протоколов</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card hidden" id="openAdminButton"><span class="dashboard-icon">⚙️</span><span><span class="dashboard-title">АДМИНИСТРИРОВАНИЕ</span><span class="dashboard-description">Управление опросами, участниками и результатами</span></span><span class="dashboard-arrow">›</span></button>
         </div>
       </section>
@@ -377,6 +378,12 @@
       <section id="matchesPanel" class="vote-box hidden"><h2>ЗАЯВКА НА МАТЧ</h2><div class="muted">Выбери матч и команду. Администратор может изменить команду в заявке.</div>
         <form id="matchApplicationForm" style="margin-top:12px"><label class="muted" for="matchSelect">Матч</label><select id="matchSelect" class="field" required><option value="">Загрузка матчей…</option></select>
         <div id="teamSelectWrap" class="hidden"><label class="muted" for="teamSelect">Команда</label><select id="teamSelect" class="field" required><option value="ДЕРЕВЕНСКИЕ">ФК ДЕРЕВЕНСКИЕ</option><option value="ГОРОДСКИЕ">ФК ГОРОДСКИЕ</option></select></div><label class="muted" for="applicationPlayerNumber">Игровой номер</label><input id="applicationPlayerNumber" class="field" type="number" min="0" max="99" step="1" placeholder="Например, 10" required><label class="candidate" style="margin:12px 0"><input id="readyToHelp" type="checkbox"><span style="font-size:13px">Готов помочь с организацией и подготовкой матча</span></label><button class="action-btn" type="submit">ПОДАТЬ ЗАЯВКУ</button></form><div id="applicationMessage" class="message"></div><h3>Мои заявки</h3><div id="myApplications" class="muted"></div>
+      </section>
+      <button type="button" class="small-btn section-back hidden" id="protocolsBackButton">← На главный экран</button>
+      <section id="protocolsPanel" class="vote-box hidden">
+        <h2>ЭЛЕКТРОННЫЕ ПРОТОКОЛЫ</h2>
+        <div class="muted" style="text-align:left">Здесь отображаются только матчи, на которые администратор назначил тебя судьёй. Заполненный протокол отправляется администратору на проверку.</div>
+        <div id="refereeProtocolsList" style="margin-top:14px"><div class="muted">Загрузка назначенных матчей…</div></div>
       </section>
       <button type="button" class="small-btn section-back hidden" id="financeBackButton">← На главный экран</button>
       <section id="financePanel" class="vote-box hidden">
@@ -537,6 +544,18 @@
           <div class="muted">Список созданных матчей и управление регистрацией.</div>
           <button type="button" id="refreshAdminMatches" class="small-btn">Обновить список</button>
           <div id="adminMatchesList" style="margin-top:10px"></div>
+        </details><details class="admin-section" open>
+          <summary>📋 Электронные протоколы</summary>
+          <div class="muted" style="text-align:left">Назначь судью на матч. Ниже появятся отправленные протоколы для проверки.</div>
+          <label class="muted" for="protocolMatchSelect">Матч</label>
+          <select id="protocolMatchSelect" class="field"><option value="">Загрузка матчей…</option></select>
+          <label class="muted" for="protocolRefereeSelect">Назначенный судья</label>
+          <select id="protocolRefereeSelect" class="field"><option value="">Загрузка участников…</option></select>
+          <button type="button" id="assignProtocolRefereeButton" class="action-btn">НАЗНАЧИТЬ СУДЬЮ</button>
+          <div id="protocolAssignmentMessage" class="message" aria-live="polite"></div>
+          <h3 style="font-size:14px;margin:18px 0 8px">Назначения и отправленные протоколы</h3>
+          <button type="button" id="refreshAdminProtocolsButton" class="small-btn">ОБНОВИТЬ СПИСОК</button>
+          <div id="adminProtocolsList" style="margin-top:10px"><div class="muted">Загрузка…</div></div>
         </details></div><div class="admin-tab-panel" data-admin-panel="stats" hidden><details class="admin-section" open>
           <summary>📊 Настройка категорий статистики</summary>
           <p class="muted">Общие настройки для всех пользователей. Изменять их может только администратор.</p>
@@ -713,6 +732,7 @@
       matchesPanel:APP_ROUTE('/matches/'),
       captainPanel:APP_ROUTE('/captain/'),
       tournamentsPanel:APP_ROUTE('/tournaments/'),
+      protocolsPanel:APP_ROUTE('/protocols/'),
       votePanel:APP_ROUTE('/votes/'),
       adminPanel:APP_ROUTE('/admin/')
     };
@@ -730,10 +750,10 @@
         if(current!==target) history.pushState({sectionId},'',target);
       }
       $('accountPanel')?.classList.toggle('main-menu-open',sectionId==='homeScreen');
-      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel','chatsPanel','financePanel','tournamentsPanel'].forEach(id => {
+      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel','chatsPanel','financePanel','tournamentsPanel','protocolsPanel'].forEach(id => {
         const panel=$(id); if(panel) panel.classList.toggle('hidden', id !== sectionId);
       });
-      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton',chatsPanel:'chatsBackButton',financePanel:'financeBackButton',tournamentsPanel:'tournamentsBackButton'};
+      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton',chatsPanel:'chatsBackButton',financePanel:'financeBackButton',tournamentsPanel:'tournamentsBackButton',protocolsPanel:'protocolsBackButton'};
       Object.entries(backButtons).forEach(([panelId,buttonId])=>{const button=$(buttonId);if(button)button.classList.toggle('hidden',sectionId!==panelId);});
       window.scrollTo({top:0,behavior:'smooth'});
     }
@@ -748,6 +768,7 @@
         else if(panel==='schedulePanel')await loadSchedule();
         else if(panel==='financePanel')await loadFinance();
         else if(panel==='tournamentsPanel')await loadTournamentBrackets();
+        else if(panel==='protocolsPanel')await loadRefereeProtocols();
       }catch(error){console.error('Не удалось открыть раздел по ссылке:',error);}
     });
 
@@ -757,7 +778,7 @@
       adminPanelLoading=true;
       const jobs=[
         loadAdminResults(),loadAdminVoteDetails(),loadNewsRecipients(),loadAdminNews(),
-        loadAdminUsers(),loadAdminMatches(),loadAdminMatchApplications(),loadAdminScheduleScores()
+        loadAdminUsers(),loadAdminMatches(),loadAdminMatchApplications(),loadAdminScheduleScores(),loadAdminProtocolManager()
       ];
       const results=await Promise.allSettled(jobs);
       const failures=results.filter(x=>x.status==='rejected');
@@ -2022,6 +2043,7 @@
       else if(initialPanel==='schedulePanel') await loadSchedule();
       else if(initialPanel==='financePanel') await loadFinance();
       else if(initialPanel==='tournamentsPanel') await loadTournamentBrackets();
+      else if(initialPanel==='protocolsPanel') await loadRefereeProtocols();
       // При входе загружаем только то, что действительно отображается на главной.
       // Остальные тяжёлые разделы подгружаются при первом открытии.
       const homeLoads = navigator.onLine ? await Promise.allSettled([loadPlayerCard(profile.player_id),loadMatchOptions(),loadMyApplications(),loadPoll()]) : await Promise.allSettled([loadPlayerCard(profile.player_id)]);
@@ -2139,6 +2161,202 @@
         setMessage('createMatchMessage','Матч успешно создан.');
         await loadAdminMatches();await loadMatchOptions();
       }finally{button.disabled=false;}
+    }
+
+
+    // Электронные протоколы: клиент обращается только к защищённым RPC и строкам,
+    // которые разрешены RLS для текущего пользователя.
+    const protocolStatusLabel = status => ({
+      pending:'На проверке', needs_changes:'Нужны исправления', approved:'Одобрен'
+    }[status] || 'Не отправлен');
+    const protocolPersonName = p => [p?.last_name,p?.first_name].filter(Boolean).join(' ').trim() || p?.username || 'Участник';
+    const protocolMatchLabel = m => [m?.title||'Матч',m?.match_date,m?.match_time,m?.location].filter(Boolean).join(' · ');
+    function protocolNode(tag,cls,textValue){
+      const node=document.createElement(tag);
+      if(cls)node.className=cls;
+      if(textValue!==undefined)node.textContent=String(textValue);
+      return node;
+    }
+    async function loadRefereeProtocols(){
+      const root=$('refereeProtocolsList');
+      if(!root||!sb||!currentUser)return;
+      root.textContent='Загружаем назначенные матчи…';
+      const {data:assignments,error}=await sb.from('match_protocol_assignments')
+        .select('id,match_id,referee_user_id,created_at')
+        .eq('referee_user_id',currentUser.id).order('created_at',{ascending:false});
+      if(error){root.textContent='Не удалось загрузить назначения: '+error.message;return;}
+      root.replaceChildren();
+      if(!assignments?.length){root.appendChild(protocolNode('div','muted','Пока нет матчей, на которые ты назначен судьёй.'));return;}
+      const ids=assignments.map(a=>a.match_id);
+      const [{data:matches,error:matchesError},{data:submissions,error:submissionsError}]=await Promise.all([
+        sb.from('matches').select('id,title,match_date,match_time,location').in('id',ids),
+        sb.from('match_protocol_submissions').select('*').in('match_id',ids)
+      ]);
+      if(matchesError||submissionsError){root.textContent='Не удалось загрузить данные протоколов: '+(matchesError?.message||submissionsError?.message);return;}
+      const matchMap=new Map((matches||[]).map(m=>[String(m.id),m]));
+      const submissionMap=new Map((submissions||[]).map(x=>[String(x.match_id),x]));
+      assignments.forEach((assignment,index)=>{
+        const match=matchMap.get(String(assignment.match_id));
+        if(!match)return;
+        const existing=submissionMap.get(String(match.id));
+        const card=protocolNode('div',null);
+        card.style.cssText='padding:14px;margin:12px 0;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,.025)';
+        const heading=protocolNode('div',null,protocolMatchLabel(match));
+        heading.style.cssText='font-size:14px;font-weight:900;line-height:1.5';
+        const status=protocolNode('div','muted','Статус: '+protocolStatusLabel(existing?.status));
+        status.style.textAlign='left';status.style.margin='6px 0 12px';
+        card.append(heading,status);
+        if(existing?.review_comment){
+          const review=protocolNode('div','muted','Комментарий администратора: '+existing.review_comment);
+          review.style.cssText='text-align:left;padding:10px;border-radius:9px;background:rgba(255,180,50,.08);margin-bottom:10px';
+          card.appendChild(review);
+        }
+        const form=document.createElement('form');
+        form.style.cssText='display:grid;gap:8px';
+        const field=(labelText,type,value,required=false,min=null,max=null,step=null)=>{
+          const label=protocolNode('label','muted',labelText);label.style.textAlign='left';
+          const input=document.createElement('input');input.className='field';input.type=type;input.value=value??'';input.required=required;
+          if(min!==null)input.min=String(min);if(max!==null)input.max=String(max);if(step!==null)input.step=String(step);
+          label.appendChild(input);form.appendChild(label);return input;
+        };
+        const area=(labelText,value)=>{
+          const label=protocolNode('label','muted',labelText);label.style.textAlign='left';
+          const input=document.createElement('textarea');input.className='field';input.rows=2;input.value=value||'';input.style.resize='vertical';
+          label.appendChild(input);form.appendChild(label);return input;
+        };
+        const scoreRow=protocolNode('div',null);scoreRow.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px';
+        const homeLabel=protocolNode('label','muted','Счёт хозяев');homeLabel.style.textAlign='left';
+        const homeScore=document.createElement('input');homeScore.className='field';homeScore.type='number';homeScore.min='0';homeScore.step='1';homeScore.required=true;homeScore.value=existing?.score_home??'';
+        homeLabel.appendChild(homeScore);
+        const awayLabel=protocolNode('label','muted','Счёт гостей');awayLabel.style.textAlign='left';
+        const awayScore=document.createElement('input');awayScore.className='field';awayScore.type='number';awayScore.min='0';awayScore.step='1';awayScore.required=true;awayScore.value=existing?.score_away??'';
+        awayLabel.appendChild(awayScore);scoreRow.append(homeLabel,awayLabel);form.appendChild(scoreRow);
+        const homePlayers=area('Состав хозяев',existing?.home_players);
+        const awayPlayers=area('Состав гостей',existing?.away_players);
+        const mainRef=field('Главный судья','text',existing?.main_referee);
+        const assistantRef=field('Помощник судьи','text',existing?.assistant_referee);
+        const ratingRow=protocolNode('div',null);ratingRow.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px';
+        const makeRating=(labelText,value)=>{
+          const label=protocolNode('label','muted',labelText);label.style.textAlign='left';
+          const input=document.createElement('input');input.className='field';input.type='number';input.min='0';input.max='10';input.step='0.1';input.value=value??'';
+          label.appendChild(input);ratingRow.appendChild(label);return input;
+        };
+        const mainRating=makeRating('Оценка главного судьи (0–10)',existing?.main_referee_rating);
+        const assistantRating=makeRating('Оценка помощника (0–10)',existing?.assistant_referee_rating);
+        form.appendChild(ratingRow);
+        const comment=area('Комментарий судьи',existing?.referee_comment);
+        const submit=protocolNode('button','action-btn',existing?.status==='approved'?'ПРОТОКОЛ ОДОБРЕН': 'ОТПРАВИТЬ ПРОТОКОЛ НА ПРОВЕРКУ');
+        submit.type='submit';
+        if(existing?.status==='approved'){submit.disabled=true;form.querySelectorAll('input,textarea').forEach(x=>x.disabled=true);}
+        form.appendChild(submit);
+        form.addEventListener('submit',async event=>{
+          event.preventDefault();
+          const sh=Number(homeScore.value),sa=Number(awayScore.value);
+          if(!Number.isInteger(sh)||!Number.isInteger(sa)||sh<0||sa<0){alert('Укажи целый неотрицательный счёт обеих команд.');return;}
+          const ratingValue=input=>input.value===''?null:Number(input.value);
+          for(const rating of [ratingValue(mainRating),ratingValue(assistantRating)]){
+            if(rating!==null&&(!Number.isFinite(rating)||rating<0||rating>10)){alert('Оценка должна быть от 0 до 10.');return;}
+          }
+          submit.disabled=true;submit.textContent='ОТПРАВЛЯЕМ…';
+          const {error:sendError}=await sb.rpc('submit_match_protocol',{
+            p_match_id:match.id,p_score_home:sh,p_score_away:sa,
+            p_home_players:homePlayers.value.trim()||null,p_away_players:awayPlayers.value.trim()||null,
+            p_main_referee:mainRef.value.trim()||null,p_assistant_referee:assistantRef.value.trim()||null,
+            p_main_referee_rating:ratingValue(mainRating),p_assistant_referee_rating:ratingValue(assistantRating),
+            p_referee_comment:comment.value.trim()||null,p_document_path:null
+          });
+          if(sendError){alert('Не удалось отправить протокол: '+sendError.message);submit.disabled=false;submit.textContent='ОТПРАВИТЬ ПРОТОКОЛ НА ПРОВЕРКУ';return;}
+          await loadRefereeProtocols();
+        });
+        card.appendChild(form);root.appendChild(card);
+      });
+      if(!root.childElementCount)root.appendChild(protocolNode('div','muted','Назначенные матчи не найдены в таблице matches.'));
+    }
+    async function loadAdminProtocolManager(){
+      if(!sb||currentProfile?.role!=='admin')return;
+      const matchSelect=$('protocolMatchSelect'),refereeSelect=$('protocolRefereeSelect'),root=$('adminProtocolsList');
+      if(matchSelect){
+        matchSelect.replaceChildren(protocolNode('option',null,'Загрузка матчей…'));
+        const {data:matches,error}=await sb.from('matches').select('id,title,match_date,match_time,location').order('match_date',{ascending:false});
+        matchSelect.replaceChildren();
+        if(error)matchSelect.appendChild(protocolNode('option',null,'Ошибка: '+error.message));
+        else if(!matches?.length)matchSelect.appendChild(protocolNode('option',null,'Матчей пока нет'));
+        else matches.forEach(m=>{const o=protocolNode('option',null,protocolMatchLabel(m));o.value=m.id;matchSelect.appendChild(o);});
+      }
+      if(refereeSelect){
+        refereeSelect.replaceChildren(protocolNode('option',null,'Загрузка участников…'));
+        const {data:people,error}=await sb.from('profiles').select('user_id,username,first_name,last_name,role').order('last_name',{ascending:true});
+        refereeSelect.replaceChildren();
+        if(error)refereeSelect.appendChild(protocolNode('option',null,'Ошибка: '+error.message));
+        else (people||[]).forEach(p=>{const o=protocolNode('option',null,protocolPersonName(p)+' · '+(p.username||'без логина')+(p.role==='admin'?' · администратор':''));o.value=p.user_id;refereeSelect.appendChild(o);});
+      }
+      if(!root)return;
+      root.textContent='Загружаем протоколы…';
+      const [{data:assignments,error:assignmentError},{data:submissions,error:submissionError},{data:matches,error:matchError},{data:people,error:peopleError}]=await Promise.all([
+        sb.from('match_protocol_assignments').select('id,match_id,referee_user_id,created_at').order('created_at',{ascending:false}),
+        sb.from('match_protocol_submissions').select('*').order('created_at',{ascending:false}),
+        sb.from('matches').select('id,title,match_date,match_time,location'),
+        sb.from('profiles').select('user_id,username,first_name,last_name')
+      ]);
+      root.replaceChildren();
+      const failure=assignmentError||submissionError||matchError||peopleError;
+      if(failure){root.textContent='Не удалось загрузить список протоколов: '+failure.message;return;}
+      const matchMap=new Map((matches||[]).map(m=>[String(m.id),m]));
+      const peopleMap=new Map((people||[]).map(p=>[p.user_id,p]));
+      const submissionMap=new Map((submissions||[]).map(x=>[String(x.match_id),x]));
+      const assignmentMap=new Map((assignments||[]).map(x=>[String(x.match_id),x]));
+      if(!assignments?.length&&!submissions?.length){root.appendChild(protocolNode('div','muted','Назначений и отправленных протоколов пока нет.'));return;}
+      const ids=[...new Set([...(assignments||[]).map(x=>String(x.match_id)),...(submissions||[]).map(x=>String(x.match_id))])];
+      ids.forEach(id=>{
+        const assignment=assignmentMap.get(id),submission=submissionMap.get(id),match=matchMap.get(id);
+        const card=protocolNode('div',null);card.style.cssText='padding:12px 0;border-top:1px solid rgba(255,255,255,.12)';
+        const title=protocolNode('div',null,protocolMatchLabel(match)||('Матч ID '+id));title.style.fontWeight='900';
+        const referee=peopleMap.get(assignment?.referee_user_id||submission?.referee_user_id);
+        const meta=protocolNode('div','muted','Судья: '+(referee?protocolPersonName(referee)+' · '+(referee.username||''): 'не назначен')+' · '+protocolStatusLabel(submission?.status));
+        meta.style.textAlign='left';
+        card.append(title,meta);
+        if(submission){
+          const detail=protocolNode('div','muted','Счёт: '+submission.score_home+':'+submission.score_away+
+            '\nХозяева: '+(submission.home_players||'—')+'\nГости: '+(submission.away_players||'—')+
+            '\nГлавный судья: '+(submission.main_referee||'—')+' · оценка '+(submission.main_referee_rating??'—')+
+            '\nПомощник: '+(submission.assistant_referee||'—')+' · оценка '+(submission.assistant_referee_rating??'—')+
+            '\nКомментарий: '+(submission.referee_comment||'—'));
+          detail.style.cssText='white-space:pre-wrap;text-align:left;margin:8px 0;line-height:1.55';
+          card.appendChild(detail);
+          if(submission.review_comment){const note=protocolNode('div','muted','Комментарий проверки: '+submission.review_comment);note.style.textAlign='left';card.appendChild(note);}
+          if(submission.status!=='approved'){
+            const reviewForm=document.createElement('form');reviewForm.style.cssText='display:grid;gap:7px;margin-top:8px';
+            const reviewComment=document.createElement('textarea');reviewComment.className='field';reviewComment.rows=2;reviewComment.placeholder='Комментарий для судьи (обязателен при возврате)';
+            reviewComment.value=submission.review_comment||'';
+            const buttons=protocolNode('div',null);buttons.style.cssText='display:flex;gap:7px;flex-wrap:wrap';
+            const approve=protocolNode('button','small-btn','Одобрить');approve.type='button';
+            const returnBtn=protocolNode('button','small-btn','Вернуть на исправление');returnBtn.type='button';
+            const review=async status=>{
+              if(status==='needs_changes'&&!reviewComment.value.trim()){alert('Напиши, что именно нужно исправить.');return;}
+              approve.disabled=true;returnBtn.disabled=true;
+              const {error}=await sb.rpc('admin_review_match_protocol',{p_submission_id:submission.id,p_status:status,p_review_comment:reviewComment.value.trim()||null});
+              if(error){alert('Не удалось изменить статус: '+error.message);approve.disabled=false;returnBtn.disabled=false;return;}
+              await loadAdminProtocolManager();
+            };
+            approve.addEventListener('click',()=>review('approved'));
+            returnBtn.addEventListener('click',()=>review('needs_changes'));
+            buttons.append(approve,returnBtn);reviewForm.append(reviewComment,buttons);card.appendChild(reviewForm);
+          }
+        }else card.appendChild(protocolNode('div','muted','Ожидает заполнения судьёй.'));
+        root.appendChild(card);
+      });
+    }
+    async function assignProtocolReferee(){
+      if(currentProfile?.role!=='admin')return;
+      const matchId=$('protocolMatchSelect')?.value,refereeId=$('protocolRefereeSelect')?.value;
+      const message=$('protocolAssignmentMessage');
+      if(!matchId||!refereeId){if(message)message.textContent='Выбери матч и участника.';return;}
+      const button=$('assignProtocolRefereeButton');if(button)button.disabled=true;
+      if(message)message.textContent='Сохраняем назначение…';
+      const {error}=await sb.rpc('admin_assign_match_referee',{p_match_id:matchId,p_referee_user_id:refereeId});
+      if(error){if(message)message.textContent='Не удалось назначить судью: '+error.message;}
+      else{if(message)message.textContent='Судья назначен на выбранный матч.';await loadAdminProtocolManager();}
+      if(button)button.disabled=false;
     }
 
     function parseScheduleCSV(source){
@@ -3084,6 +3302,10 @@
     $('refreshLoginHistory')?.addEventListener('click',loadLoginHistory);
     $('loginButton').addEventListener('click',()=>signIn());$('biometricLoginButton')?.addEventListener('click',biometricSignIn);$('biometricSettingsButton')?.addEventListener('click',toggleBiometricLogin);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
     $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();});
+    $('openProtocolsButton')?.addEventListener('click',async()=>{showSection('protocolsPanel');await loadRefereeProtocols();});
+    $('protocolsBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
+    $('assignProtocolRefereeButton')?.addEventListener('click',assignProtocolReferee);
+    $('refreshAdminProtocolsButton')?.addEventListener('click',loadAdminProtocolManager);
     $('statsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('newsBackButton').addEventListener('click',()=>showSection('homeScreen'));$('voteBackButton').addEventListener('click',()=>showSection('homeScreen'));$('adminBackButton').addEventListener('click',()=>showSection('homeScreen'));
     $('saveStatsCategorySettings')?.addEventListener('click', saveStatSettings);
     initStatSettings();

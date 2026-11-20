@@ -2378,7 +2378,11 @@
               approve.disabled=true;returnBtn.disabled=true;
               const {error}=await sb.rpc('admin_review_match_protocol',{p_submission_id:submission.id,p_status:status,p_review_comment:reviewComment.value.trim()||null});
               if(error){alert('Не удалось изменить статус: '+error.message);approve.disabled=false;returnBtn.disabled=false;return;}
-              await loadAdminProtocolManager();
+              await Promise.allSettled([
+                loadAdminProtocolManager(),
+                loadAdminScheduleScores(),
+                loadSchedule()
+              ]);
             };
             approve.addEventListener('click',()=>review('approved'));
             returnBtn.addEventListener('click',()=>review('needs_changes'));

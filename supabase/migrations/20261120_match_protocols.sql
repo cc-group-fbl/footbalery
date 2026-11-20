@@ -1,10 +1,10 @@
 -- Footbalery: электронные протоколы матчей
--- Выполнить в Supabase SQL Editor. Миграция не изменяет существующие matches/schedule_events.
+-- Выполнить в Supabase SQL Editor. Отдельные таблицы; существующие matches/schedule_events не изменяются.
 begin;
 
 create table if not exists public.match_protocol_assignments (
   id uuid primary key default gen_random_uuid(),
-  match_id uuid not null references public.matches(id) on delete cascade,
+  match_id bigint not null references public.matches(id) on delete cascade,
   referee_user_id uuid not null references auth.users(id) on delete cascade,
   assigned_by uuid not null references auth.users(id),
   created_at timestamptz not null default now(),
@@ -13,7 +13,7 @@ create table if not exists public.match_protocol_assignments (
 
 create table if not exists public.match_protocol_submissions (
   id uuid primary key default gen_random_uuid(),
-  match_id uuid not null references public.matches(id) on delete cascade,
+  match_id bigint not null references public.matches(id) on delete cascade,
   referee_user_id uuid not null references auth.users(id) on delete cascade,
   score_home integer not null check (score_home >= 0),
   score_away integer not null check (score_away >= 0),
@@ -59,7 +59,7 @@ using (
   or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin')
 );
 
-create or replace function public.admin_assign_match_referee(p_match_id uuid, p_referee_user_id uuid)
+create or replace function public.admin_assign_match_referee(p_match_id bigint, p_referee_user_id uuid)
 returns uuid
 language plpgsql
 security definer
@@ -88,7 +88,7 @@ end;
 $$;
 
 create or replace function public.submit_match_protocol(
-  p_match_id uuid,
+  p_match_id bigint,
   p_score_home integer,
   p_score_away integer,
   p_home_players text default null,
@@ -112,7 +112,9 @@ begin
     select 1 from public.match_protocol_assignments
     where match_id = p_match_id and referee_user_id = auth.uid()
   ) then raise exception 'Вы не назначены судьёй на этот матч'; end if;
-  if p_score_home < 0 or p_score_away < 0 then raise exception 'Счёт не может быть отрицательным'; end if;
+  if p_score_home is null or p_score_away is null or p_score_home < 0 or p_score_away < 0 then
+    raise exception 'Укажи неотрицательный счёт обеих команд';
+  end if;
   insert into public.match_protocol_submissions(
     match_id, referee_user_id, score_home, score_away, home_players, away_players,
     main_referee, assistant_referee, main_referee_rating, assistant_referee_rating,
@@ -162,11 +164,11 @@ begin
 end;
 $$;
 
-revoke all on function public.admin_assign_match_referee(uuid,uuid) from public;
-revoke all on function public.submit_match_protocol(uuid,integer,integer,text,text,text,text,numeric,numeric,text,text) from public;
+revoke all on function public.admin_assign_match_referee(bigint,uuid) from public;
+revoke all on function public.submit_match_protocol(bigint,integer,integer,text,text,text,text,numeric,numeric,text,text) from public;
 revoke all on function public.admin_review_match_protocol(uuid,text,text) from public;
-grant execute on function public.admin_assign_match_referee(uuid,uuid) to authenticated;
-grant execute on function public.submit_match_protocol(uuid,integer,integer,text,text,text,text,numeric,numeric,text,text) to authenticated;
+grant execute on function public.admin_assign_match_referee(bigint,uuid) to authenticated;
+grant execute on function public.submit_match_protocol(bigint,integer,integer,text,text,text,text,numeric,numeric,text,text) to authenticated;
 grant execute on function public.admin_review_match_protocol(uuid,text,text) to authenticated;
 
 commit;

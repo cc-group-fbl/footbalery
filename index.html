@@ -1016,22 +1016,23 @@
         try { localStorage.setItem('futbolery_remember_session', $('rememberMeCheckbox')?.checked ? 'true' : 'false'); } catch (_) {}
         currentUser = data.user;offlineWrite('user_snapshot',currentUser);
         if (window.Capacitor?.isNativePlatform?.() && !credentialsOverride?.fromBiometric) {
-          try {
-            const api = await getNativeBiometric();
-            const saved = api ? await hasBiometricCredentials() : false;
-            if (api && saved) {
-              // Обновляем сохранённый пароль, если пользователь сменил его и вошёл вручную.
-              await api.setCredentials({ username, password, server: BIOMETRIC_SERVER });
-            } else if (api && !localStorage.getItem('futbolery_biometric_declined') && confirm('Включить быстрый вход в «ФУТБОЛЁРЫ» по отпечатку пальца на этом устройстве?')) {
-              await saveBiometricCredentials(username, password);
-              setMessage('loginMessage','Быстрый вход по отпечатку включён.');
-            } else if (api) {
-              try { localStorage.setItem('futbolery_biometric_declined','true'); } catch (_) {}
+          // Настройка биометрии не должна задерживать уже подтверждённый вход.
+          (async()=>{
+            try {
+              const api = await getNativeBiometric();
+              const saved = api ? await hasBiometricCredentials() : false;
+              if (api && saved) {
+                await api.setCredentials({ username, password, server: BIOMETRIC_SERVER });
+              } else if (api && !localStorage.getItem('futbolery_biometric_declined') && confirm('Включить быстрый вход в «ФУТБОЛЁРЫ» по отпечатку пальца на этом устройстве?')) {
+                await saveBiometricCredentials(username, password);
+                setMessage('loginMessage','Быстрый вход по отпечатку включён.');
+              } else if (api) {
+                try { localStorage.setItem('futbolery_biometric_declined','true'); } catch (_) {}
+              }
+            } catch (biometricError) {
+              console.warn('Не удалось настроить быстрый вход:', biometricError);
             }
-          } catch (biometricError) {
-            console.warn('Не удалось настроить быстрый вход:', biometricError);
-            setMessage('loginMessage','Вход выполнен. Быстрый вход пока не включён: '+(biometricError?.message||'ошибка настройки'));
-          }
+          })();
         }
         try {
           const ua=navigator.userAgent||'';

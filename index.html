@@ -335,6 +335,7 @@
       <button id="biometricLoginButton" class="action-btn hidden" type="button" style="background:linear-gradient(90deg,#147de0,#48c8ff);color:#fff">☝️ ВОЙТИ ПО ОТПЕЧАТКУ</button>
       <div class="muted">Вход по логину и паролю. После первого входа можно включить быстрый вход по отпечатку пальца.</div>
       <div id="loginMessage" class="message"></div>
+      <div id="authDiagnostic" class="message" style="display:none;margin-top:10px;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;color:#b9d8ef"></div>
     </section>
 
     <section id="accountPanel" class="hidden">
@@ -3423,20 +3424,38 @@
     } else if (!sb) {
       setMessage('loginMessage','Не удалось запустить подключение к Supabase. Обновите страницу.',true);
     } else {
-      sb.auth.getSession().then(async ({data})=>{
+      sb.auth.getSession().then(async ({data,error:sessionError})=>{
         let rememberSession = true;
+        let backupState = "не проверена";
+        const authStorageKeys=(()=>{try{return Object.keys(localStorage).filter(key=>/^sb-.+-auth-token$/.test(key));}catch(_){return null;}})();
         try { rememberSession = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
         if($('rememberMeCheckbox'))$('rememberMeCheckbox').checked=rememberSession;
         // Если WebView потерял localStorage-сессию, восстанавливаем её из IndexedDB.
         if(!data.session&&rememberSession&&window.footbaleryReadAuthBackup){
           try{
             const backup=await window.footbaleryReadAuthBackup();
+            backupState=backup?.access_token&&backup?.refresh_token?"есть":"нет";
             if(backup?.access_token&&backup?.refresh_token){
               const restored=await sb.auth.setSession(backup);
               if(!restored.error&&restored.data?.session)data.session=restored.data.session;
-              else{console.warn('Резервная сессия Supabase не восстановилась:',restored.error);await window.footbaleryClearAuthBackup?.();}
+              else{backupState="есть, но восстановление не удалось: "+(restored.error?.message||"ошибка");console.warn('Резервная сессия Supabase не восстановилась:',restored.error);await window.footbaleryClearAuthBackup?.();}
             }
-          }catch(backupError){console.warn('Не удалось восстановить резервную сессию:',backupError);}
+          }catch(backupError){backupState="ошибка чтения: "+(backupError?.message||"неизвестно");console.warn('Не удалось восстановить резервную сессию:',backupError);}
+        }
+        if(!data.session){
+          const diag=$('authDiagnostic');
+          if(diag){
+            const rows=[
+              "Диагностика сохранения входа",
+              "Адрес приложения: "+location.origin,
+              "Флаг «Запомнить»: "+(rememberSession?"включён":"выключен"),
+              "Ключ сессии Supabase в localStorage: "+(authStorageKeys===null?"недоступен":(authStorageKeys.length?"есть":"нет")),
+              "Резервная сессия IndexedDB: "+backupState,
+              "Ответ Supabase: "+(sessionError?.message||"сессия не найдена")
+            ];
+            diag.textContent=rows.join("\n");
+            diag.style.display="block";
+          }
         }
         // Галочка «Запомнить меня» одинаково работает в браузере и Android.
         const biometricEnabled = await hasBiometricCredentials();
@@ -3456,7 +3475,7 @@
         } else if ($('rememberMeCheckbox')) {
           try { $('rememberMeCheckbox').checked = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
         }
-      }).catch(err=>setMessage('loginMessage','Ошибка связи с сервером: '+(err?.message||'не удалось проверить сессию'),true));
+      }).catch(err=>{setMessage('loginMessage','Ошибка связи с сервером: '+(err?.message||'не удалось проверить сессию'),true);const diag=$('authDiagnostic');if(diag){diag.textContent='Диагностика: проверка Supabase завершилась ошибкой\nАдрес приложения: '+location.origin+'\nОшибка: '+(err?.message||'неизвестно');diag.style.display='block';}});
     }
   
     // Вкладки панели администратора: содержимое разделов сохраняет прежние ID и обработчики.

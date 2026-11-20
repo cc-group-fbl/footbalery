@@ -2353,7 +2353,7 @@
       if(!matchId||!refereeId){if(message)message.textContent='Выбери матч и участника.';return;}
       const button=$('assignProtocolRefereeButton');if(button)button.disabled=true;
       if(message)message.textContent='Сохраняем назначение…';
-      const {error}=await sb.rpc('admin_assign_match_referee',{p_match_id:matchId,p_referee_user_id:refereeId});
+      const {error}=await sb.rpc('admin_assign_match_referee',{p_match_id:Number(matchId),p_referee_user_id:refereeId});
       if(error){if(message)message.textContent='Не удалось назначить судью: '+error.message;}
       else{if(message)message.textContent='Судья назначен на выбранный матч.';await loadAdminProtocolManager();}
       if(button)button.disabled=false;

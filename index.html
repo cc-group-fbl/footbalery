@@ -1013,7 +1013,7 @@
         setMessage('loginMessage','Проверяем данные…');
         const { data, error } = await sb.auth.signInWithPassword({ email: usernameEmail(username), password });
         if (error) throw error;
-        try { localStorage.setItem('futbolery_remember_session', (window.Capacitor?.isNativePlatform?.() || $('rememberMeCheckbox')?.checked) ? 'true' : 'false'); } catch (_) {}
+        try { localStorage.setItem('futbolery_remember_session', $('rememberMeCheckbox')?.checked ? 'true' : 'false'); } catch (_) {}
         currentUser = data.user;offlineWrite('user_snapshot',currentUser);
         if (window.Capacitor?.isNativePlatform?.() && !credentialsOverride?.fromBiometric) {
           // Настройка биометрии не должна задерживать уже подтверждённый вход.
@@ -3368,20 +3368,11 @@
       sb.auth.getSession().then(async ({data})=>{
         let rememberSession = true;
         try { rememberSession = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
-        // В Android-приложении сохраняем авторизацию между принудительными закрытиями.
-        // Старое значение "false" не должно автоматически разлогинивать пользователя.
-        if (window.Capacitor?.isNativePlatform?.()) {
-          rememberSession = true;
-          try { localStorage.setItem('futbolery_remember_session', 'true'); } catch (_) {}
-        }
+        // Галочка «Запомнить меня» одинаково работает в браузере и Android.
         const biometricEnabled = await hasBiometricCredentials();
-        if (biometricEnabled) {
-          // Биометрия остаётся дополнительным способом входа.
-          // Не удаляем действующую сессию: иначе пользователь будет вынужден
-          // подтверждать вход при каждом запуске приложения.
-          if ($('biometricLoginButton')) $('biometricLoginButton').classList.remove('hidden');
-          if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = true;
-          rememberSession = true;
+        if (biometricEnabled && $('biometricLoginButton')) {
+          // Наличие сохранённых биометрических данных не меняет выбор пользователя.
+          $('biometricLoginButton').classList.remove('hidden');
         }
         if (data.session && rememberSession) {
           if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = true;

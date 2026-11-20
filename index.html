@@ -1044,7 +1044,7 @@
             .catch(logError=>console.warn('Ошибка журнала входов:',logError));
         } catch(logError) { console.warn('Ошибка журнала входов:',logError); }
         await showAccount();
-        await updateBiometricControls();
+        updateBiometricControls().catch(error=>console.warn('Не удалось обновить настройки быстрого входа:',error));
       } catch(err) {
         setMessage('loginMessage','Не удалось войти: '+(err?.message || 'ошибка соединения'),true);
       } finally {
@@ -2032,7 +2032,7 @@
       if(error){console.error('Не удалось проверить профиль; сессия сохранена:',error);$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');return setMessage('loginMessage','Не удалось загрузить профиль. Авторизация сохранена — проверьте подключение и повторите попытку позже.',true);}
       if(!profile){if(navigator.onLine)await sb.auth.signOut();$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');return setMessage('loginMessage',navigator.onLine?'Для аккаунта не назначена карточка игрока. Обратитесь к администратору.':'Нет сохранённого профиля. Сначала войдите с интернетом на этом устройстве.',true);}
       currentProfile = profile;
-      try{await loadSharedStatSettings();}catch(statError){console.error('Не удалось загрузить общие настройки статистики:',statError);sharedStatSettings=null;sharedStatSettingsLoaded=false;}
+      loadSharedStatSettings().then(()=>{renderStatSettings();}).catch(statError=>{console.error('Не удалось загрузить общие настройки статистики:',statError);sharedStatSettings=null;sharedStatSettingsLoaded=false;renderStatSettings();});
       renderBirthdayGreeting(profile?.birth_date,false); window.footbaleryCurrentUserId = currentUser.id; window.dispatchEvent(new Event('footbalery-user-ready')); renderStatSettings(); $('loginPanel').classList.add('hidden'); $('accountPanel').classList.remove('hidden'); refreshBirthdayGreeting(profile).catch(error=>console.warn('Проверка поздравления пропущена:',error)); $('welcomeText').textContent = 'ЛИЧНЫЙ КАБИНЕТ: ' + profile.username.toUpperCase();
       $('openAdminButton').classList.toggle('hidden', profile.role !== 'admin');
       $('openCaptainButton').classList.toggle('hidden', profile.role !== 'captain');
@@ -2046,8 +2046,8 @@
       else if(initialPanel==='protocolsPanel') await loadRefereeProtocols();
       // При входе загружаем только то, что действительно отображается на главной.
       // Остальные тяжёлые разделы подгружаются при первом открытии.
-      const homeLoads = navigator.onLine ? await Promise.allSettled([loadPlayerCard(profile.player_id),loadMatchOptions(),loadMyApplications(),loadPoll()]) : await Promise.allSettled([loadPlayerCard(profile.player_id)]);
-      homeLoads.filter(x=>x.status==='rejected').forEach(x=>console.warn('Ошибка загрузки главной:',x.reason));
+      const homeLoads = navigator.onLine ? [loadPlayerCard(profile.player_id),loadMatchOptions(),loadMyApplications(),loadPoll()] : [loadPlayerCard(profile.player_id)];
+      Promise.allSettled(homeLoads).then(results=>results.filter(x=>x.status==='rejected').forEach(x=>console.warn('Ошибка загрузки главной:',x.reason)));
       // Список чатов обновляется при открытии раздела; активный чат использует отдельную realtime-подписку.
     }
     function normalizeHeader(v) {
@@ -3242,7 +3242,8 @@
       // Сначала применяем кэш; если его нет, скрываем интерфейс до ответа Supabase,
       // чтобы пользователь не видел осеннюю палитру до загрузки своего сезона.
       const cachedSeason=getActiveSeason(cachedSchedule);
-      if(cachedSeason) applySeasonTheme(cachedSeason);
+      applySeasonTheme(cachedSeason || 'autumn');
+      document.body.classList.remove('theme-loading');
       try {
         if(!sb) return;
         const [scheduleResult,legacyResult]=await Promise.all([
@@ -3295,7 +3296,7 @@
       const status=$('seasonThemeStatus'); if(status) status.textContent='Расписание сохранено. Оформление будет переключаться автоматически в заданное время.';
     });
     // Загружаем общую тему и до авторизации, чтобы посетители не видели осень по умолчанию.
-    if(sb) loadSharedSeasonTheme();
+    if(sb) loadSharedSeasonTheme().catch(error=>{console.warn('Не удалось обновить сезонную тему:',error);document.body.classList.remove('theme-loading');});
     else { let cached={};try{cached=JSON.parse(localStorage.getItem('futbolerySeasonSchedule')||'{}');}catch(_){} applySeasonTheme(getActiveSeason(cached)||'autumn'); document.body.classList.remove('theme-loading'); }
     $('createPollForm')?.addEventListener('submit',createPoll);
     $('createMemberForm')?.addEventListener('submit',createMember);

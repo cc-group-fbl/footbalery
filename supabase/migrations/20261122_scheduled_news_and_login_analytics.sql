@@ -104,8 +104,8 @@ begin
     select * from public.scheduled_news
     where status='pending' and scheduled_for <= now()
     order by scheduled_for
-    for update skip locked
     limit 50
+    for update skip locked
   loop
     begin
       insert into public.news(id,title,body,image_url,author_id,created_by,visibility)

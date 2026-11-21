@@ -731,7 +731,7 @@
         async function saveAuthSessionBackup(session){
           if(!session?.access_token||!session?.refresh_token)return;
           let remember=true;
-          try{remember=localStorage.getItem('futbolery_remember_session')!=='false';}catch(_){}
+          try{remember=!!window.Capacitor?.isNativePlatform?.() || localStorage.getItem('futbolery_remember_session')!=='false';}catch(_){}
           if(!remember)return;
           const db=await openAuthBackupDb();
           await new Promise((resolve,reject)=>{
@@ -768,6 +768,12 @@
           if(session)saveAuthSessionBackup(session).catch(error=>console.warn('Не удалось обновить резервную сессию:',error));
         });
         $('rememberMeCheckbox')?.addEventListener('change',event=>{
+          // В Android авторизация всегда сохраняется.
+          if(window.Capacitor?.isNativePlatform?.() && !event.target.checked){
+            event.target.checked=true;
+            try{localStorage.setItem('futbolery_remember_session','true');}catch(_){}
+            return;
+          }
           try{localStorage.setItem('futbolery_remember_session',event.target.checked?'true':'false');}catch(_){}
           if(!event.target.checked)clearAuthSessionBackup();
         });
@@ -1118,10 +1124,14 @@
         const { data, error } = await sb.auth.signInWithPassword({ email: usernameEmail(username), password });
         if (error) throw error;
         try { localStorage.removeItem('futbolery_biometric_autologin_disabled'); } catch (_) {}
-        const rememberThisDevice=!!$('rememberMeCheckbox')?.checked;
+        const rememberThisDevice=!!window.Capacitor?.isNativePlatform?.() || !!$('rememberMeCheckbox')?.checked;
         try { localStorage.setItem('futbolery_remember_session', rememberThisDevice ? 'true' : 'false'); } catch (_) {}
-        if(rememberThisDevice)window.footbalerySaveAuthBackup?.(data.session).catch(error=>console.warn('Не удалось сохранить резервную сессию:',error));
-        else window.footbaleryClearAuthBackup?.();
+        if(rememberThisDevice){
+          try{await window.footbalerySaveAuthBackup?.(data.session);}
+          catch(error){console.warn('Не удалось сохранить резервную сессию:',error);}
+        }else{
+          await window.footbaleryClearAuthBackup?.();
+        }
         currentUser = data.user;offlineWrite('user_snapshot',currentUser);
         if (window.Capacitor?.isNativePlatform?.() && !credentialsOverride?.fromBiometric) {
           // Настройка биометрии не должна задерживать уже подтверждённый вход.
@@ -3580,8 +3590,10 @@
       sb.auth.getSession().then(async ({data,error:sessionError})=>{
         let rememberSession = true;
         let backupState = "не проверена";
+        const isNativeApp=!!window.Capacitor?.isNativePlatform?.();
         const authStorageKeys=(()=>{try{return Object.keys(localStorage).filter(key=>/^sb-.+-auth-token$/.test(key));}catch(_){return null;}})();
-        try { rememberSession = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
+        try { rememberSession = isNativeApp || localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
+        if(isNativeApp){try{localStorage.setItem('futbolery_remember_session','true');}catch(_){}}
         if($('rememberMeCheckbox'))$('rememberMeCheckbox').checked=rememberSession;
         // Если WebView потерял localStorage-сессию, восстанавливаем её из IndexedDB.
         if(!data.session&&rememberSession&&window.footbaleryReadAuthBackup){

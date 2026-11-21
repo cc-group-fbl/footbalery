@@ -803,7 +803,7 @@
       return path;
     }
     function tournamentResultsRouteStage(){
-      const match=normalizedAppPath().match(/^\/tournaments\/1-na-1\/results\/(autumn|winter|spring|overall)\/?$/);
+      const match=normalizedAppPath().match(/^\/tournaments\/1-na-1\/results\/(autumn|winter|spring|summer-playoff|overall)\/?$/);
       return match?match[1]:null;
     }
     function panelFromCurrentPath(){
@@ -811,11 +811,12 @@
       if(tournamentResultsRouteStage())return 'tournamentsPanel';
       return ROUTE_SECTIONS[APP_ROUTE(path)]||ROUTE_SECTIONS[path]||'homeScreen';
     }
-    const TOURNAMENT_RESULT_ROUTES={autumn:'/tournaments/1-na-1/results/autumn',winter:'/tournaments/1-na-1/results/winter',spring:'/tournaments/1-na-1/results/spring',overall:'/tournaments/1-na-1/results/overall'};
+    const TOURNAMENT_RESULT_ROUTES={autumn:'/tournaments/1-na-1/results/autumn',winter:'/tournaments/1-na-1/results/winter',spring:'/tournaments/1-na-1/results/spring','summer-playoff':'/tournaments/1-na-1/results/summer-playoff',overall:'/tournaments/1-na-1/results/overall'};
     async function openTournamentResultsRoute(stage){
       if(!TOURNAMENT_RESULT_ROUTES[stage])return false;
-      activeTournamentKey='one';activeTournamentStage=stage;activeOneOnOneView=stage==='overall'?'overall':'table';renderTournamentSwitch();
+      activeTournamentKey='one';activeTournamentStage=stage==='summer-playoff'?'summer_playoff':stage;activeOneOnOneView=stage==='overall'?'overall':(stage==='summer-playoff'?'matches':'table');renderTournamentSwitch();
       const target=APP_ROUTE(TOURNAMENT_RESULT_ROUTES[stage]);if(window.location.pathname!==target)history.pushState({sectionId:'tournamentsPanel',resultStage:stage},'',target);
+      if(stage==='summer-playoff'){const root=$('tournamentBracketsList');if(root)root.textContent='Загружаем матчи летнего плей-офф…';await loadTournamentBrackets();return true;}
       const root=$(stage==='overall'?'oneOnOneOverall':'oneOnOneStandings');if(root)root.textContent='Загружаем таблицу из Google Таблицы…';
       try{await loadOneOnOneSheet();if(stage==='overall')renderOneOnOneOverall();else renderOneOnOneStandings();}catch(error){if(root)root.textContent='Не удалось загрузить таблицу: '+(error.message||'ошибка');}
       return true;
@@ -1467,7 +1468,7 @@
     function addTournamentResultsTools(root,table,stage){
       const tools=document.createElement('div');tools.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px';
       const save=document.createElement('button');save.type='button';save.className='small-btn';save.textContent='📷 СОХРАНИТЬ ТАБЛИЦУ КАК ФОТО';save.addEventListener('click',()=>downloadTournamentTableImage(table,stage));tools.appendChild(save);
-      const links=document.createElement('div');links.style.cssText='display:flex;flex-wrap:wrap;gap:8px;font-size:12px';const names={autumn:'🍂 Осень',winter:'❄️ Зима',spring:'🌱 Весна',overall:'🏆 Итоги'};
+      const links=document.createElement('div');links.style.cssText='display:flex;flex-wrap:wrap;gap:8px;font-size:12px';const names={autumn:'🍂 Осень',winter:'❄️ Зима',spring:'🌱 Весна','summer-playoff':'☀️ Летний плей-офф',overall:'🏆 Итоги'};
       Object.entries(TOURNAMENT_RESULT_ROUTES).forEach(([key,path])=>{const link=document.createElement('a');link.href=APP_ROUTE(path);link.textContent=names[key];link.style.cssText='color:var(--accent-text);text-decoration:underline';link.addEventListener('click',event=>{event.preventDefault();openTournamentResultsRoute(key);});links.appendChild(link);});tools.appendChild(links);root.appendChild(tools);
     }
     function downloadTournamentTableImage(table,stage){

@@ -796,11 +796,29 @@
       adminPanel:APP_ROUTE('/admin/')
     };
     const ROUTE_SECTIONS = Object.fromEntries(Object.entries(SECTION_ROUTES).map(([panel,path])=>[path,panel]));
-    function panelFromCurrentPath(){
+    function normalizedAppPath(){
       let path=window.location.pathname.replace(/\/+$/,'/')||'/';
       if(APP_BASE_PATH && path.startsWith(APP_BASE_PATH+'/')) path=path.slice(APP_BASE_PATH.length);
       else if(APP_BASE_PATH && path===APP_BASE_PATH) path='/';
+      return path;
+    }
+    function tournamentResultsRouteStage(){
+      const match=normalizedAppPath().match(/^\/tournaments\/1-na-1\/results\/(autumn|winter|spring|overall)\/?$/);
+      return match?match[1]:null;
+    }
+    function panelFromCurrentPath(){
+      const path=normalizedAppPath();
+      if(tournamentResultsRouteStage())return 'tournamentsPanel';
       return ROUTE_SECTIONS[APP_ROUTE(path)]||ROUTE_SECTIONS[path]||'homeScreen';
+    }
+    const TOURNAMENT_RESULT_ROUTES={autumn:'/tournaments/1-na-1/results/autumn',winter:'/tournaments/1-na-1/results/winter',spring:'/tournaments/1-na-1/results/spring',overall:'/tournaments/1-na-1/results/overall'};
+    async function openTournamentResultsRoute(stage){
+      if(!TOURNAMENT_RESULT_ROUTES[stage])return false;
+      activeTournamentKey='one';activeTournamentStage=stage;activeOneOnOneView=stage==='overall'?'overall':'table';renderTournamentSwitch();
+      const target=APP_ROUTE(TOURNAMENT_RESULT_ROUTES[stage]);if(window.location.pathname!==target)history.pushState({sectionId:'tournamentsPanel',resultStage:stage},'',target);
+      const root=$(stage==='overall'?'oneOnOneOverall':'oneOnOneStandings');if(root)root.textContent='Загружаем таблицу из Google Таблицы…';
+      try{await loadOneOnOneSheet();if(stage==='overall')renderOneOnOneOverall();else renderOneOnOneStandings();}catch(error){if(root)root.textContent='Не удалось загрузить таблицу: '+(error.message||'ошибка');}
+      return true;
     }
     function showSection(sectionId,updateUrl=true) {
       if(updateUrl && SECTION_ROUTES[sectionId]){
@@ -819,15 +837,9 @@
 
     window.addEventListener('popstate',async()=>{
       if(!currentUser)return;
-      const panel=panelFromCurrentPath();
-      showSection(panel,false);
-      try{
-        if(panel==='newsPanel')await loadNews();
-        else if(panel==='chatsPanel')await loadChats();
-        else if(panel==='schedulePanel')await loadSchedule();
-        else if(panel==='financePanel')await loadFinance();
-        else if(panel==='tournamentsPanel')await loadTournamentBrackets();
-        else if(panel==='protocolsPanel')await loadRefereeProtocols();
+      const panel=panelFromCurrentPath();showSection(panel,false);
+      try{const stage=tournamentResultsRouteStage();if(stage){await openTournamentResultsRoute(stage);return;}
+        if(panel==='newsPanel')await loadNews();else if(panel==='chatsPanel')await loadChats();else if(panel==='schedulePanel')await loadSchedule();else if(panel==='financePanel')await loadFinance();else if(panel==='tournamentsPanel')await loadTournamentBrackets();else if(panel==='protocolsPanel')await loadRefereeProtocols();
       }catch(error){console.error('Не удалось открыть раздел по ссылке:',error);}
     });
 
@@ -1452,6 +1464,22 @@
       const points=player.values[normalizeHeader('Очков за '+(stage==='осень'?'осенний':stage==='зима'?'зимний':'весенний')+' этап')]||'';
       return {values:total,place,points};
     }
+    function addTournamentResultsTools(root,table,stage){
+      const tools=document.createElement('div');tools.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px';
+      const save=document.createElement('button');save.type='button';save.className='small-btn';save.textContent='📷 СОХРАНИТЬ ТАБЛИЦУ КАК ФОТО';save.addEventListener('click',()=>downloadTournamentTableImage(table,stage));tools.appendChild(save);
+      const links=document.createElement('div');links.style.cssText='display:flex;flex-wrap:wrap;gap:8px;font-size:12px';const names={autumn:'🍂 Осень',winter:'❄️ Зима',spring:'🌱 Весна',overall:'🏆 Итоги'};
+      Object.entries(TOURNAMENT_RESULT_ROUTES).forEach(([key,path])=>{const link=document.createElement('a');link.href=APP_ROUTE(path);link.textContent=names[key];link.style.cssText='color:var(--accent-text);text-decoration:underline';link.addEventListener('click',event=>{event.preventDefault();openTournamentResultsRoute(key);});links.appendChild(link);});tools.appendChild(links);root.appendChild(tools);
+    }
+    function downloadTournamentTableImage(table,stage){
+      if(!table)return;const rows=Array.from(table.rows||[]);if(!rows.length)return;
+      const probe=document.createElement('canvas').getContext('2d'),padX=12,padY=9,line=18,cols=Math.max(...rows.map(row=>row.cells.length)),widths=Array(cols).fill(76);
+      rows.forEach(row=>Array.from(row.cells).forEach((cell,i)=>{const st=getComputedStyle(cell);probe.font=(st.fontWeight||'500')+' '+(parseFloat(st.fontSize)||12)+'px Gilroy,Arial';widths[i]=Math.min(280,Math.max(widths[i],probe.measureText(String(cell.innerText||cell.textContent||'')).width+padX*2));}));
+      const heights=rows.map(row=>Math.max(40,...Array.from(row.cells).map((cell,i)=>{const st=getComputedStyle(cell);probe.font=(st.fontWeight||'500')+' '+(parseFloat(st.fontSize)||12)+'px Gilroy,Arial';return Math.max(40,Math.ceil(probe.measureText(String(cell.innerText||cell.textContent||'')).width/Math.max(40,widths[i]-padX*2))*line+padY*2);}));
+      const scale=2,margin=24,W=widths.reduce((a,b)=>a+b,0)+margin*2,H=heights.reduce((a,b)=>a+b,0)+margin*2+36,canvas=document.createElement('canvas');canvas.width=Math.ceil(W*scale);canvas.height=Math.ceil(H*scale);
+      const ctx=canvas.getContext('2d');ctx.scale(scale,scale);ctx.fillStyle='#0b111b';ctx.fillRect(0,0,W,H);ctx.fillStyle='#fff';ctx.font='900 20px Gilroy,Arial';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(stage==='overall'?'ИТОГИ ТУРНИРА 1 НА 1':'ТУРНИР 1 НА 1 · '+String(stage).toUpperCase(),margin,margin+5);
+      let y=margin+32;rows.forEach((row,ri)=>{let x=margin;const header=row.parentElement?.tagName==='THEAD';Array.from(row.cells).forEach((cell,i)=>{const w=widths[i],h=heights[ri],st=getComputedStyle(cell);ctx.fillStyle=header?'#26364a':'#121d2b';ctx.fillRect(x,y,w,h);ctx.strokeStyle='#40516a';ctx.strokeRect(x,y,w,h);ctx.fillStyle=header?'#fff':'#eaf2ff';ctx.font=(st.fontWeight||'500')+' '+(parseFloat(st.fontSize)||12)+'px Gilroy,Arial';ctx.textAlign=i===1?'left':'center';ctx.textBaseline='middle';const val=String(cell.innerText||cell.textContent||'').trim(),max=w-padX*2;let lines=[val];if(ctx.measureText(val).width>max){lines=[];let cur='';val.split(/\s+/).forEach(word=>{const test=cur?cur+' '+word:word;if(cur&&ctx.measureText(test).width>max){lines.push(cur);cur=word;}else cur=test;});if(cur)lines.push(cur);}const count=Math.max(1,Math.floor((h-padY*2)/line));lines.slice(0,count).forEach((v,j)=>ctx.fillText(v,x+(i===1?padX:w/2),y+h/2-(Math.min(lines.length,count)-1)*line/2+j*line,max));x+=w;});y+=heights[ri];});
+      canvas.toBlob(blob=>{if(!blob){alert('Не удалось подготовить изображение таблицы.');return;}const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='footbalery-1na1-'+stage+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);},'image/png');
+    }
     function renderOneOnOneStandings(){
       const root=$('oneOnOneStandings');if(!root)return;root.replaceChildren();
       const stage=oneOnOneStageNames[activeTournamentStage];
@@ -1471,7 +1499,7 @@
       const head=document.createElement('tr');['#','Участник','И','В','Н','П','ЗМ','ПМ','РМ','ЖК','КК','О'].forEach((x,j)=>{const th=document.createElement('th');th.textContent=x;th.style.cssText='padding:9px 6px;background:rgba(255,255,255,.07);white-space:nowrap'+(j===1?';'+stickyHeaderStyle:'');head.appendChild(th);});
       const thead=document.createElement('thead');thead.appendChild(head);table.appendChild(thead);const body=document.createElement('tbody');
       players.forEach((p,i)=>{const tr=document.createElement('tr');tr.style.borderTop='1px solid var(--border-color)';[p.place||i+1,p.name,p.played,p.wins,p.draws,p.losses,p.scored,p.conceded,p.diff,p.yellow,p.red,p.points].forEach((v,j)=>{const td=document.createElement('td');td.textContent=j===1?compactParticipantName(p.name):String(v);td.style.cssText='padding:9px 6px;white-space:nowrap';if(j===1){td.title=p.name;td.style.textAlign='left';td.style.fontWeight='700';td.style.cssText+=';'+stickyStyle;}if(j===11){td.style.fontWeight='900';td.style.color='var(--accent-text)';}tr.appendChild(td);});body.appendChild(tr);});
-      table.appendChild(body);wrap.appendChild(table);root.appendChild(wrap);
+      table.appendChild(body);wrap.appendChild(table);root.appendChild(wrap);addTournamentResultsTools(root,table,activeTournamentStage);
     }
     function renderOneOnOneOverall(){
       const root=$('oneOnOneOverall');if(!root)return;root.replaceChildren();
@@ -1512,7 +1540,7 @@
         });
         body.appendChild(tr);
       });
-      table.appendChild(body);wrap.appendChild(table);root.appendChild(wrap);
+      table.appendChild(body);wrap.appendChild(table);root.appendChild(wrap);addTournamentResultsTools(root,table,'overall');
     }
     function appendOneOnOneStats(container,name){
       const stats=oneOnOnePlayerStats(name);if(!stats)return;
@@ -1944,6 +1972,9 @@
     }));
     $('tournamentStageSelect')?.addEventListener('change',async event=>{
       activeTournamentStage=event.target.value;
+      if(TOURNAMENT_RESULT_ROUTES[activeTournamentStage]){activeOneOnOneView=activeTournamentStage==='overall'?'overall':'table';history.replaceState({sectionId:'tournamentsPanel',resultStage:activeTournamentStage},'',APP_ROUTE(TOURNAMENT_RESULT_ROUTES[activeTournamentStage]));}
+      else if(window.location.pathname.includes('/tournaments/1-na-1/results/'))history.replaceState({sectionId:'tournamentsPanel'},'',APP_ROUTE('/tournaments/'));
+
       if(activeTournamentStage==='overall'){
         activeOneOnOneView='overall';renderTournamentSwitch();
         const root=$('oneOnOneOverall');if(root)root.textContent='Загружаем общий зачёт из Google Таблицы…';
@@ -2175,14 +2206,15 @@
         $('openCaptainButton').classList.toggle('hidden',p.role!=='captain');
       };
       renderAccount(profile,!cachedProfile);
-      const initialPanel=cachedProfile?'homeScreen':panelFromCurrentPath();
+      const requestedInitialPanel=panelFromCurrentPath();
+      const initialPanel=requestedInitialPanel!=='homeScreen'?requestedInitialPanel:(cachedProfile?'homeScreen':requestedInitialPanel);
       showSection(initialPanel,false);
       const loadInitialSection=async(panel=initialPanel)=>{
         if(panel==='newsPanel')await loadNews();
         else if(panel==='chatsPanel')await loadChats();
         else if(panel==='schedulePanel')await loadSchedule();
         else if(panel==='financePanel')await loadFinance();
-        else if(panel==='tournamentsPanel')await loadTournamentBrackets();
+        else if(panel==='tournamentsPanel'){const stage=tournamentResultsRouteStage();if(stage)await openTournamentResultsRoute(stage);else await loadTournamentBrackets();}
         else if(panel==='protocolsPanel')await loadRefereeProtocols();
       };
       if(!cachedProfile){

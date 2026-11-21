@@ -861,7 +861,7 @@
       adminPanelLoading=true;
       const jobs=[
         loadAdminResults(),loadAdminVoteDetails(),loadNewsRecipients(),loadAdminNews(),
-        loadAdminUsers(),loadAdminMatches(),loadAdminMatchApplications(),loadAdminScheduleScores(),loadAdminProtocolManager()
+        loadAdminUsers(),loadAdminMatches(),loadAdminMatchApplications(),loadAdminScheduleScores(),loadAdminProtocolManager(),loadScheduledNews()
       ];
       const results=await Promise.allSettled(jobs);
       const failures=results.filter(x=>x.status==='rejected');
@@ -1024,7 +1024,7 @@
       $('createNewsForm').reset();
       document.querySelectorAll('input[name="newsAudience"]').forEach(x=>x.disabled=false);
       $('newsRecipientsWrap').classList.add('hidden');$('newsEditWrap').classList.add('hidden');
-      $('newsEditAttachments').replaceChildren();$('newsAttachmentFiles').value='';
+      $('newsEditAttachments').replaceChildren();$('newsAttachmentFiles').value='';$('newsScheduleWrap')?.classList.add('hidden');
       $('publishNewsButton').textContent='ОПУБЛИКОВАТЬ НОВОСТЬ';
     }
     async function loadScheduledNews(){
@@ -3560,7 +3560,7 @@
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('refreshLoginHistory')?.addEventListener('click',loadLoginHistory);
     $('loginButton').addEventListener('click',()=>signIn());$('biometricLoginButton')?.addEventListener('click',biometricSignIn);$('biometricSettingsButton')?.addEventListener('click',toggleBiometricLogin);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
-    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);loadScheduledNews();$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsDelivery"]').forEach(r=>r.addEventListener('change',()=> $('newsScheduleWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsDelivery"]:checked')?.value!=='scheduled')));$('loginHistoryPeriod')?.addEventListener('change',loadLoginHistory);$('loginHistorySearch')?.addEventListener('input',()=>{clearTimeout(window._loginHistorySearchTimer);window._loginHistorySearchTimer=setTimeout(loadLoginHistory,250);});document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();});
+    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsDelivery"]').forEach(r=>r.addEventListener('change',()=> $('newsScheduleWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsDelivery"]:checked')?.value!=='scheduled')));$('loginHistoryPeriod')?.addEventListener('change',loadLoginHistory);$('loginHistorySearch')?.addEventListener('input',()=>{clearTimeout(window._loginHistorySearchTimer);window._loginHistorySearchTimer=setTimeout(loadLoginHistory,250);});document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();});
     $('openProtocolsButton')?.addEventListener('click',async()=>{showSection('protocolsPanel');await loadRefereeProtocols();});
     $('protocolsBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
     $('assignProtocolRefereeButton')?.addEventListener('click',assignProtocolReferee);

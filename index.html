@@ -2364,15 +2364,15 @@
       return node;
     }
     function parseProtocolPlayerStats(text,sideLabel){
-      return String(text||'').split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean).map((line,index)=>{
+      return String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map((line,index)=>{
         const parts=line.split(/[;|]/).map(x=>x.trim());
         if(parts.length<2||!parts[0])throw new Error(sideLabel+', строка '+(index+1)+': формат «ФИО; голы; жёлтые; красные».');
         const values=[parts[1],parts[2]??'0',parts[3]??'0'].map(v=>v===''?'0':v);
-        if(values.some(v=>!/^\\d+$/.test(v)))throw new Error(sideLabel+', строка '+(index+1)+': голы и карточки должны быть целыми неотрицательными числами.');
+        if(values.some(v=>!/^\d+$/.test(v)))throw new Error(sideLabel+', строка '+(index+1)+': голы и карточки должны быть целыми неотрицательными числами.');
         return {name:parts[0],goals:Number(values[0]),yellow_cards:Number(values[1]),red_cards:Number(values[2])};
       });
     }
-    function protocolStatsToText(rows){return (Array.isArray(rows)?rows:[]).map(p=>[p.name,p.goals??0,p.yellow_cards??0,p.red_cards??0].join('; ')).join('\\n');}
+    function protocolStatsToText(rows){return (Array.isArray(rows)?rows:[]).map(p=>[p.name,p.goals??0,p.yellow_cards??0,p.red_cards??0].join('; ')).join('\n');}
     async function loadRefereeProtocols(){
       const root=$('refereeProtocolsList');
       if(!root||!sb||!currentUser)return;
@@ -2662,7 +2662,7 @@
     }
     function scheduleDateLabel(value){if(!value)return '';const d=new Date(value+'T00:00:00');return Number.isNaN(d.getTime())?value:d.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'});}
     function renderScheduleLineups(item,card){
-      const asPlayers=value=>Array.isArray(value)?value:String(value||'').split(/[,;\\n]/).map(x=>x.trim()).filter(Boolean);
+      const asPlayers=value=>Array.isArray(value)?value:String(value||'').split(/[,;\n]/).map(x=>x.trim()).filter(Boolean);
       const home=asPlayers(item.match?.home_players),away=asPlayers(item.match?.away_players),protocol=item.match?.protocol_data||null;
       const stats=Array.isArray(protocol?.player_stats)?protocol.player_stats:[];
       if(!home.length&&!away.length&&!stats.length&&!protocol)return;
@@ -2671,12 +2671,12 @@
       const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:12px';
       [[home,'ХОЗЯЕВА','home'],[away,'ГОСТИ','away']].forEach(([players,label,team])=>{
         const side=document.createElement('div'),heading=document.createElement('div');heading.className='news-meta';heading.style.fontWeight='900';heading.textContent=label;side.appendChild(heading);
-        const teamStats=stats.filter(p=>p.team===team),list=document.createElement('div');list.className='news-body';list.style.fontSize='12px';list.textContent=players.length?players.join('\\n'):'Состав не указан';
-        if(teamStats.length)list.textContent+='\\n\\n'+teamStats.map(p=>p.name+' — ⚽ '+(p.goals||0)+' · 🟨 '+(p.yellow_cards||0)+' · 🟥 '+(p.red_cards||0)).join('\\n');
+        const teamStats=stats.filter(p=>p.team===team),list=document.createElement('div');list.className='news-body';list.style.fontSize='12px';list.textContent=players.length?players.join('\n'):'Состав не указан';
+        if(teamStats.length)list.textContent+='\n\n'+teamStats.map(p=>p.name+' — ⚽ '+(p.goals||0)+' · 🟨 '+(p.yellow_cards||0)+' · 🟥 '+(p.red_cards||0)).join('\n');
         side.appendChild(list);grid.appendChild(side);
       });
       details.appendChild(grid);
-      if(protocol){const info=document.createElement('div');info.className='news-body';info.style.cssText='font-size:12px;margin-top:10px;white-space:pre-wrap';info.textContent=['Главный судья: '+(protocol.main_referee||'—')+(protocol.main_referee_rating!=null?' · оценка '+protocol.main_referee_rating:''),'Помощник: '+(protocol.assistant_referee||'—')+(protocol.assistant_referee_rating!=null?' · оценка '+protocol.assistant_referee_rating:''),'Комментарий: '+(protocol.referee_comment||'—')].join('\\n');details.appendChild(info);}
+      if(protocol){const info=document.createElement('div');info.className='news-body';info.style.cssText='font-size:12px;margin-top:10px;white-space:pre-wrap';info.textContent=['Главный судья: '+(protocol.main_referee||'—')+(protocol.main_referee_rating!=null?' · оценка '+protocol.main_referee_rating:''),'Помощник: '+(protocol.assistant_referee||'—')+(protocol.assistant_referee_rating!=null?' · оценка '+protocol.assistant_referee_rating:''),'Комментарий: '+(protocol.referee_comment||'—')].join('\n');details.appendChild(info);}
       card.appendChild(details);
     }
     const MATCH_ATTACHMENT_BUCKET='schedule-attachments';

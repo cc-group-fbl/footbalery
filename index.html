@@ -438,7 +438,6 @@
           </select>
           <div id="tournamentStageHint" class="muted" style="font-size:12px;margin-top:6px">Выберите сезон, чтобы открыть его матчи и турнирную таблицу.</div>
         </div>
-        <button type="button" id="tournamentOverallButton" class="admin-tab hidden" style="width:100%;margin:10px 0;text-align:center;padding:14px;font-size:15px;font-weight:900">🏆 ИТОГИ ТУРНИРА — ОБЩИЙ ЗАЧЁТ</button>
         <div id="tournamentPhaseWrap" class="tournament-switch hidden" style="margin-top:6px">
           <button type="button" class="admin-tab active" data-phase="qualification">КВАЛИФИКАЦИЯ</button>
           <button type="button" class="admin-tab" data-phase="playoff">ПЛЕЙ-ОФФ</button>
@@ -1546,7 +1545,6 @@
       document.querySelectorAll('[data-tournament]').forEach(b=>b.classList.toggle('active',b.dataset.tournament===activeTournamentKey));
       const isOverallStage=activeTournamentStage==='overall';
       $('tournamentStageWrap')?.classList.toggle('hidden',activeTournamentKey!=='one');
-      $('tournamentOverallButton')?.classList.toggle('hidden',activeTournamentKey!=='one');
       const stageSelect=$('tournamentStageSelect');if(stageSelect)stageSelect.value=activeTournamentStage;
       const stageHint=$('tournamentStageHint');if(stageHint){const labels={autumn:'Сейчас открыт осенний этап. Здесь показаны его матчи и результаты.',winter:'Сейчас открыт зимний этап. Здесь показаны его матчи и результаты.',spring:'Сейчас открыт весенний этап. Здесь показаны его матчи и результаты.',summer_playoff:'Сейчас открыт летний плей-офф.',overall:'Общий зачёт по очкам всех этапов из Google Таблицы.'};stageHint.textContent=labels[activeTournamentStage]||'Выберите этап турнира.';}
       const playoffEnabled=oneOnOnePlayoffEnabled();
@@ -1944,14 +1942,6 @@
     document.querySelectorAll('[data-tournament]').forEach(button=>button.addEventListener('click',async()=>{
       activeTournamentKey=button.dataset.tournament;await loadTournamentBrackets();
     }));
-    $('tournamentOverallButton')?.addEventListener('click',async()=>{
-      activeTournamentStage='overall';
-      const stageSelect=$('tournamentStageSelect');if(stageSelect)stageSelect.value='overall';
-      activeOneOnOneView='overall';renderTournamentSwitch();
-      const root=$('oneOnOneOverall');if(root)root.textContent='Загружаем общий зачёт из Google Таблицы…';
-      try{await loadOneOnOneSheet();renderOneOnOneOverall();}
-      catch(error){if(root)root.textContent='Не удалось загрузить Google Таблицу: '+(error.message||'ошибка');}
-    });
     $('tournamentStageSelect')?.addEventListener('change',async event=>{
       activeTournamentStage=event.target.value;
       if(activeTournamentStage==='overall'){

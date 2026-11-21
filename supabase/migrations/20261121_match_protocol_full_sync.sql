@@ -46,7 +46,7 @@ begin
   end if;
   if exists (
     select 1
-    from jsonb_array_elements(p_player_stats) as item
+    from jsonb_array_elements(p_player_stats) as items(item)
     where coalesce(item->>'team','') not in ('home','away')
        or coalesce(item->>'name','') = ''
        or coalesce(item->>'goals','') !~ '^\\d+$'
@@ -58,7 +58,7 @@ begin
     coalesce(sum((item->>'goals')::integer) filter (where item->>'team'='home'),0),
     coalesce(sum((item->>'goals')::integer) filter (where item->>'team'='away'),0)
   into v_home_goals,v_away_goals
-  from jsonb_array_elements(p_player_stats) as item;
+  from jsonb_array_elements(p_player_stats) as items(item);
 
   if v_home_goals <> p_score_home or v_away_goals <> p_score_away then
     raise exception 'Сумма голов по игрокам должна совпадать со счётом обеих команд';

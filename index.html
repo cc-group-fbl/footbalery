@@ -1085,6 +1085,7 @@
         setMessage('loginMessage','Проверяем данные…');
         const { data, error } = await sb.auth.signInWithPassword({ email: usernameEmail(username), password });
         if (error) throw error;
+        try { localStorage.removeItem('futbolery_biometric_autologin_disabled'); } catch (_) {}
         const rememberThisDevice=!!$('rememberMeCheckbox')?.checked;
         try { localStorage.setItem('futbolery_remember_session', rememberThisDevice ? 'true' : 'false'); } catch (_) {}
         if(rememberThisDevice)window.footbalerySaveAuthBackup?.(data.session).catch(error=>console.warn('Не удалось сохранить резервную сессию:',error));
@@ -3406,7 +3407,7 @@
         setMessage('createMemberMessage','Не удалось создать участника: '+(err.message||'ошибка')+'. Проверьте, что функция create-member опубликована и вы вошли как admin.',true);
       } finally { button.disabled=false; }
     }
-    async function logout(){if(!confirm('Вы действительно хотите выйти из своего аккаунта?'))return;const {error}=await sb.auth.signOut();if(error){alert('Не удалось выйти из аккаунта: '+error.message);return;}await window.footbaleryClearAuthBackup?.();if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');currentUser=null;currentProfile=null;$('birthdayGreeting')?.classList.remove('visible');$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('passwordInput').value='';$('biometricLoginButton')?.classList.add('hidden');if(await hasBiometricCredentials()) $('biometricLoginButton')?.classList.remove('hidden');setMessage('loginMessage','Вы вышли из аккаунта.');}
+    async function logout(){if(!confirm('Вы действительно хотите выйти из своего аккаунта?'))return;const {error}=await sb.auth.signOut();if(error){alert('Не удалось выйти из аккаунта: '+error.message);return;}await window.footbaleryClearAuthBackup?.();try{localStorage.setItem('futbolery_biometric_autologin_disabled','true');}catch(_){}if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');currentUser=null;currentProfile=null;$('birthdayGreeting')?.classList.remove('visible');$('accountPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('passwordInput').value='';$('biometricLoginButton')?.classList.add('hidden');if(await hasBiometricCredentials()) $('biometricLoginButton')?.classList.remove('hidden');setMessage('loginMessage','Вы вышли из аккаунта.');}
 
     $('openChatsButton')?.addEventListener('click',async()=>{showSection('chatsPanel');$('chatThread').classList.add('hidden');$('chatList').classList.remove('hidden');try{await loadChats();}catch(e){$('chatList').textContent='Не удалось загрузить чаты. Сначала необходимо выполнить SQL-настройку чатов в Supabase.';console.error(e);}});
     $('chatsBackButton')?.addEventListener('click',async()=>{if(chatRealtimeChannel){await sb.removeChannel(chatRealtimeChannel);chatRealtimeChannel=null;}activeChatId=null;$('accountPanel').classList.remove('chat-thread-open');$('chatThread').classList.add('hidden');showSection('homeScreen');});
@@ -3584,8 +3585,17 @@
           await sb.auth.signOut();
           await window.footbaleryClearAuthBackup?.();
           if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = false;
-        } else if ($('rememberMeCheckbox')) {
-          try { $('rememberMeCheckbox').checked = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
+        } else {
+          if ($('rememberMeCheckbox')) {
+            try { $('rememberMeCheckbox').checked = localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
+          }
+          // В Android, если WebView потерял локальную сессию, безопасно восстанавливаем вход
+          // через системное хранилище Native Biometric после подтверждения отпечатком.
+          let biometricAutoLoginAllowed = true;
+          try { biometricAutoLoginAllowed = localStorage.getItem('futbolery_biometric_autologin_disabled') !== 'true'; } catch (_) {}
+          if (window.Capacitor?.isNativePlatform?.() && biometricEnabled && biometricAutoLoginAllowed) {
+            await biometricSignIn();
+          }
         }
       }).catch(err=>{setMessage('loginMessage','Ошибка связи с сервером: '+(err?.message||'не удалось проверить сессию'),true);const diag=$('authDiagnostic');if(diag){diag.textContent='Диагностика: проверка Supabase завершилась ошибкой\nАдрес приложения: '+location.origin+'\nОшибка: '+(err?.message||'неизвестно');diag.style.display='block';}});
     }

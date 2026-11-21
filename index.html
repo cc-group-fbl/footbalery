@@ -599,6 +599,10 @@
           <label class="candidate"><input type="radio" name="newsAudience" value="all" checked><span style="font-size:13px">Всем участникам сообщества</span></label>
           <label class="candidate"><input type="radio" name="newsAudience" value="selected"><span style="font-size:13px">Только выбранным пользователям</span></label>
           <div id="newsRecipientsWrap" class="hidden" style="margin:10px 0;padding:10px;border:1px solid rgba(255,255,255,.12);border-radius:10px"><div style="display:flex;gap:8px;margin-bottom:8px"><button type="button" id="selectAllNewsRecipients" class="small-btn">Выбрать всех</button><button type="button" id="clearNewsRecipients" class="small-btn">Снять выбор</button></div><div id="newsRecipientsList" class="muted" style="text-align:left">Загрузка пользователей…</div></div>
+          <label class="muted" style="display:block;text-align:left;margin-top:12px">Когда отправить?</label>
+          <label class="candidate"><input type="radio" name="newsDelivery" value="now" checked><span style="font-size:13px">Опубликовать сейчас</span></label>
+          <label class="candidate"><input type="radio" name="newsDelivery" value="scheduled"><span style="font-size:13px">Отложенная отправка</span></label>
+          <div id="newsScheduleWrap" class="hidden"><label class="muted" for="newsScheduledAt">Дата и время публикации<input id="newsScheduledAt" class="field" type="datetime-local"></label><div class="muted" style="text-align:left">Время указывается по часовому поясу устройства администратора. Отложенные новости публикуются автоматически.</div></div>
           <label class="muted" for="newsTitle">Заголовок новости</label><input id="newsTitle" class="field" maxlength="180" placeholder="Например: Изменение расписания" required>
           <label class="muted" for="newsBody">Текст сообщения</label><textarea id="newsBody" class="field" rows="5" maxlength="8000" placeholder="Введите текст новости…" required style="resize:vertical"></textarea>
           <label class="muted" for="newsImage">Ссылка на изображение (необязательно)</label><input id="newsImage" class="field" type="url" placeholder="https://…">
@@ -608,6 +612,8 @@
         </form>
         <div id="createNewsMessage" class="message"></div>
         <div id="adminNewsList" style="margin-top:12px"></div>
+        <h3 style="font-size:13px;margin:18px 0 8px">🕒 Запланированные публикации</h3>
+        <div id="scheduledNewsList" class="muted" style="text-align:left">Загрузка…</div>
         </details></div><div class="admin-tab-panel" data-admin-panel="users" hidden><details class="admin-section">
           <summary>👤 Добавление и управление игроками</summary>
           <h3 style="font-size:14px;margin:18px 0 8px">Создать участника</h3>
@@ -638,8 +644,13 @@
         <div class="admin-section">
           <h3 style="font-size:14px;margin:4px 0 8px">🔐 История входов в аккаунты</h3>
           <div class="muted" style="text-align:left;margin:0 0 10px">Успешные входы после включения журнала. Время отображается по часовому поясу устройства администратора. Модель устройства может быть недоступна браузеру.</div>
-          <button type="button" id="refreshLoginHistory" class="small-btn">ОБНОВИТЬ ИСТОРИЮ</button>
-          <div id="loginHistoryList" style="margin-top:12px"><div class="muted">Нажмите «Обновить историю».</div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0">
+            <label class="muted" style="text-align:left">Период<select id="loginHistoryPeriod" class="field" style="margin:5px 0"><option value="7">Последние 7 дней</option><option value="30" selected>Последние 30 дней</option><option value="all">Всё время</option></select></label>
+            <label class="muted" style="text-align:left">Поиск участника<input id="loginHistorySearch" class="field" style="margin:5px 0" placeholder="Имя или логин"></label>
+          </div>
+          <button type="button" id="refreshLoginHistory" class="small-btn">ОБНОВИТЬ СТАТИСТИКУ</button>
+          <div id="loginHistorySummary" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0"></div>
+          <div id="loginHistoryList" style="margin-top:12px"><div class="muted">Нажмите «Обновить статистику».</div></div>
         </div>
       </div></section>
 
@@ -1016,6 +1027,15 @@
       $('newsEditAttachments').replaceChildren();$('newsAttachmentFiles').value='';
       $('publishNewsButton').textContent='ОПУБЛИКОВАТЬ НОВОСТЬ';
     }
+    async function loadScheduledNews(){
+      const root=$('scheduledNewsList');if(!root||!sb||currentProfile?.role!=='admin')return;
+      root.textContent='Загружаем запланированные новости…';
+      const {data,error}=await sb.from('scheduled_news').select('id,title,scheduled_for,visibility').eq('status','pending').order('scheduled_for',{ascending:true}).limit(50);
+      if(error){root.textContent='Не удалось загрузить очередь: '+error.message+'. Выполните SQL-миграцию отложенных новостей.';return;}
+      root.replaceChildren();
+      if(!data?.length){root.textContent='Запланированных публикаций нет.';return;}
+      data.forEach(n=>{const row=document.createElement('div');row.style.cssText='padding:10px 0;border-top:1px solid rgba(255,255,255,.12);font-size:12px';const title=document.createElement('div');title.style.cssText='font-weight:900;color:var(--accent-text)';title.textContent=n.title;const when=document.createElement('div');when.className='muted';when.style.cssText='text-align:left';when.textContent=new Date(n.scheduled_for).toLocaleString('ru-RU')+' · '+(n.visibility==='selected'?'выбранным участникам':'всем');const cancel=document.createElement('button');cancel.className='small-btn';cancel.style.marginTop='6px';cancel.textContent='Отменить публикацию';cancel.addEventListener('click',async()=>{if(!confirm('Отменить запланированную новость «'+n.title+'»?'))return;const {error}=await sb.rpc('admin_cancel_scheduled_news',{p_schedule_id:n.id});if(error)alert('Не удалось отменить: '+error.message);else await loadScheduledNews();});row.append(title,when,cancel);root.appendChild(row);});
+    }
     async function loadAdminNews() {
       const root=$('adminNewsList'); if(!root)return; root.replaceChildren(); const {data,error}=await sb.from('news').select('id,title,visibility,created_at').order('created_at',{ascending:false}).limit(20);
       if(error){root.textContent='Не удалось загрузить список новостей.';return;} if(!data?.length){root.textContent='Опубликованных новостей пока нет.';return;}
@@ -1035,11 +1055,23 @@
       const visibility=document.querySelector('input[name="newsAudience"]:checked')?.value||'all';
       const recipientIds=[...document.querySelectorAll('input[name="newsRecipient"]:checked')].map(x=>x.value);
       const files=$('newsAttachmentFiles')?.files||[];
+      const delivery=document.querySelector('input[name="newsDelivery"]:checked')?.value||'now';
       if(!title||!body)return setMessage('createNewsMessage','Заполните заголовок и текст.',true);
       if(!editingNewsId&&visibility==='selected'&&!recipientIds.length)return setMessage('createNewsMessage','Выберите хотя бы одного получателя.',true);
       if(image_url&&!/^https:\/\//i.test(image_url))return setMessage('createNewsMessage','Ссылка на изображение должна начинаться с https://',true);
       const btn=$('publishNewsButton');btn.disabled=true;setMessage('createNewsMessage',editingNewsId?'Сохраняем изменения…':'Публикуем новость…');
       try {
+        if(!editingNewsId&&delivery==='scheduled'){
+          const localValue=$('newsScheduledAt')?.value||'';
+          const scheduledFor=localValue?new Date(localValue):null;
+          if(!scheduledFor||!Number.isFinite(scheduledFor.getTime())||scheduledFor.getTime()<=Date.now())throw new Error('Укажи дату и время в будущем.');
+          if(files.length)throw new Error('Для отложенной новости пока нельзя прикреплять файлы. Можно добавить ссылку на изображение.');
+          const {error:scheduleError}=await sb.rpc('admin_schedule_news',{p_title:title,p_body:body,p_image_url:image_url||null,p_visibility:visibility,p_recipient_ids:visibility==='selected'?recipientIds:[],p_scheduled_for:scheduledFor.toISOString()});
+          if(scheduleError)throw scheduleError;
+          setMessage('createNewsMessage','Новость запланирована на '+scheduledFor.toLocaleString('ru-RU')+'. Она опубликуется автоматически.');
+          resetNewsEditor();await loadScheduledNews();
+          return;
+        }
         let newsId=editingNewsId;
         if(editingNewsId) {
           const {error:updateError}=await sb.from('news').update({title,body,image_url:image_url||null}).eq('id',editingNewsId);
@@ -2115,25 +2147,33 @@
       $('financeGoalForm').reset();$('financeGoalCurrent').value='0';setMessage('financeGoalMessage','Цель создана.');await loadFinance();
     });
     async function loadLoginHistory() {
-      const root=$('loginHistoryList');
+      const root=$('loginHistoryList'),summary=$('loginHistorySummary');
       if(!root||!sb||currentProfile?.role!=='admin') return;
-      root.textContent='Загружаем историю входов…';
-      const {data:events,error}=await sb.from('login_history')
-        .select('id,user_id,logged_in_at,device_label,browser_label,os_label')
-        .order('logged_in_at',{ascending:false}).limit(200);
+      root.textContent='Загружаем статистику входов…';
+      const period=$('loginHistoryPeriod')?.value||'30';
+      const search=($('loginHistorySearch')?.value||'').trim().toLocaleLowerCase('ru');
+      let query=sb.from('login_history').select('id,user_id,logged_in_at,device_label,browser_label,os_label').order('logged_in_at',{ascending:false}).limit(2000);
+      if(period!=='all'){const since=new Date(Date.now()-Number(period)*86400000).toISOString();query=query.gte('logged_in_at',since);}
+      const {data:events,error}=await query;
       if(error||!events){root.textContent='Не удалось загрузить историю: '+(error?.message||'ошибка');return;}
-      root.replaceChildren();
-      if(!events.length){root.textContent='Записей пока нет. Новые успешные входы будут появляться здесь.';return;}
       const ids=[...new Set(events.map(x=>x.user_id))];
-      const {data:profiles}=await sb.from('profiles').select('user_id,username,first_name,last_name').in('user_id',ids);
-      const names=new Map((profiles||[]).map(p=>[p.user_id,[p.username,p.first_name,p.last_name].filter(Boolean).join(' · ')]));
-      events.forEach(event=>{
-        const item=document.createElement('div');
-        item.style.cssText='padding:12px 0;border-top:1px solid rgba(255,255,255,.12);font-size:12px;overflow-wrap:anywhere';
-        const name=document.createElement('div');name.style.cssText='font-weight:900;color:var(--accent-text)';name.textContent=names.get(event.user_id)||'Аккаунт не найден';
-        const date=document.createElement('div');date.style.cssText='margin-top:5px';date.textContent=new Date(event.logged_in_at).toLocaleString('ru-RU',{dateStyle:'medium',timeStyle:'medium'});
-        const device=document.createElement('div');device.className='muted';device.style.cssText='text-align:left;margin-top:5px';device.textContent=[event.device_label,event.os_label,event.browser_label].filter(Boolean).join(' · ');
-        item.append(name,date,device);root.appendChild(item);
+      const {data:profiles,error:profilesError}=ids.length?await sb.from('profiles').select('user_id,username,first_name,last_name').in('user_id',ids):{data:[],error:null};
+      if(profilesError){root.textContent='Не удалось загрузить участников: '+profilesError.message;return;}
+      const profileMap=new Map((profiles||[]).map(p=>[p.user_id,p]));
+      const nameOf=id=>{const p=profileMap.get(id);return p?[p.first_name,p.last_name].filter(Boolean).join(' ')||p.username||'Участник':'Аккаунт не найден';};
+      const userMap=new Map();
+      events.forEach(event=>{if(!userMap.has(event.user_id))userMap.set(event.user_id,[]);userMap.get(event.user_id).push(event);});
+      const filtered=[...userMap.entries()].map(([id,rows])=>({id,rows,name:nameOf(id),username:profileMap.get(id)?.username||''})).filter(x=>!search||(x.name+' '+x.username).toLocaleLowerCase('ru').includes(search)).sort((a,b)=>b.rows.length-a.rows.length);
+      if(summary){summary.replaceChildren();const active=userMap.size;const total=events.length;const cards=[['Уникальных участников',active],['Всего входов',total]];cards.forEach(([label,value])=>{const card=document.createElement('div');card.style.cssText='padding:12px;border:1px solid var(--border-color);border-radius:12px;background:rgba(255,255,255,.04)';const v=document.createElement('div');v.style.cssText='font-size:23px;font-weight:900;color:var(--accent-text)';v.textContent=String(value);const l=document.createElement('div');l.className='muted';l.style.cssText='text-align:left;margin:3px 0 0';l.textContent=label;card.append(v,l);summary.appendChild(card);});}
+      root.replaceChildren();
+      if(!filtered.length){root.textContent=events.length?'По этому запросу участников не найдено.':'За выбранный период записей нет.';return;}
+      filtered.forEach(person=>{
+        const details=document.createElement('details');details.style.cssText='padding:11px 0;border-top:1px solid rgba(255,255,255,.12)';
+        const head=document.createElement('summary');head.style.cssText='cursor:pointer;font-size:12px;font-weight:900;line-height:1.5;color:var(--accent-text)';head.textContent=person.name+' · '+person.rows.length+' вход(ов)';
+        const last=document.createElement('div');last.className='muted';last.style.cssText='text-align:left;margin:5px 0 8px';last.textContent='Последний вход: '+new Date(person.rows[0].logged_in_at).toLocaleString('ru-RU',{dateStyle:'medium',timeStyle:'short'});
+        details.append(head,last);
+        person.rows.forEach(event=>{const row=document.createElement('div');row.style.cssText='padding:8px 0 8px 10px;border-left:2px solid var(--accent);font-size:11px;overflow-wrap:anywhere';const dt=document.createElement('div');dt.textContent=new Date(event.logged_in_at).toLocaleString('ru-RU',{dateStyle:'medium',timeStyle:'medium'});const device=document.createElement('div');device.className='muted';device.style.cssText='text-align:left;margin:3px 0';device.textContent=[event.device_label,event.os_label,event.browser_label].filter(Boolean).join(' · ')||'Устройство не определено';row.append(dt,device);details.appendChild(row);});
+        root.appendChild(details);
       });
     }
 
@@ -3520,7 +3560,7 @@
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('refreshLoginHistory')?.addEventListener('click',loadLoginHistory);
     $('loginButton').addEventListener('click',()=>signIn());$('biometricLoginButton')?.addEventListener('click',biometricSignIn);$('biometricSettingsButton')?.addEventListener('click',toggleBiometricLogin);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
-    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();});
+    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);loadScheduledNews();$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsDelivery"]').forEach(r=>r.addEventListener('change',()=> $('newsScheduleWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsDelivery"]:checked')?.value!=='scheduled')));$('loginHistoryPeriod')?.addEventListener('change',loadLoginHistory);$('loginHistorySearch')?.addEventListener('input',()=>{clearTimeout(window._loginHistorySearchTimer);window._loginHistorySearchTimer=setTimeout(loadLoginHistory,250);});document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();});
     $('openProtocolsButton')?.addEventListener('click',async()=>{showSection('protocolsPanel');await loadRefereeProtocols();});
     $('protocolsBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
     $('assignProtocolRefereeButton')?.addEventListener('click',assignProtocolReferee);

@@ -1972,8 +1972,6 @@
     }));
     $('tournamentStageSelect')?.addEventListener('change',async event=>{
       activeTournamentStage=event.target.value;
-      if(TOURNAMENT_RESULT_ROUTES[activeTournamentStage]){activeOneOnOneView=activeTournamentStage==='overall'?'overall':'table';history.replaceState({sectionId:'tournamentsPanel',resultStage:activeTournamentStage},'',APP_ROUTE(TOURNAMENT_RESULT_ROUTES[activeTournamentStage]));}
-      else if(window.location.pathname.includes('/tournaments/1-na-1/results/'))history.replaceState({sectionId:'tournamentsPanel'},'',APP_ROUTE('/tournaments/'));
 
       if(activeTournamentStage==='overall'){
         activeOneOnOneView='overall';renderTournamentSwitch();

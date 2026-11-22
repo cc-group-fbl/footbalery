@@ -715,7 +715,7 @@
     // не оставляла кнопку входа без подключения к серверу.
     try {
       if (window.supabase && SUPABASE_URL.startsWith('https://') && !SUPABASE_KEY.startsWith('ВСТАВЬТЕ_')) {
-        sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+        sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'sb-qyarjovuxthzxfaksapp-auth-token' } });
         // Резервная копия сессии в IndexedDB: на некоторых Android WebView
         // localStorage может оказаться недоступен после пересоздания процесса.
         const AUTH_BACKUP_DB='footbalery_auth_backup_v1';
@@ -728,18 +728,35 @@
             request.onerror=()=>reject(request.error||new Error('Не удалось открыть IndexedDB'));
           });
         }
+        const AUTH_STORAGE_KEY='sb-qyarjovuxthzxfaksapp-auth-token';
         async function saveAuthSessionBackup(session){
-          if(!session?.access_token||!session?.refresh_token)return;
+          if(!session?.access_token||!session?.refresh_token)throw new Error('Supabase вернул пустую сессию');
           let remember=true;
           try{remember=!!window.Capacitor?.isNativePlatform?.() || localStorage.getItem('futbolery_remember_session')!=='false';}catch(_){}
-          if(!remember)return;
+          if(!remember)return {saved:false,reason:'Запоминание отключено'};
+          // Дублируем сессию в явном ключе localStorage и IndexedDB.
+          // Это также позволяет восстановить её, если SDK не успел записать собственный ключ.
+          try{
+            localStorage.setItem(AUTH_STORAGE_KEY,JSON.stringify(session));
+            const stored=localStorage.getItem(AUTH_STORAGE_KEY);
+            if(!stored||JSON.parse(stored)?.refresh_token!==session.refresh_token)throw new Error('localStorage не подтвердил запись');
+          }catch(storageError){console.warn('Не удалось записать сессию в localStorage:',storageError);}
           const db=await openAuthBackupDb();
-          await new Promise((resolve,reject)=>{
-            const tx=db.transaction('sessions','readwrite');
-            tx.objectStore('sessions').put({access_token:session.access_token,refresh_token:session.refresh_token},'supabase');
-            tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Не удалось сохранить сессию'));
-          });
-          db.close();
+          try{
+            await new Promise((resolve,reject)=>{
+              const tx=db.transaction('sessions','readwrite');
+              tx.objectStore('sessions').put({access_token:session.access_token,refresh_token:session.refresh_token},'supabase');
+              tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error('Не удалось сохранить сессию'));
+              tx.onabort=()=>reject(tx.error||new Error('Запись сессии отменена'));
+            });
+            const check=await new Promise((resolve,reject)=>{
+              const request=db.transaction('sessions','readonly').objectStore('sessions').get('supabase');
+              request.onsuccess=()=>resolve(request.result||null);
+              request.onerror=()=>reject(request.error||new Error('Не удалось проверить сохранённую сессию'));
+            });
+            if(check?.refresh_token!==session.refresh_token)throw new Error('IndexedDB не подтвердил сохранение резервной сессии');
+          }finally{db.close();}
+          return {saved:true};
         }
         async function readAuthSessionBackup(){
           const db=await openAuthBackupDb();
@@ -1127,8 +1144,14 @@
         const rememberThisDevice=!!window.Capacitor?.isNativePlatform?.() || !!$('rememberMeCheckbox')?.checked;
         try { localStorage.setItem('futbolery_remember_session', rememberThisDevice ? 'true' : 'false'); } catch (_) {}
         if(rememberThisDevice){
-          try{await window.footbalerySaveAuthBackup?.(data.session);}
-          catch(error){console.warn('Не удалось сохранить резервную сессию:',error);}
+          try{
+            const saved=await window.footbalerySaveAuthBackup?.(data.session);
+            if(saved?.saved){setMessage('loginMessage','Вход выполнен. Сохранение входа подтверждено.');}
+            else{setMessage('loginMessage','Вход выполнен, но сохранение входа не подтверждено: '+(saved?.reason||'проверьте настройки хранения'),true);}
+          }catch(error){
+            console.error('Не удалось сохранить резервную сессию:',error);
+            setMessage('loginMessage','Вход выполнен, но Android не сохранил сессию: '+(error?.message||'ошибка хранилища'),true);
+          }
         }else{
           await window.footbaleryClearAuthBackup?.();
         }
@@ -3595,7 +3618,18 @@
         try { rememberSession = isNativeApp || localStorage.getItem('futbolery_remember_session') !== 'false'; } catch (_) {}
         if(isNativeApp){try{localStorage.setItem('futbolery_remember_session','true');}catch(_){}}
         if($('rememberMeCheckbox'))$('rememberMeCheckbox').checked=rememberSession;
-        // Если WebView потерял localStorage-сессию, восстанавливаем её из IndexedDB.
+        // Сначала пробуем явно сохранённую сессию localStorage, затем резервную IndexedDB.
+        if(!data.session&&rememberSession){
+          try{
+            const raw=localStorage.getItem('sb-qyarjovuxthzxfaksapp-auth-token');
+            const saved=raw?JSON.parse(raw):null;
+            if(saved?.access_token&&saved?.refresh_token){
+              const restored=await sb.auth.setSession({access_token:saved.access_token,refresh_token:saved.refresh_token});
+              if(!restored.error&&restored.data?.session)data.session=restored.data.session;
+              else console.warn('Сессия localStorage не восстановилась:',restored.error);
+            }
+          }catch(storageRestoreError){console.warn('Не удалось восстановить сессию localStorage:',storageRestoreError);}
+        }
         if(!data.session&&rememberSession&&window.footbaleryReadAuthBackup){
           try{
             const backup=await window.footbaleryReadAuthBackup();

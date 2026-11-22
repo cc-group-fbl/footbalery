@@ -336,6 +336,7 @@
       <div class="muted">Вход по логину и паролю. После первого входа можно включить быстрый вход по отпечатку пальца.</div>
       <div id="loginMessage" class="message"></div>
       <div id="authDiagnostic" class="message" style="display:block;margin-top:10px;padding:12px;text-align:left;font-size:12px;line-height:1.5;white-space:pre-wrap;color:#d9efff;background:rgba(20,90,140,.22);border:1px solid rgba(120,190,240,.35);border-radius:10px">Диагностика входа: ожидаем ответ Supabase… Если это сообщение не меняется, проверка авторизации не завершилась.</div>
+      <button id="testNetworkButton" class="small-btn" type="button" style="width:100%;margin-top:10px">ПРОВЕРИТЬ СВЯЗЬ С СЕРВЕРОМ</button>
     </section>
 
     <section id="accountPanel" class="hidden">
@@ -837,6 +838,30 @@
     }
     function usernameEmail(username) { const value = username.trim().toLowerCase(); return value.includes('@') ? value : value.replace(/[^a-z0-9._-]/g, '-') + '@members.futbolery.local'; }
     function setMessage(id, msg, bad=false) { $(id).textContent = msg || ''; $(id).style.color = bad ? '#ff7777' : 'var(--accent-text, #ffd21f)'; }
+    // Отдельная проверка сети для Android WebView; не меняет сессию и не требует входа.
+    $('testNetworkButton')?.addEventListener('click',async()=>{
+      const button=$('testNetworkButton'),panel=$('authDiagnostic');
+      if(button)button.disabled=true;
+      const lines=['Проверка связи','Адрес: '+location.href,'Origin: '+location.origin,'Android/Capacitor: '+(window.Capacitor?.isNativePlatform?.()?'да':'нет')];
+      if(panel){panel.textContent=lines.join('\\n');panel.style.display='block';}
+      const probe=async(label,url,headers={})=>{
+        const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
+        try{
+          const response=await fetch(url,{method:'GET',headers,cache:'no-store',signal:controller.signal});
+          lines.push(label+': HTTP '+response.status+(response.ok?' · доступен':' · сервер ответил ошибкой'));
+          try{const body=(await response.text()).slice(0,180).replace(/\\s+/g,' ');if(body)lines.push('Ответ: '+body);}catch(_){}
+        }catch(error){lines.push(label+': ОШИБКА '+(error?.name||'')+' '+(error?.message||String(error)));}
+        finally{clearTimeout(timeout);}
+        if(panel)panel.textContent=lines.join('\\n');
+      };
+      try{
+        await probe('GitHub Pages',new URL('version.json',location.href).toString());
+        await probe('Supabase Auth',SUPABASE_URL+'/auth/v1/health',{'apikey':SUPABASE_KEY});
+        await probe('Supabase REST',SUPABASE_URL+'/rest/v1/',{'apikey':SUPABASE_KEY});
+        lines.push('Проверка завершена. Токены и пароль не передавались.');
+        if(panel)panel.textContent=lines.join('\\n');
+      }finally{if(button)button.disabled=false;}
+    });
 
     // Сохранение FCM-токена устройства для системных push-уведомлений.
     window.footbalerySavePushToken = async function(token, userId) {

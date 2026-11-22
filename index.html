@@ -576,14 +576,15 @@
           <div id="statsSettingsMessage" class="message"></div>
         </details></div><div class="admin-tab-panel" data-admin-panel="polls" hidden><details class="admin-section" open>
         <summary>🗳️ Управление опросами</summary>
-        <div class="muted">Создавайте опросы здесь. Для каждого кандидата укажите ID игрока и имя через вертикальную черту: FTB-001 | Иван Петров. ID должен совпадать с ID игрока в статистике.</div>
+        <div class="muted">Создавайте обычные голосования с 2–20 вариантами ответа или голосования за игрока. Каждый вариант указывайте с новой строки. Для голосования за игрока используйте формат: FTB-001 | Иван Петров.</div>
         <form id="createPollForm" style="margin-top:12px">
           <label class="muted" for="pollTitle">Название опроса</label>
-          <input id="pollTitle" class="field" maxlength="160" placeholder="Например: Лучший игрок месяца" required />
+          <input id="pollTitle" class="field" maxlength="160" placeholder="Например: Какой формат турнира выбрать?" required />
           <label class="muted" for="pollEndsAt">Дата и время окончания</label>
           <input id="pollEndsAt" class="field" type="datetime-local" required />
-          <label class="muted" for="pollCandidatesInput">Кандидаты — один на строку</label>
-          <textarea id="pollCandidatesInput" class="field" rows="5" placeholder="FTB-001 | Иван Петров&#10;FTB-002 | Сергей Иванов" required style="resize:vertical"></textarea>
+          <label class="muted" for="pollCandidatesInput">Варианты ответа — каждый с новой строки (максимум 20)</label>
+          <textarea id="pollCandidatesInput" class="field" rows="7" maxlength="2000" placeholder="Провести турнир 1 на 1&#10;Провести командный турнир&#10;Оставить текущий формат" required style="resize:vertical"></textarea>
+          <div class="muted" id="pollOptionsCounter">0 / 20 вариантов</div>
           <button id="createPollButton" class="action-btn" type="submit">СОЗДАТЬ ОПРОС</button>
         </form>
         <div id="createPollMessage" class="message"></div>
@@ -3498,14 +3499,25 @@
       const title=$('pollTitle')?.value.trim()||'';
       const endsValue=$('pollEndsAt')?.value||'';
       const raw=($('pollCandidatesInput')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-      if (!title || !endsValue || !raw.length) return setMessage('createPollMessage','Заполните название, срок окончания и список кандидатов.',true);
+      if (!title || !endsValue || !raw.length) return setMessage('createPollMessage','Заполните название, срок окончания и минимум два варианта ответа.',true);
+      if (raw.length<2) return setMessage('createPollMessage','Добавьте минимум 2 варианта ответа.',true);
+      if (raw.length>20) return setMessage('createPollMessage','В одном голосовании может быть не больше 20 вариантов ответа.',true);
+      const playerMode=raw.some(line=>line.includes('|'));
+      if(playerMode && raw.some(line=>!line.includes('|'))) return setMessage('createPollMessage','Не смешивайте обычные варианты и формат игроков. Для голосования за игроков укажите для каждой строки ID | Имя.',true);
       const candidates=[];
-      for (const line of raw) {
-        const parts=line.split('|');
-        const player_id=(parts[0]||'').trim();
-        const player_name=parts.slice(1).join('|').trim();
-        if (!player_id || !player_name) return setMessage('createPollMessage','Неверная строка: «'+line+'». Используйте формат ID игрока | Имя игрока.',true);
-        if (candidates.some(c=>c.player_id.toLowerCase()===player_id.toLowerCase())) return setMessage('createPollMessage','ID игрока повторяется: '+player_id,true);
+      for (let index=0;index<raw.length;index++) {
+        const line=raw[index];
+        let player_id,player_name;
+        if(playerMode) {
+          const parts=line.split('|');
+          player_id=(parts[0]||'').trim();
+          player_name=parts.slice(1).join('|').trim();
+          if (!player_id || !player_name) return setMessage('createPollMessage','Неверная строка: «'+line+'». Используйте формат ID игрока | Имя игрока.',true);
+          if (candidates.some(c=>c.player_id.toLowerCase()===player_id.toLowerCase())) return setMessage('createPollMessage','ID игрока повторяется: '+player_id,true);
+        } else {
+          player_id='OPTION-'+String(index+1).padStart(2,'0');
+          player_name=line;
+        }
         candidates.push({player_id,player_name});
       }
       const ends_at=new Date(endsValue).toISOString();
@@ -3521,7 +3533,7 @@
           await loadAdminResults(); await loadPoll(); return;
         }
         $('createPollForm').reset();
-        setMessage('createPollMessage','Опрос создан! Добавлено кандидатов: '+candidates.length+'.');
+        setMessage('createPollMessage','Опрос создан! Добавлено вариантов ответа: '+candidates.length+'.');
         await loadAdminResults(); await loadPoll();
       } catch(err) {
         setMessage('createPollMessage','Не удалось создать опрос: '+(err.message||'ошибка Supabase')+'. Проверьте подключение и права администратора.',true);
@@ -3663,6 +3675,7 @@
     if(sb) loadSharedSeasonTheme().catch(error=>{console.warn('Не удалось обновить сезонную тему:',error);document.body.classList.remove('theme-loading');});
     else { let cached={};try{cached=JSON.parse(localStorage.getItem('futbolerySeasonSchedule')||'{}');}catch(_){} applySeasonTheme(getActiveSeason(cached)||'autumn'); document.body.classList.remove('theme-loading'); }
     $('createPollForm')?.addEventListener('submit',createPoll);
+    $('pollCandidatesInput')?.addEventListener('input',()=>{const count=($('pollCandidatesInput').value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).length;const counter=$('pollOptionsCounter');if(counter)counter.textContent=count+' / 20 вариантов'+(count>20?' — превышен лимит':'');});
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('refreshLoginHistory')?.addEventListener('click',loadLoginHistory);
     $('loginButton').addEventListener('click',()=>signIn());$('biometricLoginButton')?.addEventListener('click',biometricSignIn);$('biometricSettingsButton')?.addEventListener('click',toggleBiometricLogin);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);

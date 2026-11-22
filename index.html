@@ -340,6 +340,10 @@
 
     <section id="accountPanel" class="hidden">
       <div class="topline"><span id="welcomeText" style="font-size:12px;color:#f5c518;font-weight:800"></span></div>
+      <div id="authPersistenceStatus" role="status" aria-live="polite" style="margin:10px 0 14px;padding:11px 12px;text-align:left;font-size:12px;line-height:1.55;white-space:pre-wrap;color:#d9efff;background:rgba(20,90,140,.22);border:1px solid rgba(120,190,240,.35);border-radius:10px">Проверяем сохранение входа…</div>
+      <div style="display:flex;gap:8px;margin:0 0 14px">
+        <button id="checkAuthPersistenceButton" type="button" class="small-btn" style="flex:1">ПРОВЕРИТЬ СОХРАНЕНИЕ ВХОДА</button>
+      </div>
       <div id="birthdayGreeting" class="birthday-greeting" role="status" aria-live="polite"><strong>🎉 С Днём Рождения!</strong><span>Желаем крепкого здоровья, ярких побед и незабываемых матчей!</span></div>
       <section id="homeScreen" class="vote-box">
         <h2>ГЛАВНОЕ МЕНЮ</h2>
@@ -781,6 +785,39 @@
         window.footbalerySaveAuthBackup=saveAuthSessionBackup;
         window.footbaleryReadAuthBackup=readAuthSessionBackup;
         window.footbaleryClearAuthBackup=clearAuthSessionBackup;
+        // Видимая диагностика: показываем наличие сессии, не раскрывая токены.
+        window.footbaleryUpdateAuthDiagnostic=async function(prefix='Состояние сохранения входа'){
+          const panel=$('authPersistenceStatus');
+          if(!panel)return;
+          const native=!!window.Capacitor?.isNativePlatform?.();
+          let localState='ошибка чтения',idbState='не проверена',sessionState='не проверена',rememberState='неизвестно';
+          try{
+            rememberState=localStorage.getItem('futbolery_remember_session')==='false'?'выключено':'включено';
+            const raw=localStorage.getItem(AUTH_STORAGE_KEY);
+            const parsed=raw?JSON.parse(raw):null;
+            localState=parsed?.access_token&&parsed?.refresh_token?'сессия найдена':'сессия не найдена';
+          }catch(error){localState='недоступно: '+(error?.message||'ошибка');}
+          try{
+            const backup=await readAuthSessionBackup();
+            idbState=backup?.access_token&&backup?.refresh_token?'резервная сессия найдена':'резервная сессия не найдена';
+          }catch(error){idbState='ошибка: '+(error?.message||'неизвестно');}
+          try{
+            const result=await sb.auth.getSession();
+            sessionState=result.data?.session?'активна':'не найдена';
+            if(result.error)sessionState='ошибка: '+result.error.message;
+          }catch(error){sessionState='ошибка: '+(error?.message||'неизвестно');}
+          panel.textContent=[
+            prefix,
+            'Режим Android/Capacitor: '+(native?'обнаружен':'НЕ обнаружен (страница в режиме браузера)'),
+            'Адрес приложения: '+location.origin,
+            'Запоминание входа: '+rememberState,
+            'localStorage: '+localState,
+            'IndexedDB: '+idbState,
+            'Текущая сессия Supabase: '+sessionState,
+            'Биометрия: отдельно не настроена; для проверки сохранения сессии не требуется.'
+          ].join('\\n');
+        };
+        $('checkAuthPersistenceButton')?.addEventListener('click',()=>window.footbaleryUpdateAuthDiagnostic?.('Результат ручной проверки'));
         sb.auth.onAuthStateChange((event,session)=>{
           if(session)saveAuthSessionBackup(session).catch(error=>console.warn('Не удалось обновить резервную сессию:',error));
         });
@@ -1186,6 +1223,7 @@
             .catch(logError=>console.warn('Ошибка журнала входов:',logError));
         } catch(logError) { console.warn('Ошибка журнала входов:',logError); }
         await showAccount();
+        await window.footbaleryUpdateAuthDiagnostic?.('Сразу после входа');
         updateBiometricControls().catch(error=>console.warn('Не удалось обновить настройки быстрого входа:',error));
       } catch(err) {
         setMessage('loginMessage','Не удалось войти: '+(err?.message || 'ошибка соединения'),true);
@@ -3647,6 +3685,7 @@
             const rows=[
               "Диагностика сохранения входа",
               "Адрес приложения: "+location.origin,
+              "Режим Android/Capacitor: "+(isNativeApp?"обнаружен":"НЕ обнаружен"),
               "Флаг «Запомнить»: "+(rememberSession?"включён":"выключен"),
               "Ключ сессии Supabase в localStorage: "+(authStorageKeys===null?"недоступен":(authStorageKeys.length?"есть":"нет")),
               "Резервная сессия IndexedDB: "+backupState,
@@ -3666,6 +3705,7 @@
           if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = true;
           currentUser = data.session.user;offlineWrite('user_snapshot',currentUser);
           await showAccount();
+          await window.footbaleryUpdateAuthDiagnostic?.('После восстановления авторизации');
           await updateBiometricControls();
         } else if (data.session && !rememberSession) {
           await sb.auth.signOut();

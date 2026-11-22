@@ -2962,6 +2962,64 @@
       card.appendChild(button);
     }
     let scheduleFilters={tournament:'',from:'',to:''};
+    const scheduleImageSelection=new Set();
+    function addScheduleImagePicker(item,card){
+      if(item.type!=='match')return;
+      const label=document.createElement('label');
+      label.className='candidate';
+      label.style.cssText='display:flex;align-items:center;gap:8px;margin:8px 0;padding:8px 10px;border:1px solid var(--border-color);border-radius:9px';
+      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=scheduleImageSelection.has(String(item.id));
+      checkbox.setAttribute('aria-label','Добавить матч в изображение расписания');
+      const caption=document.createElement('span');caption.style.fontSize='12px';caption.textContent='Добавить в изображение расписания';
+      checkbox.addEventListener('change',()=>{
+        if(checkbox.checked)scheduleImageSelection.add(String(item.id));else scheduleImageSelection.delete(String(item.id));
+        const count=document.getElementById('scheduleImageSelectionCount');
+        if(count)count.textContent='Выбрано матчей: '+scheduleImageSelection.size;
+        const button=document.getElementById('downloadScheduleImageButton');if(button)button.disabled=!scheduleImageSelection.size;
+      });
+      label.append(checkbox,caption);card.appendChild(label);
+    }
+    function downloadSelectedScheduleImage(){
+      const selected=scheduleRowsForImage.filter(x=>scheduleImageSelection.has(String(x.id)));
+      if(!selected.length){alert('Сначала отметь хотя бы один матч.');return;}
+      const width=1400,pad=72,header=220,rowHeight=154,gap=18;
+      const height=pad*2+header+selected.length*rowHeight+(selected.length-1)*gap+80;
+      const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+      const ctx=canvas.getContext('2d');
+      ctx.fillStyle='#071522';ctx.fillRect(0,0,width,height);
+      const gradient=ctx.createLinearGradient(0,0,width,height);gradient.addColorStop(0,'#102f4a');gradient.addColorStop(1,'#071522');
+      ctx.fillStyle=gradient;ctx.fillRect(0,0,width,header+pad);
+      ctx.fillStyle='#ffffff';ctx.font='900 48px Arial,sans-serif';ctx.textAlign='left';ctx.fillText('СС «ФУТБОЛЁРЫ»',pad,pad+60);
+      ctx.fillStyle='#9ed8ff';ctx.font='700 28px Arial,sans-serif';ctx.fillText('РАСПИСАНИЕ МАТЧЕЙ',pad,pad+112);
+      ctx.fillStyle='rgba(255,255,255,.72)';ctx.font='22px Arial,sans-serif';ctx.fillText('Выбрано матчей: '+selected.length,pad,pad+158);
+      let y=pad+header;
+      selected.forEach((item,index)=>{
+        ctx.fillStyle='#10283b';ctx.fillRect(pad,y,width-pad*2,rowHeight);
+        ctx.strokeStyle='rgba(158,216,255,.35)';ctx.lineWidth=2;ctx.strokeRect(pad,y,width-pad*2,rowHeight);
+        ctx.fillStyle='#9ed8ff';ctx.font='700 20px Arial,sans-serif';ctx.textAlign='left';
+        const type=String(item.tournament||'').toLowerCase().includes('1 на 1')?'ТУРНИР 1 НА 1':(item.tournament==='DXG'?'ДЕРЕВЕНСКИЕ × ГОРОДСКИЕ':'МАТЧ');
+        ctx.fillText(type,pad+28,y+38);
+        ctx.fillStyle='#ffffff';ctx.font='900 34px Arial,sans-serif';
+        let title=String(item.title||'Матч');if(title.length>48)title=title.slice(0,45)+'…';
+        ctx.fillText(title,pad+28,y+86);
+        ctx.fillStyle='#c5d7e5';ctx.font='22px Arial,sans-serif';
+        const date=scheduleDateLabel(item.event_date);
+        const meta=[date,item.event_time?item.event_time.slice(0,5):'',item.location||''].filter(Boolean).join('  ·  ');
+        ctx.fillText(meta.slice(0,85),pad+28,y+126);
+        const score=item.match&&item.match.score_home!==null&&item.match.score_away!==null?item.match.score_home+' : '+item.match.score_away:'— : —';
+        ctx.textAlign='right';ctx.fillStyle='#ffffff';ctx.font='900 42px Arial,sans-serif';ctx.fillText(score,width-pad-28,y+92);
+        y+=rowHeight+gap;
+      });
+      ctx.textAlign='left';ctx.fillStyle='rgba(255,255,255,.55)';ctx.font='18px Arial,sans-serif';
+      ctx.fillText('Официальное расписание сообщества «ФУТБОЛЁРЫ»',pad,height-pad+10);
+      canvas.toBlob(blob=>{
+        if(!blob){alert('Не удалось сформировать изображение.');return;}
+        const url=URL.createObjectURL(blob),a=document.createElement('a');
+        a.href=url;a.download='raspisanie-futbolery-'+new Date().toISOString().slice(0,10)+'.png';
+        document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+      },'image/png');
+    }
+    let scheduleRowsForImage=[];
     async function loadSchedule(){
       const root=$('scheduleList');if(!root||!sb||!currentUser)return;
       root.textContent='Загружаем расписание…';
@@ -2995,6 +3053,11 @@
         const actions=document.createElement('div');actions.style.cssText='display:flex;align-items:end;gap:8px;flex-wrap:wrap';
         const reset=document.createElement('button');reset.type='button';reset.className='small-btn';reset.textContent='Сбросить фильтры';actions.appendChild(reset);
         filters.append(tournamentLabel,fromLabel,toLabel,actions);root.appendChild(filters);
+        const imageTools=document.createElement('div');imageTools.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:12px;border:1px solid rgba(158,216,255,.3);border-radius:12px;background:rgba(20,65,95,.12)';
+        const imageInfo=document.createElement('div');imageInfo.style.cssText='font-size:12px;color:var(--muted,#9aa)';imageInfo.id='scheduleImageSelectionCount';imageInfo.textContent='Выбрано матчей: '+scheduleImageSelection.size;
+        const imageButton=document.createElement('button');imageButton.type='button';imageButton.className='action-btn';imageButton.id='downloadScheduleImageButton';imageButton.textContent='СОХРАНИТЬ ВЫБРАННОЕ КАК PNG';imageButton.disabled=!scheduleImageSelection.size;imageButton.style.cssText='width:auto;margin:0;padding:10px 14px';
+        imageButton.addEventListener('click',downloadSelectedScheduleImage);
+        imageTools.append(imageInfo,imageButton);root.appendChild(imageTools);
         const applyFilters=()=>{scheduleFilters={tournament:tournamentSelect.value,from:fromInput.value,to:toInput.value};loadSchedule();};
         tournamentSelect.addEventListener('change',applyFilters);
         fromInput.addEventListener('change',applyFilters);
@@ -3010,12 +3073,14 @@
         };
         const today=new Date().toISOString().slice(0,10);
         const filteredRows=rows.filter(matchesFilters);
+        scheduleRowsForImage=rows.filter(x=>x.type==='match');
         const upcoming=filteredRows.filter(x=>x.event_date>=today);
         const pastMatches=filteredRows.filter(x=>x.type==='match'&&x.event_date<today).sort((a,b)=>b.event_date.localeCompare(a.event_date)||(b.event_time||'').localeCompare(a.event_time||''));
         if(!upcoming.length&&!pastMatches.length){const empty=document.createElement('div');empty.className='muted';empty.style.padding='12px 0';empty.textContent='По выбранным фильтрам записей не найдено.';root.appendChild(empty);}
         upcoming.forEach(item=>{
           const card=document.createElement('article');card.className='news-item schedule-item';
           const tag=document.createElement('div');tag.className='news-meta';tag.textContent=item.type==='match'?(String(item.tournament||'').toLowerCase().includes('1 на 1')?'⚔️ ТУРНИР 1 НА 1':'⚽ МАТЧ'):'📌 МЕРОПРИЯТИЕ';card.appendChild(tag);
+          addScheduleImagePicker(item,card);
           const title=document.createElement('div');title.className='news-title';title.textContent=item.title;card.appendChild(title);
           const meta=document.createElement('div');meta.className='news-meta';meta.textContent=[scheduleDateLabel(item.event_date),item.event_time?item.event_time.slice(0,5):'',item.location].filter(Boolean).join(' · ');card.appendChild(meta);
           if(item.type==='match'){
@@ -3066,6 +3131,7 @@
           pastMatches.forEach(item=>{
             const card=document.createElement('article');card.className='news-item schedule-item';
             const tag=document.createElement('div');tag.className='news-meta';tag.textContent=String(item.tournament||'').toLowerCase().includes('1 на 1')?'⚔️ ТУРНИР 1 НА 1':'⚽ МАТЧ';card.appendChild(tag);
+            addScheduleImagePicker(item,card);
             const title=document.createElement('div');title.className='news-title';title.textContent=item.title;card.appendChild(title);
             const meta=document.createElement('div');meta.className='news-meta';meta.textContent=[scheduleDateLabel(item.event_date),item.event_time?item.event_time.slice(0,5):'',item.location].filter(Boolean).join(' · ');card.appendChild(meta);
             const score=document.createElement('div');score.className='schedule-score';score.textContent=item.match&&item.match.score_home!==null&&item.match.score_away!==null?item.match.score_home+' : '+item.match.score_away:'— : —';card.appendChild(score);

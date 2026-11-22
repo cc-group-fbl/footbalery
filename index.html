@@ -2522,7 +2522,7 @@
       if(!assignments?.length){root.appendChild(protocolNode('div','muted','Пока нет матчей, на которые ты назначен судьёй.'));return;}
       const ids=assignments.map(a=>a.match_id);
       const [{data:matches,error:matchesError},{data:submissions,error:submissionsError}]=await Promise.all([
-        sb.from('matches').select('id,title,match_date,match_time,location').in('id',ids),
+        sb.from('matches').select('id,title,match_date,match_time,location,protocol_data').in('id',ids),
         sb.from('match_protocol_submissions').select('*').in('match_id',ids)
       ]);
       if(matchesError||submissionsError){root.textContent='Не удалось загрузить данные протоколов: '+(matchesError?.message||submissionsError?.message);return;}
@@ -2544,6 +2544,8 @@
           review.style.cssText='text-align:left;padding:10px;border-radius:9px;background:rgba(255,180,50,.08);margin-bottom:10px';
           card.appendChild(review);
         }
+        const todayLocal=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
+        if(match.match_date&&match.match_date>todayLocal){card.appendChild(protocolNode('div','muted','Протокол откроется в день мероприятия — '+scheduleDateLabel(match.match_date)+'. До этой даты заполнение недоступно.'));root.appendChild(card);return;}
         const form=document.createElement('form');
         form.style.cssText='display:grid;gap:8px';
         const field=(labelText,type,value,required=false,min=null,max=null,step=null)=>{
@@ -2570,7 +2572,7 @@
         const homeStats=area('Статистика хозяев — ФИО; голы; жёлтые; красные (по игроку в строке)',protocolStatsToText(oldStats.filter(p=>p.team==='home')));
         const awayStats=area('Статистика гостей — ФИО; голы; жёлтые; красные (по игроку в строке)',protocolStatsToText(oldStats.filter(p=>p.team==='away')));
         [homeStats,awayStats].forEach(input=>{input.rows=4;input.placeholder='Иван Иванов; 2; 1; 0';});
-        const mainRef=field('Главный судья','text',existing?.main_referee);
+        const mainRef=field('Главный судья','text',existing?.main_referee||match.protocol_data?.main_referee);
         const assistantRef=field('Помощник судьи','text',existing?.assistant_referee);
         const ratingRow=protocolNode('div',null);ratingRow.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px';
         const makeRating=(labelText,value)=>{
@@ -2739,7 +2741,8 @@
         score_away:index('score away','score_away','счет гостей','счёт гостей','счёт гости','счет гости','счет 2','score 2'),
         status:index('status','статус','статус матча/мероприятия'),
         home:index('home','хозяева','команда хозяев','хозяева команда','состав хозяев'),
-        away:index('away','гости','команда гостей','гости команда','состав гостей')
+        away:index('away','гости','команда гостей','гости команда','состав гостей'),
+        main_referee:index('главный судья','main referee','main_referee')
       };
       const get=(r,k)=>cols[k]<0?'':String(r[cols[k]]??'').trim();
       const parsePlayers=value=>String(value||'').split(',').map(name=>name.trim()).filter(Boolean);
@@ -2792,7 +2795,7 @@
         const id=get(r,'id')||makeId(occurrence===0?identity:identity+'|occurrence:'+occurrence);
         if(seen.has(id))throw new Error('Строка '+line+': повторяется идентификатор «'+id+'».');
         seen.add(id);
-        result.push({id,type,title,event_date:date,event_time:time,location,description:get(r,'description')||null,tournament,score_home:sh===''?null:Number(sh),score_away:sa===''?null:Number(sa),hasScore:sh!==''&&sa!=='',status,scheduled:/запланирован/i.test(status),home,away,home_players:parsePlayers(home),away_players:parsePlayers(away)});
+        result.push({id,type,title,event_date:date,event_time:time,location,description:get(r,'description')||null,tournament,score_home:sh===''?null:Number(sh),score_away:sa===''?null:Number(sa),hasScore:sh!==''&&sa!=='',status,scheduled:/запланирован|открыта заявка/i.test(status),home,away,main_referee:get(r,'main_referee'),home_players:parsePlayers(home),away_players:parsePlayers(away)});
       });
       if(!result.length)throw new Error('Не найдено ни одной записи расписания. Проверь тип мероприятия и даты.');
       return result;
@@ -3116,24 +3119,31 @@
       try{
         const records=parseScheduleCSV(await file.text());
         if(records.length>500)throw new Error('За один раз можно загрузить не более 500 строк.');
+        const todayLocal=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
+        const needsAutoAssign=records.some(x=>x.type==='match'&&x.event_date>=todayLocal&&x.main_referee);
+        let profiles=[];if(needsAutoAssign){const {data,error}=await sb.from('profiles').select('user_id,first_name,last_name,username');if(error)throw new Error('Не удалось загрузить список участников для назначения судей: '+error.message);profiles=data||[];}
+        const assignmentNotes=[];
+        const normalizePerson=v=>String(v||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/g,' ').trim().replace(/\\s+/g,' ');
         for(let i=0;i<records.length;i++){
           const item=records[i];
           if(item.type==='match'){
-            const {data:existing,error:findError}=await sb.from('matches').select('id,is_open').eq('schedule_id',item.id).maybeSingle();
+            const {data:existing,error:findError}=await sb.from('matches').select('id,is_open,protocol_data').eq('schedule_id',item.id).maybeSingle();
             if(findError)throw new Error('Не удалось найти матч '+item.id+': '+findError.message);
             const payload={title:item.title,match_date:item.event_date,match_time:item.event_time,location:item.location||'',tournament:item.tournament,description:item.description,is_open:item.scheduled,home_players:item.home_players,away_players:item.away_players};
             if(item.hasScore){payload.score_home=item.score_home;payload.score_away=item.score_away;}
+            if(item.main_referee)payload.protocol_data={...(existing?.protocol_data||{}),main_referee:item.main_referee};
             let matchId=existing?.id;
             if(existing){const {error}=await sb.from('matches').update(payload).eq('id',existing.id);if(error)throw new Error('Ошибка обновления матча '+item.id+': '+error.message);}
             else{const {data,error}=await sb.from('matches').insert({...payload,schedule_id:item.id,registration_deadline:null}).select('id').single();if(error)throw new Error('Ошибка создания матча '+item.id+': '+error.message);matchId=data.id;}
             const eventRow={id:item.id,type:'match',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,details:await getExistingScheduleDetails(item.id),tournament:item.tournament,match_id:matchId};
             const {error:eventError}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(eventError)throw new Error('Не удалось сохранить запись расписания '+item.id+': '+eventError.message);
+            if(item.event_date>=todayLocal&&item.main_referee){const wanted=normalizePerson(item.main_referee);const candidates=profiles.filter(p=>{const a=normalizePerson([p.last_name,p.first_name].filter(Boolean).join(' ')),b=normalizePerson([p.first_name,p.last_name].filter(Boolean).join(' '));return a===wanted||b===wanted||normalizePerson(p.username)===wanted;});if(candidates.length!==1)assignmentNotes.push(item.title+': «'+item.main_referee+'» — '+(candidates.length?'найдено несколько профилей':'профиль не найден')+'. Назначение пропущено.');else{const {error:assignError}=await sb.rpc('admin_assign_match_referee',{p_match_id:Number(matchId),p_referee_user_id:candidates[0].user_id});if(assignError)assignmentNotes.push(item.title+': не удалось назначить '+item.main_referee+' — '+assignError.message);}}
           }else{
             const eventRow={id:item.id,type:'event',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,details:await getExistingScheduleDetails(item.id),tournament:item.tournament,match_id:null};
             const {error}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(error)throw new Error('Не удалось сохранить мероприятие '+item.id+': '+error.message);
           }
         }
-        setMessage('scheduleImportMessage','Готово: обработано мероприятий — '+records.length+'. Записи, которых нет в CSV, сохранены.');
+        setMessage('scheduleImportMessage','Готово: обработано мероприятий — '+records.length+'. Записи, которых нет в CSV, сохранены.'+(assignmentNotes.length?' Автоназначение: '+assignmentNotes.join(' | '):''));
         $('scheduleCsvFile').value='';await loadSchedule();await loadAdminScheduleScores();await loadAdminMatches();await loadMatchOptions();
       }catch(error){setMessage('scheduleImportMessage','Импорт остановлен: '+error.message,true);}
       finally{button.disabled=false;}

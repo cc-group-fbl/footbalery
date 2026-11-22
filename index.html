@@ -3123,7 +3123,7 @@
         const needsAutoAssign=records.some(x=>x.type==='match'&&x.event_date>=todayLocal&&x.main_referee);
         let profiles=[];if(needsAutoAssign){const {data,error}=await sb.from('profiles').select('user_id,first_name,last_name,username');if(error)throw new Error('Не удалось загрузить список участников для назначения судей: '+error.message);profiles=data||[];}
         const assignmentNotes=[];
-        const normalizePerson=v=>String(v||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/g,' ').trim().replace(/\\s+/g,' ');
+        const normalizePerson=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/g,' ').trim().replace(/\s+/g,' ');
         for(let i=0;i<records.length;i++){
           const item=records[i];
           if(item.type==='match'){

@@ -3235,9 +3235,9 @@
         const records=parseScheduleCSV(await file.text());
         if(records.length>500)throw new Error('За один раз можно загрузить не более 500 строк.');
         const todayLocal=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
-        const needsAutoAssign=records.some(x=>x.type==='match'&&x.event_date>=todayLocal&&x.main_referee);
+        const needsAutoAssign=records.some(x=>x.type==='match'&&x.main_referee);
         let profiles=[];if(needsAutoAssign){const {data,error}=await sb.from('profiles').select('user_id,first_name,last_name,username');if(error)throw new Error('Не удалось загрузить список участников для назначения судей: '+error.message);profiles=data||[];}
-        const assignmentNotes=[];
+        const assignmentNotes=[];let autoAssignedCount=0,autoAssignCheckedCount=0;
         const normalizePerson=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/g,' ').trim().replace(/\s+/g,' ');
         const refereeNameMatches=(csvName,profile)=>{
           const wanted=normalizePerson(csvName).split(' ').filter(Boolean),first=normalizePerson(profile.first_name).split(' ').filter(Boolean),last=normalizePerson(profile.last_name).split(' ').filter(Boolean),username=normalizePerson(profile.username);
@@ -3260,13 +3260,13 @@
             else{const {data,error}=await sb.from('matches').insert({...payload,schedule_id:item.id,registration_deadline:null}).select('id').single();if(error)throw new Error('Ошибка создания матча '+item.id+': '+error.message);matchId=data.id;}
             const eventRow={id:item.id,type:'match',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,details:await getExistingScheduleDetails(item.id),tournament:item.tournament,match_id:matchId};
             const {error:eventError}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(eventError)throw new Error('Не удалось сохранить запись расписания '+item.id+': '+eventError.message);
-            if(item.event_date>=todayLocal&&item.main_referee){const candidates=profiles.filter(p=>refereeNameMatches(item.main_referee,p));if(candidates.length!==1)assignmentNotes.push(item.title+': «'+item.main_referee+'» — '+(candidates.length?'найдено несколько профилей ('+candidates.map(p=>[p.last_name,p.first_name].filter(Boolean).join(' ')||p.username).join(', ')+')':'профиль не найден')+'. Назначение пропущено. Проверь колонку «Главный судья» и ФИО в профиле.');else{const {error:assignError}=await sb.rpc('admin_assign_match_referee',{p_match_id:Number(matchId),p_referee_user_id:candidates[0].user_id});if(assignError)assignmentNotes.push(item.title+': не удалось назначить '+item.main_referee+' — '+assignError.message);}}
+            if(item.main_referee){const candidates=profiles.filter(p=>refereeNameMatches(item.main_referee,p));if(candidates.length!==1)assignmentNotes.push(item.title+': «'+item.main_referee+'» — '+(candidates.length?'найдено несколько профилей ('+candidates.map(p=>[p.last_name,p.first_name].filter(Boolean).join(' ')||p.username).join(', ')+')':'профиль не найден')+'. Назначение пропущено. Проверь колонку «Главный судья» и ФИО в профиле.');else{autoAssignCheckedCount++;const {error:assignError}=await sb.rpc('admin_assign_match_referee',{p_match_id:Number(matchId),p_referee_user_id:candidates[0].user_id});if(assignError)assignmentNotes.push(item.title+': не удалось назначить '+item.main_referee+' — '+assignError.message);else autoAssignedCount++;}}
           }else{
             const eventRow={id:item.id,type:'event',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,details:await getExistingScheduleDetails(item.id),tournament:item.tournament,match_id:null};
             const {error}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(error)throw new Error('Не удалось сохранить мероприятие '+item.id+': '+error.message);
           }
         }
-        setMessage('scheduleImportMessage','Готово: обработано мероприятий — '+records.length+'. Записи, которых нет в CSV, сохранены.'+(assignmentNotes.length?' Автоназначение: '+assignmentNotes.join(' | '):''));
+        setMessage('scheduleImportMessage','Готово: обработано мероприятий — '+records.length+'. Записи, которых нет в CSV, сохранены. Автоматически назначено судей: '+autoAssignedCount+'. Проверено строк с распознанным судьёй: '+autoAssignCheckedCount+'.'+(assignmentNotes.length?' Проблемы автоназначения: '+assignmentNotes.join(' | '):''));
         $('scheduleCsvFile').value='';await loadSchedule();await loadAdminScheduleScores();await loadAdminMatches();await loadMatchOptions();
       }catch(error){setMessage('scheduleImportMessage','Импорт остановлен: '+error.message,true);}
       finally{button.disabled=false;}

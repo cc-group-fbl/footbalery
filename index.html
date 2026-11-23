@@ -2786,7 +2786,7 @@
         status:index('status','статус','статус матча/мероприятия'),
         home:index('home','хозяева','команда хозяев','хозяева команда','состав хозяев'),
         away:index('away','гости','команда гостей','гости команда','состав гостей'),
-        main_referee:index('главный судья','main referee','main_referee')
+        main_referee:index('главный судья','main referee','main_referee','судья','фио судьи','фамилия и имя судьи','главный судья фио','судья фио')
       };
       const get=(r,k)=>cols[k]<0?'':String(r[cols[k]]??'').trim();
       const parsePlayers=value=>String(value||'').split(',').map(name=>name.trim()).filter(Boolean);
@@ -3234,6 +3234,14 @@
         let profiles=[];if(needsAutoAssign){const {data,error}=await sb.from('profiles').select('user_id,first_name,last_name,username');if(error)throw new Error('Не удалось загрузить список участников для назначения судей: '+error.message);profiles=data||[];}
         const assignmentNotes=[];
         const normalizePerson=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/g,' ').trim().replace(/\s+/g,' ');
+        const refereeNameMatches=(csvName,profile)=>{
+          const wanted=normalizePerson(csvName).split(' ').filter(Boolean),first=normalizePerson(profile.first_name).split(' ').filter(Boolean),last=normalizePerson(profile.last_name).split(' ').filter(Boolean),username=normalizePerson(profile.username);
+          if(!wanted.length)return false;
+          const fullA=[...last,...first],fullB=[...first,...last];
+          const exact=(a,b)=>a.length>=2&&a.length===b.length&&a.every((v,i)=>v===b[i]);
+          const core=a=>a.slice(0,2);
+          return exact(wanted,fullA)||exact(wanted,fullB)||exact(core(wanted),core(fullA))||exact(core(wanted),core(fullB))||(username&&username===wanted.join(' '));
+        };
         for(let i=0;i<records.length;i++){
           const item=records[i];
           if(item.type==='match'){
@@ -3247,7 +3255,7 @@
             else{const {data,error}=await sb.from('matches').insert({...payload,schedule_id:item.id,registration_deadline:null}).select('id').single();if(error)throw new Error('Ошибка создания матча '+item.id+': '+error.message);matchId=data.id;}
             const eventRow={id:item.id,type:'match',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,details:await getExistingScheduleDetails(item.id),tournament:item.tournament,match_id:matchId};
             const {error:eventError}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(eventError)throw new Error('Не удалось сохранить запись расписания '+item.id+': '+eventError.message);
-            if(item.event_date>=todayLocal&&item.main_referee){const wanted=normalizePerson(item.main_referee);const candidates=profiles.filter(p=>{const a=normalizePerson([p.last_name,p.first_name].filter(Boolean).join(' ')),b=normalizePerson([p.first_name,p.last_name].filter(Boolean).join(' '));return a===wanted||b===wanted||normalizePerson(p.username)===wanted;});if(candidates.length!==1)assignmentNotes.push(item.title+': «'+item.main_referee+'» — '+(candidates.length?'найдено несколько профилей':'профиль не найден')+'. Назначение пропущено.');else{const {error:assignError}=await sb.rpc('admin_assign_match_referee',{p_match_id:Number(matchId),p_referee_user_id:candidates[0].user_id});if(assignError)assignmentNotes.push(item.title+': не удалось назначить '+item.main_referee+' — '+assignError.message);}}
+            if(item.event_date>=todayLocal&&item.main_referee){const candidates=profiles.filter(p=>refereeNameMatches(item.main_referee,p));if(candidates.length!==1)assignmentNotes.push(item.title+': «'+item.main_referee+'» — '+(candidates.length?'найдено несколько профилей ('+candidates.map(p=>[p.last_name,p.first_name].filter(Boolean).join(' ')||p.username).join(', ')+')':'профиль не найден')+'. Назначение пропущено. Проверь колонку «Главный судья» и ФИО в профиле.');else{const {error:assignError}=await sb.rpc('admin_assign_match_referee',{p_match_id:Number(matchId),p_referee_user_id:candidates[0].user_id});if(assignError)assignmentNotes.push(item.title+': не удалось назначить '+item.main_referee+' — '+assignError.message);}}
           }else{
             const eventRow={id:item.id,type:'event',title:item.title,event_date:item.event_date,event_time:item.event_time,location:item.location,description:item.description,details:await getExistingScheduleDetails(item.id),tournament:item.tournament,match_id:null};
             const {error}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(error)throw new Error('Не удалось сохранить мероприятие '+item.id+': '+error.message);
@@ -3457,7 +3465,7 @@
       const dateGroups=new Map();
       data.forEach(a=>{
         const raw=String(a.matches?.match_date||'').slice(0,10);
-        const day=/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)?raw:'undated';
+        const day=/^\d{4}-\d{2}-\d{2}$/.test(raw)?raw:'undated';
         if(!dateGroups.has(day))dateGroups.set(day,[]);
         dateGroups.get(day).push(a);
       });

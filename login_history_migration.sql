@@ -39,7 +39,6 @@ CREATE POLICY "Admins can read login history"
   );
 
 GRANT SELECT ON public.login_history TO authenticated;
-GRANT USAGE, SELECT ON SEQUENCE public.login_history_id_seq TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.log_my_login(
   p_device_label text DEFAULT NULL,

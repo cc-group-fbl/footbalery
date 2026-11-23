@@ -3344,7 +3344,7 @@
       root.appendChild(d);
     }
     function normalizeTeamName(value){
-      return String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/^\\s*фк\\s*/i,'').replace(/\\s+/g,' ').trim();
+      return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/^\s*фк\s*/i,'').replace(/\s+/g,' ').trim();
     }
     async function loadCaptainTeamBalance(team){
       const value=$('captainTeamBalanceValue'),date=$('captainTeamBalanceDate');
@@ -3378,7 +3378,7 @@
         if(nameIndex<0||balanceIndex<0)throw new Error('Не найдены обязательные столбцы «Название команды» и «Баланс FC».');
         const teams=[];
         rows.slice(1).forEach((row,index)=>{
-          const name=String(row[nameIndex]||'').trim(),raw=String(row[balanceIndex]??'').trim().replace(/\\s/g,'').replace(',','.');
+          const name=String(row[nameIndex]||'').trim(),raw=String(row[balanceIndex]??'').trim().replace(/\s/g,'').replace(',','.');
           if(!name&&!raw)return;
           if(!name)throw new Error('Строка '+(index+2)+': не указано название команды.');
           if(!raw||!Number.isFinite(Number(raw))||Number(raw)<0)throw new Error('Строка '+(index+2)+': баланс FC должен быть неотрицательным числом.');

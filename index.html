@@ -3712,8 +3712,8 @@
       }
       const starts_at=new Date(startsValue).toISOString();
       const ends_at=new Date(endsValue).toISOString();
-      if (!Number.isFinite(new Date(starts_at).getTime()) || new Date(starts_at)<=new Date()) return setMessage('createPollMessage','Дата начала должна быть в будущем.',true);
-      if (!Number.isFinite(new Date(ends_at).getTime()) || new Date(ends_at)<=new Date(starts_at)) return setMessage('createPollMessage','Дата окончания должна быть позже даты начала.',true);
+      if (!Number.isFinite(new Date(starts_at).getTime())) return setMessage('createPollMessage','Проверьте дату начала.',true);
+      if (!Number.isFinite(new Date(ends_at).getTime()) || new Date(ends_at)<=new Date() || new Date(ends_at)<=new Date(starts_at)) return setMessage('createPollMessage','Дата окончания должна быть в будущем и позже даты начала.',true);
       const button=$('createPollButton'); if(!button)return setMessage('createPollMessage','Форма создания опроса не найдена на странице.',true); button.disabled=true; setMessage('createPollMessage','Создаём опрос…');
       try {
         const {data:poll,error}=await sb.from('polls').insert({title,starts_at,ends_at,is_active:true,created_by:currentUser.id}).select('id').single();

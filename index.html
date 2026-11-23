@@ -480,7 +480,7 @@
         <div id="scheduleList" style="margin-top:14px"><div class="muted">Загрузка расписания…</div></div>
       </section>
       <button type="button" class="small-btn section-back hidden" id="captainBackButton">← На главный экран</button>
-      <section id="captainPanel" class="vote-box hidden"><h2>КАПИТАН</h2><div class="muted" id="captainTeamLabel"></div><div id="captainApplications" class="muted" style="margin-top:12px"></div></section>
+      <section id="captainPanel" class="vote-box hidden"><h2>КАПИТАН</h2><div class="muted" id="captainTeamLabel"></div><div id="captainTeamBalance" style="margin:12px 0;padding:14px;border:1px solid var(--border-color);border-radius:12px;background:rgba(255,255,255,.04)"><div class="muted">БАЛАНС КОМАНДЫ</div><div id="captainTeamBalanceValue" style="font-size:30px;font-weight:900;color:var(--accent-text);margin:4px 0">— FC</div><div id="captainTeamBalanceDate" class="muted">По данным последней загруженной выгрузки CSV</div></div><div id="captainApplications" class="muted" style="margin-top:12px"></div></section>
       <button type="button" class="small-btn section-back hidden" id="voteBackButton">← На главный экран</button>
       <section id="votePanel" class="vote-box hidden" style="margin-top:16px;">
         <h2>ГОЛОСОВАНИЕ</h2><div id="pollContent" class="muted">Загрузка активного голосования...</div><div id="voteMessage" class="message"></div>
@@ -546,6 +546,12 @@
           <button type="button" id="downloadScheduleTemplateButton" class="small-btn" style="width:100%;margin-top:8px">Скачать пример CSV</button>
           <button type="button" id="deleteAllScheduleButton" class="action-btn" style="width:100%;margin-top:10px;background:#a83232">УДАЛИТЬ ВСЁ РАСПИСАНИЕ</button>
           <div id="scheduleImportMessage" class="message" aria-live="polite"></div>
+        </details><details class="admin-section" open>
+          <summary>💰 Импорт баланса команд из CSV</summary>
+          <div class="muted" style="text-align:left">Загрузи файл КОМАНДЫ.csv с колонками «Название команды» и «Баланс FC». После загрузки баланс станет виден капитанам соответствующих команд.</div>
+          <input id="teamBalancesCsvFile" class="field" type="file" accept=".csv,text/csv">
+          <button type="button" id="importTeamBalancesCsvButton" class="action-btn">ЗАГРУЗИТЬ БАЛАНСЫ FC</button>
+          <div id="teamBalancesImportMessage" class="message" aria-live="polite"></div>
         </details><details class="admin-section">
           <summary>⚽ Результаты матчей расписания</summary>
           <div class="muted">Введи голы обеих сторон и сохрани. Пока результат не внесён, в расписании отображается пустой счёт.</div>
@@ -3337,10 +3343,64 @@
       }
       root.appendChild(d);
     }
+    function normalizeTeamName(value){
+      return String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/^\\s*фк\\s*/i,'').replace(/\\s+/g,' ').trim();
+    }
+    async function loadCaptainTeamBalance(team){
+      const value=$('captainTeamBalanceValue'),date=$('captainTeamBalanceDate');
+      if(value)value.textContent='— FC';
+      if(date)date.textContent='По данным последней загруженной выгрузки CSV';
+      if(!team||!sb)return;
+      const {data,error}=await sb.from('site_settings').select('value,updated_at').eq('key','team_balances_csv').maybeSingle();
+      if(error){if(date)date.textContent='Не удалось загрузить баланс: '+error.message;return;}
+      if(!data?.value){if(date)date.textContent='Баланс ещё не загружен администратором';return;}
+      try{
+        const payload=typeof data.value==='string'?JSON.parse(data.value):data.value;
+        const match=(payload?.teams||[]).find(item=>normalizeTeamName(item.name)===normalizeTeamName(team));
+        if(!match){if(date)date.textContent='Для этой команды нет баланса в последней выгрузке';return;}
+        const amount=Number(match.balance);
+        if(!Number.isFinite(amount)){if(date)date.textContent='В CSV указано некорректное значение баланса';return;}
+        if(value)value.textContent=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(amount)+' FC';
+        if(date)date.textContent='На момент выгрузки CSV · '+(payload.exported_at?new Date(payload.exported_at).toLocaleString('ru-RU',{dateStyle:'medium',timeStyle:'short'}):'дата не указана');
+      }catch(parseError){if(date)date.textContent='Не удалось прочитать сохранённую выгрузку CSV';}
+    }
+    async function importTeamBalancesCSV(){
+      if(currentProfile?.role!=='admin')return setMessage('teamBalancesImportMessage','Импорт доступен только администратору.',true);
+      const file=$('teamBalancesCsvFile')?.files?.[0];if(!file)return setMessage('teamBalancesImportMessage','Сначала выбери CSV-файл.',true);
+      const button=$('importTeamBalancesCsvButton');if(button)button.disabled=true;
+      setMessage('teamBalancesImportMessage','Проверяем CSV…');
+      try{
+        const rows=parseCSV(await file.text());
+        if(rows.length<2)throw new Error('В CSV нет строк с командами.');
+        const headers=rows[0].map(normalizeHeader);
+        const nameIndex=headers.findIndex(h=>['название команды','команда','team','team name'].includes(h));
+        const balanceIndex=headers.findIndex(h=>['баланс fc','fc','футкоины','баланс футкоинов'].includes(h));
+        if(nameIndex<0||balanceIndex<0)throw new Error('Не найдены обязательные столбцы «Название команды» и «Баланс FC».');
+        const teams=[];
+        rows.slice(1).forEach((row,index)=>{
+          const name=String(row[nameIndex]||'').trim(),raw=String(row[balanceIndex]??'').trim().replace(/\\s/g,'').replace(',','.');
+          if(!name&&!raw)return;
+          if(!name)throw new Error('Строка '+(index+2)+': не указано название команды.');
+          if(!raw||!Number.isFinite(Number(raw))||Number(raw)<0)throw new Error('Строка '+(index+2)+': баланс FC должен быть неотрицательным числом.');
+          teams.push({name,balance:Number(raw)});
+        });
+        if(!teams.length)throw new Error('В CSV не найдено ни одной команды.');
+        const unique=new Set(teams.map(t=>normalizeTeamName(t.name)));
+        if(unique.size!==teams.length)throw new Error('В CSV есть повторяющиеся названия команд.');
+        const payload={teams,exported_at:new Date().toISOString(),file_name:file.name};
+        const {error}=await sb.from('site_settings').upsert({key:'team_balances_csv',value:JSON.stringify(payload),updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'key'});
+        if(error)throw new Error('Не удалось сохранить балансы: '+error.message);
+        setMessage('teamBalancesImportMessage','Готово: сохранены балансы '+teams.map(t=>t.name+' — '+new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(t.balance)+' FC').join('; ')+'.');
+        $('teamBalancesCsvFile').value='';
+        if(currentProfile?.role==='captain')await loadCaptainTeamBalance(currentProfile.captain_team);
+      }catch(error){setMessage('teamBalancesImportMessage','Импорт остановлен: '+error.message,true);}
+      finally{if(button)button.disabled=false;}
+    }
     async function loadCaptainApplications(){
       const root=$('captainApplications');if(!root||!sb||currentProfile?.role!=='captain')return;
       const team=currentProfile.captain_team;
       $('captainTeamLabel').textContent=team?'Команда: ФК '+team:'Администратор должен назначить капитану команду в списке учётных записей.';
+      await loadCaptainTeamBalance(team);
       root.replaceChildren();if(!team)return;
       const {data,error}=await sb.from('match_applications').select('id,user_id,team,player_number,ready_to_help,created_at,matches(title,match_date,match_time,location)').eq('team',team).order('created_at');
       if(error){root.textContent='Не удалось загрузить состав: '+error.message;return;}
@@ -3686,6 +3746,7 @@
     $('openScheduleButton')?.addEventListener('click',async()=>{showSection('schedulePanel');await loadSchedule();});
     $('scheduleBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
     $('importScheduleCsvButton')?.addEventListener('click',importScheduleCSV);
+    $('importTeamBalancesCsvButton')?.addEventListener('click',importTeamBalancesCSV);
     $('downloadScheduleTemplateButton')?.addEventListener('click',downloadScheduleCSVTemplate);
     $('deleteAllScheduleButton')?.addEventListener('click',deleteAllSchedule);
     $('openMatchesButton').addEventListener('click',async()=>{showSection('matchesPanel');await loadMatchOptions();await loadMyApplications();});

@@ -958,7 +958,7 @@
       if(!root||!sb||currentProfile?.role!=='admin')return;
       if(refresh)refresh.disabled=true;
       root.textContent='Загружаем последние события…';
-      const errors=[],events=[];
+      const errors=[],notes=[],events=[];
       try{
         const [profileResult,voteResult,applicationResult]=await Promise.all([
           sb.from('profiles').select('user_id,username,first_name,last_name,created_at').order('created_at',{ascending:false}).limit(100),
@@ -967,7 +967,6 @@
         ]);
         let newProfiles=profileResult.data||[];
         if(profileResult.error){
-          errors.push('Регистрации: '+profileResult.error.message);
           // Если в profiles нет created_at, используем первый зафиксированный вход и честно подписываем его как вход, а не регистрацию.
           const fallback=await sb.from('profiles').select('user_id,username,first_name,last_name');
           const loginResult=await sb.from('login_history').select('user_id,logged_in_at').order('logged_in_at',{ascending:true}).limit(2000);
@@ -976,7 +975,8 @@
             const firstLogin=new Map();
             (loginResult.data||[]).forEach(x=>{if(!firstLogin.has(x.user_id))firstLogin.set(x.user_id,x.logged_in_at);});
             newProfiles=newProfiles.map(p=>({...p,created_at:firstLogin.get(p.user_id)||null,_activityLabel:'Первый вход в приложение'})).filter(p=>p.created_at);
-          }
+            notes.push('В профилях нет даты регистрации: для новых участников показан первый зафиксированный вход.');
+          }else errors.push('Регистрации: '+profileResult.error.message);
         }
         if(voteResult.error)errors.push('Голоса: '+voteResult.error.message);
         if(applicationResult.error)errors.push('Заявки: '+applicationResult.error.message);
@@ -1002,7 +1002,7 @@
         };
         (newProfiles||[]).forEach(p=>{
           if(!p.created_at)return;
-          events.push({kind:'registration',at:p.created_at,icon:'👤',title:p._activityLabel||'Новая регистрация',person:person(p.user_id),detail:p.username?'Логин: '+p.username:''});
+          events.push({kind:p._activityLabel?'first_login':'registration',at:p.created_at,icon:'👤',title:p._activityLabel||'Новая регистрация',person:person(p.user_id),detail:p.username?'Логин: '+p.username:''});
         });
         (voteResult.data||[]).forEach(v=>events.push({kind:'vote',at:v.created_at,icon:'🗳️',title:'Проголосовал в опросе',person:person(v.voter_id),detail:(pollMap.get(v.poll_id)||'Опрос')+' · голос: '+(candidateMap.get(v.candidate_id)||'вариант')}));
         (applicationResult.data||[]).forEach(a=>events.push({kind:'application',at:a.created_at,icon:'⚽',title:'Подал заявку на матч',person:person(a.user_id),detail:(a.matches?.title||'Матч')+(a.team?' · ФК '+a.team:'')+(Number.isInteger(a.player_number)?' · №'+a.player_number:'')}));
@@ -1010,8 +1010,8 @@
         const since=Date.now()-7*86400000;
         const recent=events.filter(x=>new Date(x.at).getTime()>=since);
         if(summary){
-          const counts=[recent.filter(x=>x.kind==='registration').length,recent.filter(x=>x.kind==='vote').length,recent.filter(x=>x.kind==='application').length];
-          const labels=['Регистрации','Голоса','Заявки'];
+          const counts=[recent.filter(x=>x.kind==='registration'||x.kind==='first_login').length,recent.filter(x=>x.kind==='vote').length,recent.filter(x=>x.kind==='application').length];
+          const labels=['Новые участники','Голоса','Заявки'];
           summary.replaceChildren();
           labels.forEach((label,i)=>{const box=document.createElement('div');box.style.cssText='padding:10px 5px;border:1px solid #ffffff22;border-radius:10px;text-align:center;background:rgba(0,0,0,.12)';const small=document.createElement('div');small.className='muted';small.style.fontSize='11px';small.textContent=label+' за 7 дней';const value=document.createElement('strong');value.style.cssText='display:block;font-size:22px;margin-top:3px';value.textContent=String(counts[i]);box.append(small,value);summary.appendChild(box);});
         }
@@ -1027,6 +1027,7 @@
           const time=document.createElement('div');time.className='muted';time.style.cssText='font-size:10px;margin-top:4px';time.textContent=new Date(item.at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
           body.append(heading,name);if(item.detail)body.appendChild(detail);body.appendChild(time);card.append(icon,body);root.appendChild(card);
         });
+        if(notes.length){const note=document.createElement('div');note.className='muted';note.style.cssText='font-size:10px;margin-top:8px';note.textContent=notes.join(' · ');root.appendChild(note);}
         if(errors.length){const note=document.createElement('div');note.className='muted';note.style.cssText='font-size:10px;margin-top:8px;color:#f0c36d';note.textContent='Часть событий не удалось загрузить: '+errors.join(' · ');root.appendChild(note);}
         const footer=document.createElement('div');footer.className='muted';footer.style.cssText='font-size:10px;margin-top:8px';footer.textContent='Показаны последние '+Math.min(events.length,40)+' событий. Счётчики — за последние 7 дней.';root.appendChild(footer);
       }catch(error){
@@ -1040,7 +1041,7 @@
       if(currentProfile?.role!=='admin'||adminPanelLoaded||adminPanelLoading)return;
       adminPanelLoading=true;
       const jobs=[
-        loadAdminActivity(),loadAdminResults(),loadAdminVoteDetails(),loadNewsRecipients(),loadAdminNews(),
+        loadAdminResults(),loadAdminVoteDetails(),loadNewsRecipients(),loadAdminNews(),
         loadAdminUsers(),loadAdminMatches(),loadAdminMatchApplications(),loadAdminScheduleScores(),loadAdminProtocolManager(),loadScheduledNews()
       ];
       const results=await Promise.allSettled(jobs);
@@ -3939,7 +3940,6 @@
       tab.addEventListener('click',()=>{
         const name=tab.dataset.adminTab;
         if(name==='logins') loadLoginHistory();
-        if(name==='activity') loadAdminActivity();
         document.querySelectorAll('[data-admin-tab]').forEach(btn=>{
           const selected=btn===tab;
           btn.classList.toggle('active',selected);

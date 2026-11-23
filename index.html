@@ -3449,7 +3449,7 @@
       root.replaceChildren();if(error){root.textContent='Не удалось загрузить заявки: '+error.message;return;}
       if(!data?.length){root.textContent='Заявок на матчи пока нет.';return;}
       const ids=[...new Set(data.map(a=>a.user_id).filter(Boolean))];
-      const {data:profiles,error:profileError}=await sb.from('profiles').select('user_id,username,player_id').in('user_id',ids);
+      const {data:profiles,error:profileError}=await sb.from('profiles').select('user_id,username,player_id,first_name,last_name').in('user_id',ids);
       if(profileError){root.textContent='Не удалось загрузить профили игроков: '+profileError.message;return;}
       const byUser=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p]));
       data.forEach(a=>{a.profiles=byUser[a.user_id]||{};});
@@ -3495,7 +3495,10 @@
       const ctx=canvas.getContext('2d');if(!ctx)return alert('Не удалось подготовить изображение.');
       const winter=document.body.classList.contains('winter-theme'),spring=document.body.classList.contains('spring-theme'),summer=document.body.classList.contains('summer-theme');
       const palettes=winter?{top:'#003bff',mid:'#00d9ed',bottom:'#064dff',panel:'#052b78',label:'#00bfe8',text:'#031b56'}:spring?{top:'#087b3b',mid:'#c8ed55',bottom:'#087b3b',panel:'#064c2b',label:'#148b43',text:'#062b16'}:summer?{top:'#009b83',mid:'#b6ed55',bottom:'#009b83',panel:'#056b59',label:'#20b88a',text:'#07351f'}:{top:'#d61800',mid:'#fff52b',bottom:'#d61800',panel:'#c41400',label:'#d90000',text:'#090909'};
-      const bg=ctx.createLinearGradient(0,0,0,1536);bg.addColorStop(0,palettes.top);bg.addColorStop(.5,palettes.mid);bg.addColorStop(1,palettes.bottom);ctx.fillStyle=bg;ctx.fillRect(0,0,1536,1536);
+      const bg=ctx.createLinearGradient(0,0,0,1536);
+      if(spring){bg.addColorStop(0,'#e900f5');bg.addColorStop(.24,'#b34acb');bg.addColorStop(.49,'#829d9d');bg.addColorStop(.75,'#08e85a');bg.addColorStop(1,'#e900f5');}
+      else{bg.addColorStop(0,palettes.top);bg.addColorStop(.5,palettes.mid);bg.addColorStop(1,palettes.bottom);}
+      ctx.fillStyle=bg;ctx.fillRect(0,0,1536,1536);
       for(let x=0;x<4;x++){ctx.fillStyle=x%2?'rgba(255,255,255,.055)':'rgba(0,0,0,.055)';ctx.fillRect(x*384,0,384,1536);}
       const left=rows.filter(a=>normalizeTeamName(a.team)==='деревенские'),right=rows.filter(a=>normalizeTeamName(a.team)==='городские');
       const drawPill=(x,y,w,h,text,fill,color,font)=>{ctx.fillStyle=fill;ctx.beginPath();ctx.roundRect(x,y,w,h,24);ctx.fill();ctx.fillStyle=color;ctx.font=font;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,x+w/2,y+h/2,w-32);};

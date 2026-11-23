@@ -821,6 +821,20 @@
     }
     function usernameEmail(username) { const value = username.trim().toLowerCase(); return value.includes('@') ? value : value.replace(/[^a-z0-9._-]/g, '-') + '@members.futbolery.local'; }
     function setMessage(id, msg, bad=false) { $(id).textContent = msg || ''; $(id).style.color = bad ? '#ff7777' : 'var(--accent-text, #ffd21f)'; }
+    // Записываем вход и при обычной авторизации, и при автоматическом восстановлении сессии.
+    let loginRecordedForPage = false;
+    async function recordAppEntry(userId=currentUser?.id){
+      if(!sb||!userId||loginRecordedForPage)return;
+      loginRecordedForPage=true;
+      const ua=navigator.userAgent||'';
+      const device=/Android|iPhone|iPad|iPod/i.test(ua)?'Мобильное устройство':(/Windows|Macintosh|Linux/i.test(ua)?'Компьютер':'Устройство');
+      const os=/Android/i.test(ua)?'Android':(/iPhone|iPad|iPod/i.test(ua)?'iOS':(/Windows/i.test(ua)?'Windows':(/Mac OS X|Macintosh/i.test(ua)?'macOS':(/Linux/i.test(ua)?'Linux':'Неизвестная ОС'))));
+      const browser=/Edg\\//i.test(ua)?'Microsoft Edge':(/Firefox\\//i.test(ua)?'Firefox':(/CriOS\\//i.test(ua)?'Chrome (iOS)':(/Chrome\\//i.test(ua)?'Chrome':(/Safari\\//i.test(ua)?'Safari':'Другой браузер'))));
+      try{
+        const {error}=await sb.rpc('log_my_login',{p_device_label:device,p_browser_label:browser,p_os_label:os,p_user_agent:ua});
+        if(error){loginRecordedForPage=false;console.warn('Не удалось записать вход в историю:',error.message);}
+      }catch(error){loginRecordedForPage=false;console.warn('Ошибка журнала входов:',error);}
+    }
     // Сохранение FCM-токена устройства для системных push-уведомлений.
     window.footbalerySavePushToken = async function(token, userId) {
       if (!sb || !token || !userId) return;
@@ -1281,16 +1295,7 @@
             }
           })();
         }
-        try {
-          const ua=navigator.userAgent||'';
-          const device=/Android|iPhone|iPad|iPod/i.test(ua)?'Мобильное устройство':(/Windows|Macintosh|Linux/i.test(ua)?'Компьютер':'Устройство');
-          const os=/Android/i.test(ua)?'Android':(/iPhone|iPad|iPod/i.test(ua)?'iOS':(/Windows/i.test(ua)?'Windows':(/Mac OS X|Macintosh/i.test(ua)?'macOS':(/Linux/i.test(ua)?'Linux':'Неизвестная ОС'))));
-          const browser=/Edg\//i.test(ua)?'Microsoft Edge':(/Firefox\//i.test(ua)?'Firefox':(/CriOS\//i.test(ua)?'Chrome (iOS)':(/Chrome\//i.test(ua)?'Chrome':(/Safari\//i.test(ua)?'Safari':'Другой браузер'))));
-          // Login history is auxiliary: do not delay opening the account if this RPC is slow.
-          sb.rpc('log_my_login',{p_device_label:device,p_browser_label:browser,p_os_label:os,p_user_agent:ua})
-            .then(({error:loginLogError})=>{if(loginLogError)console.warn('Не удалось записать вход в историю:',loginLogError);})
-            .catch(logError=>console.warn('Ошибка журнала входов:',logError));
-        } catch(logError) { console.warn('Ошибка журнала входов:',logError); }
+        recordAppEntry(currentUser.id).catch(()=>{});
         await showAccount();
         updateBiometricControls().catch(error=>console.warn('Не удалось обновить настройки быстрого входа:',error));
       } catch(err) {
@@ -4014,6 +4019,7 @@
           if ($('rememberMeCheckbox')) $('rememberMeCheckbox').checked = true;
           currentUser = data.session.user;offlineWrite('user_snapshot',currentUser);
           await showAccount();
+          recordAppEntry(currentUser.id).catch(()=>{});
           await updateBiometricControls();
         } else if (data.session && !rememberSession) {
           await sb.auth.signOut();

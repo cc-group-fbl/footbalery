@@ -3411,7 +3411,33 @@
       const byUser=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p]));
       data.forEach(a=>{a.profiles=byUser[a.user_id]||{};});
       let directory={};try{directory=await loadPlayerDirectory();}catch(e){}
-      data.forEach(a=>appendApplicationCard(root,a,directory,false));
+      const groups=new Map();
+      data.forEach(a=>{
+        const raw=String(a.matches?.match_date||'').slice(0,10);
+        const key=/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)?raw:'undated';
+        if(!groups.has(key))groups.set(key,[]);
+        groups.get(key).push(a);
+      });
+      const orderedKeys=[...groups.keys()].sort((a,b)=>{
+        if(a==='undated')return 1;if(b==='undated')return -1;return a.localeCompare(b);
+      });
+      orderedKeys.forEach(day=>{
+        const section=document.createElement('section');
+        section.style.cssText='margin:14px 0 18px;padding:12px;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(255,255,255,.025)';
+        const heading=document.createElement('h3');
+        heading.style.cssText='margin:0 0 10px;font-size:14px;font-weight:900;color:var(--accent-text);';
+        if(day==='undated')heading.textContent='ДАТА НЕ УКАЗАНА';
+        else{
+          const [year,month,date]=day.split('-').map(Number);
+          heading.textContent=new Date(year,month-1,date).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).toLocaleUpperCase('ru-RU');
+        }
+        const count=document.createElement('span');
+        count.className='muted';count.style.cssText='display:block;font-size:11px;font-weight:500;margin-top:3px';
+        count.textContent='Заявок: '+groups.get(day).length;
+        heading.appendChild(count);section.appendChild(heading);
+        groups.get(day).forEach(a=>appendApplicationCard(section,a,directory,false));
+        root.appendChild(section);
+      });
     }
     async function loadAdminMatchApplications(){
       const root=$('adminMatchApplications');if(!root||!sb||currentProfile?.role!=='admin')return;

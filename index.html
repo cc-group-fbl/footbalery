@@ -3454,7 +3454,76 @@
       const byUser=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p]));
       data.forEach(a=>{a.profiles=byUser[a.user_id]||{};});
       let directory={};try{directory=await loadPlayerDirectory();}catch(e){}
-      data.forEach(a=>appendApplicationCard(root,a,directory,true));
+      const dateGroups=new Map();
+      data.forEach(a=>{
+        const raw=String(a.matches?.match_date||'').slice(0,10);
+        const day=/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)?raw:'undated';
+        if(!dateGroups.has(day))dateGroups.set(day,[]);
+        dateGroups.get(day).push(a);
+      });
+      const orderedDays=[...dateGroups.keys()].sort((a,b)=>a==='undated'?1:b==='undated'?-1:a.localeCompare(b));
+      orderedDays.forEach(day=>{
+        const daySection=document.createElement('section');
+        daySection.style.cssText='margin:14px 0 18px;padding:12px;border:1px solid rgba(255,255,255,.16);border-radius:13px;background:rgba(255,255,255,.025)';
+        const dayTitle=document.createElement('h3');
+        dayTitle.style.cssText='margin:0 0 10px;font-size:14px;font-weight:900;color:var(--accent-text)';
+        if(day==='undated')dayTitle.textContent='ДАТА НЕ УКАЗАНА';
+        else{const [y,m,d]=day.split('-').map(Number);dayTitle.textContent=new Date(y,m-1,d).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).toLocaleUpperCase('ru-RU');}
+        const dayCount=document.createElement('span');dayCount.className='muted';dayCount.style.cssText='display:block;font-size:11px;font-weight:500;margin-top:3px';dayCount.textContent='Заявок: '+dateGroups.get(day).length;dayTitle.appendChild(dayCount);daySection.appendChild(dayTitle);
+        const matchGroups=new Map();
+        dateGroups.get(day).forEach(a=>{const key=String(a.matches?.title||'Матч')+'|'+String(a.matches?.match_time||'');if(!matchGroups.has(key))matchGroups.set(key,[]);matchGroups.get(key).push(a);});
+        matchGroups.forEach(matchRows=>{
+          const matchBox=document.createElement('div');matchBox.style.cssText='margin:10px 0;padding:10px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(0,0,0,.12)';
+          const matchTitle=document.createElement('strong');matchTitle.style.cssText='display:block;margin-bottom:8px;color:var(--accent-text)';matchTitle.textContent=(matchRows[0].matches?.title||'Матч')+(matchRows[0].matches?.match_time?' · '+matchRows[0].matches.match_time:'');matchBox.appendChild(matchTitle);
+          const exportButton=document.createElement('button');exportButton.type='button';exportButton.className='small-btn';exportButton.style.marginBottom='8px';exportButton.textContent='🖼️ СКАЧАТЬ СОСТАВЫ КОМАНД PNG';exportButton.addEventListener('click',()=>downloadMatchApplicationsImage(matchRows,directory,day));matchBox.appendChild(exportButton);
+          const teamOrder=['ДЕРЕВЕНСКИЕ','ГОРОДСКИЕ'];
+          teamOrder.forEach(teamName=>{
+            const teamRows=matchRows.filter(a=>normalizeTeamName(a.team)===normalizeTeamName(teamName));
+            const teamHeading=document.createElement('div');teamHeading.style.cssText='font-size:11px;font-weight:900;margin:7px 0 3px;color:var(--muted)';teamHeading.textContent='ФК '+teamName+' · '+teamRows.length+' заявок';matchBox.appendChild(teamHeading);
+            teamRows.forEach(a=>appendApplicationCard(matchBox,a,directory,true));
+          });
+          const otherRows=matchRows.filter(a=>!teamOrder.some(t=>normalizeTeamName(t)===normalizeTeamName(a.team)));
+          otherRows.forEach(a=>appendApplicationCard(matchBox,a,directory,true));
+          daySection.appendChild(matchBox);
+        });
+        root.appendChild(daySection);
+      });
+    }
+
+    function downloadMatchApplicationsImage(rows,directory,day){
+      const canvas=document.createElement('canvas');canvas.width=1536;canvas.height=1536;
+      const ctx=canvas.getContext('2d');if(!ctx)return alert('Не удалось подготовить изображение.');
+      const winter=document.body.classList.contains('winter-theme'),spring=document.body.classList.contains('spring-theme'),summer=document.body.classList.contains('summer-theme');
+      const palettes=winter?{top:'#003bff',mid:'#00d9ed',bottom:'#064dff',panel:'#052b78',label:'#00bfe8',text:'#031b56'}:spring?{top:'#087b3b',mid:'#c8ed55',bottom:'#087b3b',panel:'#064c2b',label:'#148b43',text:'#062b16'}:summer?{top:'#009b83',mid:'#b6ed55',bottom:'#009b83',panel:'#056b59',label:'#20b88a',text:'#07351f'}:{top:'#d61800',mid:'#fff52b',bottom:'#d61800',panel:'#c41400',label:'#d90000',text:'#090909'};
+      const bg=ctx.createLinearGradient(0,0,0,1536);bg.addColorStop(0,palettes.top);bg.addColorStop(.5,palettes.mid);bg.addColorStop(1,palettes.bottom);ctx.fillStyle=bg;ctx.fillRect(0,0,1536,1536);
+      for(let x=0;x<4;x++){ctx.fillStyle=x%2?'rgba(255,255,255,.055)':'rgba(0,0,0,.055)';ctx.fillRect(x*384,0,384,1536);}
+      const left=rows.filter(a=>normalizeTeamName(a.team)==='деревенские'),right=rows.filter(a=>normalizeTeamName(a.team)==='городские');
+      const drawPill=(x,y,w,h,text,fill,color,font)=>{ctx.fillStyle=fill;ctx.beginPath();ctx.roundRect(x,y,w,h,24);ctx.fill();ctx.fillStyle=color;ctx.font=font;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,x+w/2,y+h/2,w-32);};
+      const drawTeam=(list,x,teamLabel,opponent,align)=>{
+        drawPill(x,34,690,145,teamLabel,'#050505','#fff','900 66px Gilroy, Arial');
+        drawPill(x+(align==='left'?0:0),218,690,118,'ЗАЯВКА НА МАТЧ ПРОТИВ '+opponent,palettes.label,'#fff','800 35px Gilroy, Arial');
+        const startY=470,available=850,lineHeight=Math.min(116,available/Math.max(1,list.length));
+        const fontSize=Math.max(36,Math.min(76,lineHeight*.62));
+        ctx.textAlign=align;ctx.textBaseline='alphabetic';ctx.fillStyle=palettes.text;ctx.font='800 '+fontSize+'px Gilroy, Arial';
+        list.forEach((a,i)=>{
+          const profile=a.profiles||{},info=playerSheetInfo(profile.player_id,directory);
+          const name=[profile.first_name,profile.last_name].filter(Boolean).join(' ')||info.name||profile.username||'Игрок';
+          const number=a.player_number??info.number??'—';
+          const text='#'+number+' '+name;
+          const tx=align==='left'?x+45:x+645;
+          const y=startY+i*lineHeight;
+          ctx.textAlign=align;ctx.fillText(text,tx,y,640);
+          const width=Math.min(640,ctx.measureText(text).width);
+          ctx.beginPath();ctx.strokeStyle=palettes.text;ctx.lineWidth=4;ctx.moveTo(align==='left'?tx:tx-width,y+12);ctx.lineTo(align==='left'?tx+width:tx,y+12);ctx.stroke();
+        });
+      };
+      drawTeam(left,26,'ФК ДЕРЕВЕНСКИЕ','ГОРОДСКИХ','left');
+      drawTeam(right,820,'ФК ГОРОДСКИЕ','ДЕРЕВЕНСКИХ','right');
+      const [y,m,d]=String(day||'').split('-').map(Number);
+      const dateLabel=day==='undated'||!y?'ДАТА НЕ УКАЗАНА':new Date(y,m-1,d).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});
+      drawPill(290,1370,956,92,'СОСТАВЫ НА Д×Г · '+dateLabel,'#fff','#251010','900 48px Gilroy, Arial');
+      const matchTitle=String(rows[0]?.matches?.title||'').replace(/[^a-zа-яё0-9 _-]/gi,'').trim();
+      const link=document.createElement('a');link.download='sostavy-dhg-'+(day||'bez-daty')+'.png';link.href=canvas.toDataURL('image/png');link.click();
     }
 
     const DEFAULT_STAT_CATEGORIES = [

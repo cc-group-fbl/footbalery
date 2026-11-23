@@ -879,6 +879,9 @@
       const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton',chatsPanel:'chatsBackButton',financePanel:'financeBackButton',tournamentsPanel:'tournamentsBackButton',protocolsPanel:'protocolsBackButton'};
       Object.entries(backButtons).forEach(([panelId,buttonId])=>{const button=$(buttonId);if(button)button.classList.toggle('hidden',sectionId!==panelId);});
       window.scrollTo({top:0,behavior:'smooth'});
+      if(sectionId==='adminPanel'&&currentProfile?.role==='admin'){
+        Promise.resolve().then(()=>loadAdminActivity()).catch(error=>console.warn('Не удалось обновить обзор событий:',error));
+      }
     }
 
     window.addEventListener('popstate',async()=>{
@@ -2304,17 +2307,25 @@
       });
     }
 
+    function birthdayMonthDay(value){
+      const raw=String(value||'').trim();
+      let match=raw.match(/^(?:\d{4})-(\d{1,2})-(\d{1,2})/),month=0,day=0;
+      if(match){month=Number(match[1]);day=Number(match[2]);}
+      else if((match=raw.match(/^(\d{1,2})[./-](\d{1,2})(?:[./-]\d{2,4})?$/))){day=Number(match[1]);month=Number(match[2]);}
+      else if(/^\d+(?:\.\d+)?$/.test(raw)){const serial=Number(raw);if(serial>20000&&serial<80000){const date=new Date(Date.UTC(1899,11,30)+serial*86400000);month=date.getUTCMonth()+1;day=date.getUTCDate();}}
+      return month>=1&&month<=12&&day>=1&&day<=31?{month,day}:null;
+    }
     function renderBirthdayGreeting(birthDate,serverConfirmed=false){
       const banner=$('birthdayGreeting');if(!banner)return;
-      const raw=String(birthDate||'').slice(0,10),match=raw.match(/^\d{4}-(\d{2})-(\d{2})$/),today=new Date();
-      const localMatch=!!match&&Number(match[1])===today.getMonth()+1&&Number(match[2])===today.getDate();
-      const isBirthday=localMatch||serverConfirmed;
+      const parsed=birthdayMonthDay(birthDate),today=new Date();
+      const isBirthday=!!(parsed&&parsed.month===today.getMonth()+1&&parsed.day===today.getDate())||serverConfirmed;
       banner.classList.toggle('visible',isBirthday);
       banner.setAttribute('aria-hidden',isBirthday?'false':'true');
       banner.style.display=isBirthday?'block':'none';
     }
     async function refreshBirthdayGreeting(profile){
-      renderBirthdayGreeting('',false);
+      renderBirthdayGreeting(profile?.birth_date||'',false);
+      if(birthdayMonthDay(profile?.birth_date))return;
       const playerId=String(profile?.player_id||'').trim();
       if(!playerId)return;
       try{
@@ -2325,18 +2336,11 @@
         const rows=parseCSV(csvText);if(rows.length<2)return;
         const headers=rows[0].map(normalizeHeader);
         const idIndex=headers.findIndex(h=>['id','player id','id игрока','идентификатор','код игрока'].includes(h));
-        const birthIndex=headers.findIndex(h=>h==='дата рождения');
-        if(idIndex<0||birthIndex<0){console.warn('В статистике не найден столбец ID или «Дата Рождения».');return;}
+        const birthIndex=headers.findIndex(h=>h==='дата рождения'||h==='день рождения'||h==='дата рожд.');
+        if(idIndex<0||birthIndex<0){console.warn('В статистике не найден столбец ID или дата рождения.');return;}
         const row=rows.slice(1).find(r=>String(r[idIndex]||'').trim().toLowerCase()===playerId.toLowerCase());
         if(!row)return;
-        const raw=String(row[birthIndex]||'').trim();
-        let month=0,day=0,match=raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-        if(match){month=Number(match[2]);day=Number(match[3]);}
-        else if((match=raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/))){day=Number(match[1]);month=Number(match[2]);}
-        else if(/^\d+(?:\.\d+)?$/.test(raw)){const serial=Number(raw);if(serial>20000&&serial<80000){const date=new Date(Date.UTC(1899,11,30)+serial*86400000);month=date.getUTCMonth()+1;day=date.getUTCDate();}}
-        const today=new Date();
-        const dateValue=month&&day?String(today.getFullYear())+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0'):'';
-        renderBirthdayGreeting(dateValue,false);
+        renderBirthdayGreeting(row[birthIndex]||'',false);
       }catch(error){console.warn('Не удалось получить дату рождения из статистики:',error?.message||error);}
     }
     async function showAccount() {

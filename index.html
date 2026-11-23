@@ -3725,7 +3725,7 @@
           await loadAdminResults(); await loadPoll(); return;
         }
         const noticeTitle='🗳️ Начался опрос: '+title;
-        const noticeBody='Голосование «'+title+'» начнётся '+new Date(starts_at).toLocaleString('ru-RU')+'. Перейдите в раздел «ГОЛОСОВАНИЕ», чтобы принять участие.';
+        const noticeBody='Голосование «'+title+'» уже открыто. Перейдите в раздел «ГОЛОСОВАНИЕ», чтобы принять участие.';
         const {error:newsNoticeError}=await sb.from('news').insert({id:crypto.randomUUID(),title:noticeTitle,body:noticeBody,author_id:currentUser.id,created_by:currentUser.id,visibility:'all',created_at:starts_at});
         if(newsNoticeError) console.warn('Опрос создан, но уведомление в новостях не добавлено:',newsNoticeError.message);
         $('createPollForm').reset();

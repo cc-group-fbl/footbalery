@@ -592,6 +592,9 @@
         <form id="createPollForm" style="margin-top:12px">
           <label class="muted" for="pollTitle">Название опроса</label>
           <input id="pollTitle" class="field" maxlength="160" placeholder="Например: Какой формат турнира выбрать?" required />
+          <label class="muted" for="pollStartsAt">Дата и время начала</label>
+          <input id="pollStartsAt" class="field" type="datetime-local" required />
+          <div class="muted">Можно запланировать опрос заранее. До указанного времени он не будет доступен участникам.</div>
           <label class="muted" for="pollEndsAt">Дата и время окончания</label>
           <input id="pollEndsAt" class="field" type="datetime-local" required />
           <label class="muted" for="pollCandidatesInput">Варианты ответа — каждый с новой строки (максимум 20)</label>
@@ -1050,7 +1053,7 @@
     async function loadNews() {
       const root=$('newsFeed');if(!root||!sb||!currentUser)return;root.replaceChildren();$('newsTabs')?.replaceChildren();
       const loading=document.createElement('div');loading.className='muted';loading.textContent='Загружаем новости…';root.appendChild(loading);
-      const {data:news,error}=await sb.from('news').select('id,title,body,image_url,author_id,visibility,created_at').order('created_at',{ascending:false}).limit(50);
+      const {data:news,error}=await sb.from('news').select('id,title,body,image_url,author_id,visibility,created_at').lte('created_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(50);
       if(error){root.textContent='Новости пока не настроены. Администратору нужно выполнить SQL из архива.';$('newsUnreadBadge').classList.add('hidden');return;}
       if(!news?.length){root.textContent='Новостей пока нет.';$('newsUnreadBadge').classList.add('hidden');return;}
       const ids=news.map(n=>n.id);
@@ -3608,7 +3611,7 @@
     async function loadPoll() {
       setMessage('voteMessage',''); const root=$('pollContent'); root.replaceChildren();
       const now=new Date().toISOString();
-      const {data:polls,error}=await sb.from('polls').select('id,title,ends_at').eq('is_active',true).gt('ends_at',now).order('ends_at',{ascending:true}).limit(1);
+      const {data:polls,error}=await sb.from('polls').select('id,title,starts_at,ends_at').eq('is_active',true).lte('starts_at',now).gt('ends_at',now).order('ends_at',{ascending:true}).limit(1);
       if(error){root.textContent='Не удалось загрузить опрос. Проверьте SQL-настройку Supabase.';return;}
       if(!polls || !polls.length){root.textContent='Сейчас нет активных голосований.';return;}
       activePoll=polls[0]; const title=document.createElement('div'); title.style.cssText='font-weight:900;font-size:15px;color:#fff;margin:8px 0'; title.textContent=activePoll.title; root.appendChild(title);
@@ -3647,10 +3650,10 @@
       setMessage('voteMessage','Ваш голос принят!');await loadPoll();
     }
     async function loadAdminResults(){
-      const root=$('adminResults');root.replaceChildren(); const {data:polls,error}=await sb.from('polls').select('id,title,ends_at,is_active').order('ends_at',{ascending:false}).limit(20);
+      const root=$('adminResults');root.replaceChildren(); const {data:polls,error}=await sb.from('polls').select('id,title,starts_at,ends_at,is_active').order('starts_at',{ascending:false}).limit(20);
       if(error){root.textContent='Не удалось загрузить опросы. Проверьте роль admin в profiles.';return;}
       if(!polls||!polls.length){root.textContent='Опросов пока нет. Создайте первый опрос с помощью формы выше.';return;}
-      for(const p of polls){const block=document.createElement('div');block.style.cssText='padding:12px 0;border-top:1px solid rgba(255,255,255,.12)';const h=document.createElement('div');h.style.fontWeight='800';h.textContent=p.title;block.appendChild(h);const meta=document.createElement('div');meta.className='muted';meta.textContent=(p.is_active?'Активен':'Закрыт')+' · до '+new Date(p.ends_at).toLocaleString('ru-RU');block.appendChild(meta);
+      for(const p of polls){const block=document.createElement('div');block.style.cssText='padding:12px 0;border-top:1px solid rgba(255,255,255,.12)';const h=document.createElement('div');h.style.fontWeight='800';h.textContent=p.title;block.appendChild(h);const meta=document.createElement('div');meta.className='muted';const now=Date.now(),start=new Date(p.starts_at||p.created_at||0).getTime(),end=new Date(p.ends_at).getTime();meta.textContent=(!p.is_active?'Закрыт':start>now?'Запланирован на '+new Date(p.starts_at).toLocaleString('ru-RU'):end<=now?'Завершён':'Активен')+' · до '+new Date(p.ends_at).toLocaleString('ru-RU');block.appendChild(meta);
         const {data:counts}=await sb.from('votes').select('candidate_id').eq('poll_id',p.id); const {data:cands}=await sb.from('poll_candidates').select('id,player_name').eq('poll_id',p.id); const tally={};(counts||[]).forEach(v=>tally[v.candidate_id]=(tally[v.candidate_id]||0)+1);(cands||[]).forEach(c=>{const line=document.createElement('div');line.style.cssText='font-size:12px;margin-top:6px';line.textContent=c.player_name+': '+(tally[c.id]||0)+' голосов';block.appendChild(line);});root.appendChild(block);}
     }
     async function loadAdminVoteDetails(){
@@ -3683,9 +3686,10 @@
       e.preventDefault();
       if (!sb || !currentUser || !currentProfile || currentProfile.role !== 'admin') return setMessage('createPollMessage','Создавать опросы может только администратор.',true);
       const title=$('pollTitle')?.value.trim()||'';
+      const startsValue=$('pollStartsAt')?.value||'';
       const endsValue=$('pollEndsAt')?.value||'';
       const raw=($('pollCandidatesInput')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-      if (!title || !endsValue || !raw.length) return setMessage('createPollMessage','Заполните название, срок окончания и минимум два варианта ответа.',true);
+      if (!title || !startsValue || !endsValue || !raw.length) return setMessage('createPollMessage','Заполните название, дату начала, дату окончания и минимум два варианта ответа.',true);
       if (raw.length<2) return setMessage('createPollMessage','Добавьте минимум 2 варианта ответа.',true);
       if (raw.length>20) return setMessage('createPollMessage','В одном голосовании может быть не больше 20 вариантов ответа.',true);
       const playerMode=raw.some(line=>line.includes('|'));
@@ -3706,11 +3710,13 @@
         }
         candidates.push({player_id,player_name});
       }
+      const starts_at=new Date(startsValue).toISOString();
       const ends_at=new Date(endsValue).toISOString();
-      if (new Date(ends_at)<=new Date()) return setMessage('createPollMessage','Дата окончания должна быть в будущем.',true);
+      if (!Number.isFinite(new Date(starts_at).getTime()) || new Date(starts_at)<=new Date()) return setMessage('createPollMessage','Дата начала должна быть в будущем.',true);
+      if (!Number.isFinite(new Date(ends_at).getTime()) || new Date(ends_at)<=new Date(starts_at)) return setMessage('createPollMessage','Дата окончания должна быть позже даты начала.',true);
       const button=$('createPollButton'); if(!button)return setMessage('createPollMessage','Форма создания опроса не найдена на странице.',true); button.disabled=true; setMessage('createPollMessage','Создаём опрос…');
       try {
-        const {data:poll,error}=await sb.from('polls').insert({title,ends_at,is_active:true,created_by:currentUser.id}).select('id').single();
+        const {data:poll,error}=await sb.from('polls').insert({title,starts_at,ends_at,is_active:true,created_by:currentUser.id}).select('id').single();
         if(error) throw error;
         const rows=candidates.map(c=>({...c,poll_id:poll.id}));
         const {error:candidateError}=await sb.from('poll_candidates').insert(rows);
@@ -3718,8 +3724,12 @@
           setMessage('createPollMessage','Опрос создан, но кандидаты не добавились: '+candidateError.message+'. Не создавайте такой же опрос повторно; сообщите администратору.',true);
           await loadAdminResults(); await loadPoll(); return;
         }
+        const noticeTitle='🗳️ Начался опрос: '+title;
+        const noticeBody='Голосование «'+title+'» начнётся '+new Date(starts_at).toLocaleString('ru-RU')+'. Перейдите в раздел «ГОЛОСОВАНИЕ», чтобы принять участие.';
+        const {error:newsNoticeError}=await sb.from('news').insert({id:crypto.randomUUID(),title:noticeTitle,body:noticeBody,author_id:currentUser.id,created_by:currentUser.id,visibility:'all',created_at:starts_at});
+        if(newsNoticeError) console.warn('Опрос создан, но уведомление в новостях не добавлено:',newsNoticeError.message);
         $('createPollForm').reset();
-        setMessage('createPollMessage','Опрос создан! Добавлено вариантов ответа: '+candidates.length+'.');
+        setMessage('createPollMessage',(new Date(starts_at)>new Date()?'Опрос запланирован на ':'Опрос создан! Начало: ')+new Date(starts_at).toLocaleString('ru-RU')+'. Добавлено вариантов ответа: '+candidates.length+'.'+(newsNoticeError?' Не удалось добавить уведомление в новости: '+newsNoticeError.message:''));
         await loadAdminResults(); await loadPoll();
       } catch(err) {
         setMessage('createPollMessage','Не удалось создать опрос: '+(err.message||'ошибка Supabase')+'. Проверьте подключение и права администратора.',true);

@@ -503,6 +503,18 @@
       <button type="button" class="small-btn section-back hidden" id="adminBackButton">← На главный экран</button>
       <section id="adminPanel" class="vote-box hidden">
         <h2>ПАНЕЛЬ АДМИНИСТРАТОРА</h2>
+        <section class="admin-section" style="border-color:rgba(0,210,255,.35);background:linear-gradient(135deg,rgba(0,160,220,.10),rgba(255,255,255,.02))">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div><h3 style="font-size:16px;margin:0">🔔 Последние события</h3><div class="muted" style="margin:4px 0 0">Новые участники, голоса и заявки на матчи</div></div>
+            <button type="button" id="refreshAdminActivity" class="small-btn">↻ ОБНОВИТЬ</button>
+          </div>
+          <div id="adminActivitySummary" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0">
+            <div class="muted" style="padding:10px;border:1px solid #ffffff22;border-radius:10px;text-align:center">Регистрации<br><strong>—</strong></div>
+            <div class="muted" style="padding:10px;border:1px solid #ffffff22;border-radius:10px;text-align:center">Голоса<br><strong>—</strong></div>
+            <div class="muted" style="padding:10px;border:1px solid #ffffff22;border-radius:10px;text-align:center">Заявки<br><strong>—</strong></div>
+          </div>
+          <div id="adminActivityList" aria-live="polite"><div class="muted">Загрузка событий…</div></div>
+        </section>
         <div class="muted" style="padding:10px;border:1px solid rgba(255,210,31,.35);border-radius:10px;margin:10px 0">
         Важно: срок голосования должен проверяться на стороне Supabase. Проверка только в браузере не защищает от изменения часов устройства; для полной защиты нужна серверная проверка срока и уникальности голоса.
         </div>
@@ -941,12 +953,94 @@
       }catch(error){console.error('Не удалось открыть раздел по ссылке:',error);}
     });
 
+    async function loadAdminActivity(){
+      const root=$('adminActivityList'),summary=$('adminActivitySummary'),refresh=$('refreshAdminActivity');
+      if(!root||!sb||currentProfile?.role!=='admin')return;
+      if(refresh)refresh.disabled=true;
+      root.textContent='Загружаем последние события…';
+      const errors=[],events=[];
+      try{
+        const [profileResult,voteResult,applicationResult]=await Promise.all([
+          sb.from('profiles').select('user_id,username,first_name,last_name,created_at').order('created_at',{ascending:false}).limit(100),
+          sb.from('votes').select('id,poll_id,voter_id,candidate_id,created_at').order('created_at',{ascending:false}).limit(60),
+          sb.from('match_applications').select('id,user_id,team,player_number,created_at,matches(title,match_date)').order('created_at',{ascending:false}).limit(60)
+        ]);
+        let newProfiles=profileResult.data||[];
+        if(profileResult.error){
+          errors.push('Регистрации: '+profileResult.error.message);
+          // Если в profiles нет created_at, используем первый зафиксированный вход и честно подписываем его как вход, а не регистрацию.
+          const fallback=await sb.from('profiles').select('user_id,username,first_name,last_name');
+          const loginResult=await sb.from('login_history').select('user_id,logged_in_at').order('logged_in_at',{ascending:true}).limit(2000);
+          if(!fallback.error&&!loginResult.error){
+            newProfiles=fallback.data||[];
+            const firstLogin=new Map();
+            (loginResult.data||[]).forEach(x=>{if(!firstLogin.has(x.user_id))firstLogin.set(x.user_id,x.logged_in_at);});
+            newProfiles=newProfiles.map(p=>({...p,created_at:firstLogin.get(p.user_id)||null,_activityLabel:'Первый вход в приложение'})).filter(p=>p.created_at);
+          }
+        }
+        if(voteResult.error)errors.push('Голоса: '+voteResult.error.message);
+        if(applicationResult.error)errors.push('Заявки: '+applicationResult.error.message);
+        const profileMap=new Map((newProfiles||[]).map(p=>[p.user_id,p]));
+        const actorIds=[...new Set([...(voteResult.data||[]).map(x=>x.voter_id),...(applicationResult.data||[]).map(x=>x.user_id)])].filter(Boolean);
+        if(actorIds.length){
+          const actors=await sb.from('profiles').select('user_id,username,first_name,last_name').in('user_id',actorIds);
+          if(!actors.error)(actors.data||[]).forEach(p=>profileMap.set(p.user_id,{...profileMap.get(p.user_id),...p}));
+          else errors.push('Имена участников: '+actors.error.message);
+        }
+        const pollIds=[...new Set((voteResult.data||[]).map(x=>x.poll_id).filter(Boolean))];
+        const candidateIds=[...new Set((voteResult.data||[]).map(x=>x.candidate_id).filter(Boolean))];
+        const [pollsResult,candidatesResult]=await Promise.all([
+          pollIds.length?sb.from('polls').select('id,title').in('id',pollIds):Promise.resolve({data:[],error:null}),
+          candidateIds.length?sb.from('poll_candidates').select('id,player_name').in('id',candidateIds):Promise.resolve({data:[],error:null})
+        ]);
+        const pollMap=new Map((pollsResult.data||[]).map(x=>[x.id,x.title]));
+        const candidateMap=new Map((candidatesResult.data||[]).map(x=>[x.id,x.player_name]));
+        const person=id=>{
+          const p=profileMap.get(id)||{};
+          const full=[p.first_name,p.last_name].filter(Boolean).join(' ').trim();
+          return full||p.username||'Участник';
+        };
+        (newProfiles||[]).forEach(p=>{
+          if(!p.created_at)return;
+          events.push({kind:'registration',at:p.created_at,icon:'👤',title:p._activityLabel||'Новая регистрация',person:person(p.user_id),detail:p.username?'Логин: '+p.username:''});
+        });
+        (voteResult.data||[]).forEach(v=>events.push({kind:'vote',at:v.created_at,icon:'🗳️',title:'Проголосовал в опросе',person:person(v.voter_id),detail:(pollMap.get(v.poll_id)||'Опрос')+' · голос: '+(candidateMap.get(v.candidate_id)||'вариант')}));
+        (applicationResult.data||[]).forEach(a=>events.push({kind:'application',at:a.created_at,icon:'⚽',title:'Подал заявку на матч',person:person(a.user_id),detail:(a.matches?.title||'Матч')+(a.team?' · ФК '+a.team:'')+(Number.isInteger(a.player_number)?' · №'+a.player_number:'')}));
+        events.sort((a,b)=>new Date(b.at)-new Date(a.at));
+        const since=Date.now()-7*86400000;
+        const recent=events.filter(x=>new Date(x.at).getTime()>=since);
+        if(summary){
+          const counts=[recent.filter(x=>x.kind==='registration').length,recent.filter(x=>x.kind==='vote').length,recent.filter(x=>x.kind==='application').length];
+          const labels=['Регистрации','Голоса','Заявки'];
+          summary.replaceChildren();
+          labels.forEach((label,i)=>{const box=document.createElement('div');box.style.cssText='padding:10px 5px;border:1px solid #ffffff22;border-radius:10px;text-align:center;background:rgba(0,0,0,.12)';const small=document.createElement('div');small.className='muted';small.style.fontSize='11px';small.textContent=label+' за 7 дней';const value=document.createElement('strong');value.style.cssText='display:block;font-size:22px;margin-top:3px';value.textContent=String(counts[i]);box.append(small,value);summary.appendChild(box);});
+        }
+        root.replaceChildren();
+        if(!events.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Пока нет новых событий.';root.appendChild(empty);}
+        events.slice(0,40).forEach(item=>{
+          const card=document.createElement('div');card.style.cssText='display:flex;gap:10px;padding:10px 2px;border-top:1px solid rgba(255,255,255,.10);align-items:flex-start';
+          const icon=document.createElement('div');icon.style.cssText='font-size:21px;flex:0 0 28px';icon.textContent=item.icon;
+          const body=document.createElement('div');body.style.cssText='min-width:0;flex:1';
+          const heading=document.createElement('div');heading.style.cssText='font-size:13px;font-weight:800';heading.textContent=item.title;
+          const name=document.createElement('div');name.style.cssText='font-size:13px;margin-top:2px';name.textContent=item.person;
+          const detail=document.createElement('div');detail.className='muted';detail.style.cssText='font-size:11px;margin-top:2px';detail.textContent=item.detail||'';
+          const time=document.createElement('div');time.className='muted';time.style.cssText='font-size:10px;margin-top:4px';time.textContent=new Date(item.at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+          body.append(heading,name);if(item.detail)body.appendChild(detail);body.appendChild(time);card.append(icon,body);root.appendChild(card);
+        });
+        if(errors.length){const note=document.createElement('div');note.className='muted';note.style.cssText='font-size:10px;margin-top:8px;color:#f0c36d';note.textContent='Часть событий не удалось загрузить: '+errors.join(' · ');root.appendChild(note);}
+        const footer=document.createElement('div');footer.className='muted';footer.style.cssText='font-size:10px;margin-top:8px';footer.textContent='Показаны последние '+Math.min(events.length,40)+' событий. Счётчики — за последние 7 дней.';root.appendChild(footer);
+      }catch(error){
+        root.textContent='Не удалось загрузить события: '+(error?.message||'ошибка Supabase');
+      }finally{if(refresh)refresh.disabled=false;}
+    }
+    $('refreshAdminActivity')?.addEventListener('click',loadAdminActivity);
+
     let adminPanelLoaded=false, adminPanelLoading=false;
     async function loadAdminPanelData(){
       if(currentProfile?.role!=='admin'||adminPanelLoaded||adminPanelLoading)return;
       adminPanelLoading=true;
       const jobs=[
-        loadAdminResults(),loadAdminVoteDetails(),loadNewsRecipients(),loadAdminNews(),
+        loadAdminActivity(),loadAdminResults(),loadAdminVoteDetails(),loadNewsRecipients(),loadAdminNews(),
         loadAdminUsers(),loadAdminMatches(),loadAdminMatchApplications(),loadAdminScheduleScores(),loadAdminProtocolManager(),loadScheduledNews()
       ];
       const results=await Promise.allSettled(jobs);
@@ -3745,7 +3839,7 @@
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('refreshLoginHistory')?.addEventListener('click',loadLoginHistory);
     $('loginButton').addEventListener('click',()=>signIn());$('biometricLoginButton')?.addEventListener('click',biometricSignIn);$('biometricSettingsButton')?.addEventListener('click',toggleBiometricLogin);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
-    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsDelivery"]').forEach(r=>r.addEventListener('change',()=> $('newsScheduleWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsDelivery"]:checked')?.value!=='scheduled')));$('loginHistoryPeriod')?.addEventListener('change',loadLoginHistory);$('loginHistorySearch')?.addEventListener('input',()=>{clearTimeout(window._loginHistorySearchTimer);window._loginHistorySearchTimer=setTimeout(loadLoginHistory,250);});document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();});
+    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsDelivery"]').forEach(r=>r.addEventListener('change',()=> $('newsScheduleWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsDelivery"]:checked')?.value!=='scheduled')));$('loginHistoryPeriod')?.addEventListener('change',loadLoginHistory);$('loginHistorySearch')?.addEventListener('input',()=>{clearTimeout(window._loginHistorySearchTimer);window._loginHistorySearchTimer=setTimeout(loadLoginHistory,250);});document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();await loadAdminActivity();});
     $('openProtocolsButton')?.addEventListener('click',async()=>{showSection('protocolsPanel');await loadRefereeProtocols();});
     $('protocolsBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
     $('assignProtocolRefereeButton')?.addEventListener('click',assignProtocolReferee);
@@ -3845,6 +3939,7 @@
       tab.addEventListener('click',()=>{
         const name=tab.dataset.adminTab;
         if(name==='logins') loadLoginHistory();
+        if(name==='activity') loadAdminActivity();
         document.querySelectorAll('[data-admin-tab]').forEach(btn=>{
           const selected=btn===tab;
           btn.classList.toggle('active',selected);

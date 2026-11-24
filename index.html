@@ -4281,6 +4281,14 @@
       ['bracket','Турнирная сетка'],
       ['voting','Голосование']
     ];
+    const EVENT_FEATURE_DESCRIPTIONS={
+      registration:'Разрешает игрокам подавать отдельную заявку на участие в этом турнире. Заявки отображаются администратору в карточке турнира.',
+      applications:'Разрешает подавать заявки на матчи, связанные с этим турниром. В заявке указываются команда (если предусмотрено) и игровой номер. Для матчей 1 на 1 заявки не показываются.',
+      protocol:'Показывает матчи этого турнира в электронных протоколах и позволяет администратору назначать судей. Если выключить — матчи турнира исключаются из списков протоколов.',
+      score_stats:'Пока не подключено к отдельному механизму турниров: переключатель сохраняет настройку, но сам по себе не включает и не скрывает ввод счёта или статистику.',
+      bracket:'Пока не подключено к механизму турнирной сетки: переключатель сохраняет настройку, но сам по себе не включает и не скрывает сетку.',
+      voting:'Пока не подключено к голосованию конкретного турнира: переключатель сохраняет настройку, но сам по себе не включает и не скрывает голосование.'
+    };
     async function loadEventCatalog(){
       const root=$('eventCatalogList');if(!root)return;
       root.innerHTML='<div class="muted">Загружаем каталог…</div>';
@@ -4314,9 +4322,12 @@
         const metaLines=[dateText?'Даты: '+dateText:'',item.status?'Статус: '+item.status:'',item.organizers?.length?'Организаторы: '+item.organizers.join(', '):'',item.teams?.length?'Команды: '+item.teams.join(', '):'',item.participants?.length?'Участники ('+item.participants.length+'): '+item.participants.join(', '):'',item.regulation?'Регламент: '+item.regulation:''].filter(Boolean);
         details.textContent=metaLines.join('\\n');details.style.whiteSpace='pre-line';card.appendChild(details);
         EVENT_FEATURES.forEach(([key,label])=>{
-          const row=document.createElement('label');row.className='candidate';row.style.cssText='display:flex;align-items:center;gap:9px;margin:7px 0';
+          const featureWrap=document.createElement('div');featureWrap.style.cssText='margin:9px 0 12px';
+          const row=document.createElement('label');row.className='candidate';row.style.cssText='display:flex;align-items:center;gap:9px;margin:4px 0';
           const check=document.createElement('input');check.type='checkbox';check.checked=!!item.features?.[key];check.dataset.eventIndex=String(index);check.dataset.feature=key;
-          const caption=document.createElement('span');caption.textContent=label;row.append(check,caption);card.appendChild(row);
+          const caption=document.createElement('span');caption.textContent=label;caption.style.fontWeight='700';row.append(check,caption);
+          const explanation=document.createElement('div');explanation.className='muted';explanation.style.cssText='font-size:12px;line-height:1.45;margin:3px 0 0 29px';explanation.textContent=EVENT_FEATURE_DESCRIPTIONS[key]||'Включает соответствующую возможность для этого мероприятия.';
+          featureWrap.append(row,explanation);card.appendChild(featureWrap);
         });
         const save=document.createElement('button');save.type='button';save.className='action-btn';save.textContent='СОХРАНИТЬ НАСТРОЙКИ';save.addEventListener('click',async()=>{
           const features={...(item.features||{})};card.querySelectorAll('input[data-feature]').forEach(c=>features[c.dataset.feature]=c.checked);

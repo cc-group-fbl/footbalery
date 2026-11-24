@@ -4307,8 +4307,10 @@
       });
     }
     async function saveEventCatalog(){
-      const {error}=await sb.from('site_settings').upsert({key:EVENT_CATALOG_KEY,value:JSON.stringify(eventCatalog),updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'key'});
+      const serialized=JSON.stringify(eventCatalog);
+      const {error}=await sb.from('site_settings').upsert({key:EVENT_CATALOG_KEY,value:serialized,updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'key'});
       if(error){setMessage('eventCatalogMessage','Не удалось сохранить настройки: '+error.message,true);return false;}
+      eventFeatureCatalogCache=eventCatalog.map(x=>({...x,features:{...(x.features||{})}}));eventFeatureCatalogLoadedAt=Date.now();
       setMessage('eventCatalogMessage','Настройки каталога сохранены.');return true;
     }
     function parseEventCsv(text){

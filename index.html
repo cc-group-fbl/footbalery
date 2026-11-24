@@ -4607,16 +4607,16 @@
           if (!latestVersion) return;
 
           const installedVersion = localStorage.getItem(versionKey);
-          if (!installedVersion) {
+          if (!installedVersion || installedVersion !== latestVersion) {
             localStorage.setItem(versionKey, latestVersion);
-            return;
-          }
-          if (installedVersion !== latestVersion) {
-            localStorage.setItem(versionKey, latestVersion);
-            const freshPage = new URL('./', window.location.href);
-            freshPage.searchParams.set('appv', latestVersion);
-            freshPage.searchParams.set('refresh', String(Date.now()));
-            window.location.replace(freshPage.href);
+            const reloadGuard = 'footbalery_version_reload_' + latestVersion;
+            if (!sessionStorage.getItem(reloadGuard)) {
+              sessionStorage.setItem(reloadGuard, '1');
+              const freshPage = new URL('./', window.location.href);
+              freshPage.searchParams.set('appv', latestVersion);
+              freshPage.searchParams.set('refresh', String(Date.now()));
+              window.location.replace(freshPage.href);
+            }
           }
         } catch (error) {
           // При отсутствии интернета продолжаем работу с уже загруженной версией.

@@ -2774,7 +2774,7 @@
         Promise.resolve(promise).then(value=>{clearTimeout(timer);resolve(value);},error=>{clearTimeout(timer);reject(error);});
       });
       const jobs=await Promise.allSettled([
-        withTimeout(sb.from('matches').select('id,title,match_date,match_time,location').order('match_date',{ascending:false}),'Матчи'),
+        withTimeout(sb.from('matches').select('id,title,match_date,match_time,location,tournament').order('match_date',{ascending:false}),'Матчи'),
         withTimeout(sb.from('profiles').select('user_id,username,first_name,last_name,role').order('last_name',{ascending:true}),'Участники'),
         withTimeout(sb.from('match_protocol_assignments').select('id,match_id,referee_user_id,created_at,is_closed').order('created_at',{ascending:false}),'Назначения'),
         withTimeout(sb.from('match_protocol_submissions').select('*').order('created_at',{ascending:false}),'Отправленные протоколы')
@@ -2783,14 +2783,19 @@
       const errorAt=i=>jobs[i].status==='rejected'?jobs[i].reason:(jobs[i].value?.error||null);
       const matches=valueAt(0)?.data||null,people=valueAt(1)?.data||null;
       const assignments=valueAt(2)?.data||null,submissions=valueAt(3)?.data||null;
+      const catalog=await getEventFeatureCatalog();
+      const protocolMatches=(matches||[]).filter(m=>eventFeatureEnabledForMatch(m,catalog,'protocol'));
+      const protocolMatchIds=new Set(protocolMatches.map(m=>String(m.id)));
+      const visibleAssignments=(assignments||[]).filter(x=>protocolMatchIds.has(String(x.match_id)));
+      const visibleSubmissions=(submissions||[]).filter(x=>protocolMatchIds.has(String(x.match_id)));
       const messageOf=e=>e?.message||String(e||'Неизвестная ошибка');
 
       if(matchSelect){
         matchSelect.replaceChildren();
         const error=errorAt(0);
         if(error)matchSelect.appendChild(protocolNode('option',null,'Ошибка загрузки: '+messageOf(error)));
-        else if(!matches?.length)matchSelect.appendChild(protocolNode('option',null,'Матчей пока нет'));
-        else matches.forEach(m=>{const o=protocolNode('option',null,protocolMatchLabel(m));o.value=m.id;matchSelect.appendChild(o);});
+        else if(!protocolMatches.length)matchSelect.appendChild(protocolNode('option',null,'Для мероприятий отключены электронные протоколы'));
+        else protocolMatches.forEach(m=>{const o=protocolNode('option',null,protocolMatchLabel(m));o.value=m.id;matchSelect.appendChild(o);});
       }
       if(refereeSelect){
         refereeSelect.replaceChildren();
@@ -2810,12 +2815,12 @@
         if(!assignments&&!submissions)return;
       }
       if(!assignments||!submissions||!matches||!people)return;
-      const matchMap=new Map((matches||[]).map(m=>[String(m.id),m]));
+      const matchMap=new Map((protocolMatches||[]).map(m=>[String(m.id),m]));
       const peopleMap=new Map((people||[]).map(p=>[p.user_id,p]));
-      const submissionMap=new Map((submissions||[]).map(x=>[String(x.match_id),x]));
-      const assignmentMap=new Map((assignments||[]).map(x=>[String(x.match_id),x]));
-      if(!assignments.length&&!submissions.length){root.appendChild(protocolNode('div','muted','Назначений и отправленных протоколов пока нет.'));return;}
-      const ids=[...new Set([...assignments.map(x=>String(x.match_id)),...submissions.map(x=>String(x.match_id))])];
+      const submissionMap=new Map((visibleSubmissions||[]).map(x=>[String(x.match_id),x]));
+      const assignmentMap=new Map((visibleAssignments||[]).map(x=>[String(x.match_id),x]));
+      if(!visibleAssignments.length&&!visibleSubmissions.length){root.appendChild(protocolNode('div','muted','Назначений и отправленных протоколов пока нет.'));return;}
+      const ids=[...new Set([...visibleAssignments.map(x=>String(x.match_id)),...visibleSubmissions.map(x=>String(x.match_id))])];
       ids.forEach(id=>{
         const assignment=assignmentMap.get(id),submission=submissionMap.get(id),match=matchMap.get(id);
         const card=protocolNode('div',null);card.style.cssText='padding:12px 0;border-top:1px solid rgba(255,255,255,.12)';

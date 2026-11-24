@@ -422,6 +422,7 @@
       <button type="button" class="small-btn section-back hidden" id="tournamentsBackButton">← На главный экран</button>
       <section id="tournamentsPanel" class="vote-box hidden">
         <h2>ТУРНИРЫ</h2>
+        <div class="admin-section" style="margin:12px 0"><h3 style="font-size:15px;margin:0 0 8px">📝 Регистрация на турниры</h3><div class="muted" style="text-align:left;margin-bottom:10px">Выберите турнир из списка и отправьте заявку на участие. Статус заявки будет отображаться здесь.</div><div id="eventRegistrationList"><div class="muted">Загрузка турниров…</div></div></div>
         <div class="tournament-switch">
           <button type="button" class="admin-tab active" data-tournament="dg">Д×Г</button>
           <button type="button" class="admin-tab" data-tournament="one">ТУРНИР 1 НА 1</button>
@@ -2265,7 +2266,7 @@
       if(!enabled&&activeTournamentPhase==='playoff')activeTournamentPhase='qualification';
       event.target.disabled=false;renderTournamentSwitch();await loadTournamentBrackets();
     });
-    $('openTournamentsButton')?.addEventListener('click',async()=>{showSection('tournamentsPanel');await Promise.all([loadTournamentBrackets(),tournamentIsAdmin()?loadTournamentParticipants():Promise.resolve()]);});
+    $('openTournamentsButton')?.addEventListener('click',async()=>{showSection('tournamentsPanel');await Promise.all([loadTournamentBrackets(),loadEventRegistrations(),tournamentIsAdmin()?loadTournamentParticipants():Promise.resolve()]);});
     $('tournamentsBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
 
     const financeMoney=value=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(Number(value)||0);
@@ -4307,7 +4308,77 @@
           const result=await saveEventCatalog();save.disabled=false;save.textContent=result?'СОХРАНЕНО':'ПОВТОРИТЬ СОХРАНЕНИЕ';
         });card.appendChild(save);
         const remove=document.createElement('button');remove.type='button';remove.className='small-btn';remove.style.cssText='width:100%;margin-top:7px;color:#ff8b8b';remove.textContent='УДАЛИТЬ ИЗ КАТАЛОГА';remove.addEventListener('click',async()=>{if(!confirm('Удалить «'+item.name+'» из каталога?'))return;eventCatalog.splice(index,1);if(await saveEventCatalog())renderEventCatalog();});card.appendChild(remove);
+        if(item.features?.registration!==false){
+          const registrations=document.createElement('div');registrations.style.cssText='margin-top:10px;padding-top:10px;border-top:1px solid var(--border-color)';
+          const regTitle=document.createElement('strong');regTitle.textContent='Заявки на участие';registrations.appendChild(regTitle);
+          const regList=document.createElement('div');regList.className='muted';regList.style.margin='7px 0';regList.textContent='Нажми, чтобы посмотреть заявки';registrations.appendChild(regList);
+          const refresh=document.createElement('button');refresh.type='button';refresh.className='small-btn';refresh.textContent='ПОКАЗАТЬ ЗАЯВКИ';
+          refresh.addEventListener('click',()=>loadEventRegistrationAdmin(item,regList));registrations.appendChild(refresh);card.appendChild(registrations);
+        }
         root.appendChild(card);
+      });
+    }
+    function eventRegistrationStatusLabel(status){
+      return status==='approved'?'Одобрена':status==='rejected'?'Отклонена':'На рассмотрении';
+    }
+    async function loadEventRegistrations(){
+      const root=$('eventRegistrationList');if(!root||!sb||!currentUser)return;
+      root.textContent='Загружаем турниры…';
+      const catalog=await getEventFeatureCatalog(true);
+      const eligible=(catalog||[]).filter(item=>item.features?.registration!==false);
+      if(!eligible.length){root.textContent='Пока нет турниров с включённой регистрацией. Администратор может включить её в панели управления.';return;}
+      const {data:mine,error}=await sb.from('event_registrations').select('event_id,status,created_at').eq('user_id',currentUser.id);
+      if(error){root.textContent='Не удалось загрузить ваши заявки: '+error.message+' Проверьте SQL-миграцию регистрации.';return;}
+      root.replaceChildren();
+      eligible.forEach(item=>{
+        const card=document.createElement('div');card.style.cssText='padding:12px 0;border-top:1px solid var(--border-color)';
+        const title=document.createElement('div');title.style.cssText='font-weight:800';title.textContent=item.name||'Турнир';
+        const existing=(mine||[]).find(row=>String(row.event_id)===String(item.id||item.name));
+        const status=document.createElement('div');status.className='muted';status.style.margin='6px 0';
+        if(existing){status.textContent='Статус: '+eventRegistrationStatusLabel(existing.status)+' · '+new Date(existing.created_at).toLocaleDateString('ru-RU');}
+        else status.textContent='Вы ещё не подавали заявку на этот турнир.';
+        const action=document.createElement('button');action.type='button';action.className='action-btn';action.textContent=existing?'ЗАЯВКА УЖЕ ПОДАНА':'ПОДАТЬ ЗАЯВКУ НА УЧАСТИЕ';action.disabled=!!existing;
+        action.addEventListener('click',async()=>{
+          action.disabled=true;action.textContent='ОТПРАВЛЯЕМ…';
+          const {error:insertError}=await sb.from('event_registrations').insert({event_id:String(item.id||item.name),event_name:String(item.name||''),user_id:currentUser.id,status:'pending'});
+          if(insertError){action.disabled=false;action.textContent='ПОВТОРИТЬ';status.textContent='Не удалось подать заявку: '+insertError.message;return;}
+          status.textContent='Статус: На рассмотрении';action.textContent='ЗАЯВКА ПОДАНА';
+        });
+        card.append(title,status,action);root.appendChild(card);
+      });
+    }
+    async function loadEventRegistrationAdmin(item,root){
+      if(!root||!sb||currentProfile?.role!=='admin')return;
+      root.textContent='Загружаем заявки…';
+      const eventId=String(item.id||item.name);
+      const {data,error}=await sb.from('event_registrations').select('id,user_id,status,created_at').eq('event_id',eventId).order('created_at',{ascending:false});
+      if(error){root.textContent='Не удалось загрузить заявки: '+error.message+' Проверьте SQL-миграцию.';return;}
+      if(!data?.length){root.textContent='Заявок пока нет.';return;}
+      const ids=[...new Set(data.map(row=>row.user_id))];
+      const {data:profiles}=await sb.from('profiles').select('user_id,username,first_name,last_name').in('user_id',ids);
+      const profileMap=new Map((profiles||[]).map(p=>[p.user_id,p]));
+      root.replaceChildren();
+      data.forEach(row=>{
+        const p=profileMap.get(row.user_id)||{};
+        const name=[p.first_name,p.last_name].filter(Boolean).join(' ')||p.username||'Участник';
+        const line=document.createElement('div');line.style.cssText='padding:8px 0;border-top:1px solid var(--border-color)';
+        const label=document.createElement('div');label.textContent=name+' · '+eventRegistrationStatusLabel(row.status)+' · '+new Date(row.created_at).toLocaleString('ru-RU');
+        line.appendChild(label);
+        if(row.status==='pending'){
+          const actions=document.createElement('div');actions.style.cssText='display:flex;gap:7px;margin-top:6px';
+          [['approved','ПРИНЯТЬ'],['rejected','ОТКЛОНИТЬ']].forEach(([status,text])=>{
+            const button=document.createElement('button');button.type='button';button.className='small-btn';button.textContent=text;
+            button.addEventListener('click',async()=>{
+              button.disabled=true;
+              const {error:updateError}=await sb.from('event_registrations').update({status,reviewed_by:currentUser.id,reviewed_at:new Date().toISOString()}).eq('id',row.id);
+              if(updateError){button.disabled=false;alert('Не удалось изменить статус: '+updateError.message);return;}
+              row.status=status;label.textContent=name+' · '+eventRegistrationStatusLabel(status)+' · '+new Date(row.created_at).toLocaleString('ru-RU');actions.remove();
+            });
+            actions.appendChild(button);
+          });
+          line.appendChild(actions);
+        }
+        root.appendChild(line);
       });
     }
     async function saveEventCatalog(){

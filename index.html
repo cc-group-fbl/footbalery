@@ -4297,6 +4297,10 @@
         const card=document.createElement('details');card.className='admin-section';card.open=false;
         const summary=document.createElement('summary');summary.textContent=(item.name||'Без названия')+(item.type?' · '+item.type:'');card.appendChild(summary);
         const meta=document.createElement('div');meta.className='muted';meta.style.cssText='font-size:11px;margin:5px 0 8px';meta.textContent='ID: '+(item.id||'не задан');card.appendChild(meta);
+        const details=document.createElement('div');details.className='muted';details.style.cssText='font-size:12px;line-height:1.55;margin:6px 0 10px';
+        const dateText=item.dates?.event||[item.dates?.start,item.dates?.end].filter(Boolean).join(' — ');
+        const metaLines=[dateText?'Даты: '+dateText:'',item.status?'Статус: '+item.status:'',item.organizers?.length?'Организаторы: '+item.organizers.join(', '):'',item.teams?.length?'Команды: '+item.teams.join(', '):'',item.participants?.length?'Участники ('+item.participants.length+'): '+item.participants.join(', '):'',item.regulation?'Регламент: '+item.regulation:''].filter(Boolean);
+        details.textContent=metaLines.join('\\n');details.style.whiteSpace='pre-line';card.appendChild(details);
         EVENT_FEATURES.forEach(([key,label])=>{
           const row=document.createElement('label');row.className='candidate';row.style.cssText='display:flex;align-items:center;gap:9px;margin:7px 0';
           const check=document.createElement('input');check.type='checkbox';check.checked=!!item.features?.[key];check.dataset.eventIndex=String(index);check.dataset.feature=key;
@@ -4390,15 +4394,44 @@
     }
     function parseEventCsv(text){
       const rows=[];let row=[],cell='',quoted=false;
-      for(let i=0;i<text.length;i++){const ch=text[i];if(quoted){if(ch==='"'&&text[i+1]==='"'){cell+='"';i++;}else if(ch==='"')quoted=false;else cell+=ch;}else if(ch==='"')quoted=true;else if(ch===','){row.push(cell);cell='';}else if(ch===';'||ch==='\\t'){row.push(cell);cell='';}else if(ch==='\\n'){row.push(cell);rows.push(row);row=[];cell='';}else if(ch!=='\\r')cell+=ch;}
+      for(let i=0;i<text.length;i++){const ch=text[i];if(quoted){if(ch==='"'&&text[i+1]==='"'){cell+='"';i++;}else if(ch==='"')quoted=false;else cell+=ch;}else if(ch==='"')quoted=true;else if(ch===','||ch===';'||ch==='\\t'){row.push(cell);cell='';}else if(ch==='\\n'){row.push(cell);rows.push(row);row=[];cell='';}else if(ch!=='\\r')cell+=ch;}
       if(cell.length||row.length){row.push(cell);rows.push(row);}
       if(!rows.length)return [];
-      const headers=rows.shift().map(x=>x.trim().toLowerCase().replace(/^\\uFEFF/,''));
-      const col=(...names)=>headers.findIndex(h=>names.includes(h));
-      const ni=col('name','title','название','турнир','мероприятие'),ii=col('id','event_id','ид','идентификатор'),ti=col('type','тип');
-      if(ni<0)throw new Error('В CSV обязательна колонка name или «Название».');
+      const headers=rows.shift().map(x=>normalizeHeader(x));
+      const col=(...names)=>headers.findIndex(h=>names.some(n=>h===normalizeHeader(n)));
+      const get=(r,...names)=>{const i=col(...names);return i<0?'':String(r[i]||'').trim();};
+      const splitList=value=>String(value||'').split(/[,;\\n]+/).map(x=>x.trim()).filter(Boolean);
+      const slug=value=>String(value||'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^\\p{L}\\p{N}]+/gu,'-').replace(/^-|-$/g,'');
       const parsed=[];
-      rows.forEach((r,n)=>{const name=(r[ni]||'').trim();if(!name)return;const id=ii>=0?(r[ii]||'').trim():'';const type=ti>=0?(r[ti]||'').trim():'';parsed.push({id:id||name.toLowerCase(),name,type,features:{}});});
+      rows.forEach((r,n)=>{
+        const eventType=get(r,'Вид события','Тип события','type')||'Турнир';
+        const name=get(r,'Название турнира','Название мероприятия','Название','name','title');
+        if(!name)return;
+        const kind=eventType.toLocaleLowerCase('ru').includes('меропр')?'event':'tournament';
+        const startDate=get(r,'Дата начала турнира','Дата начала','start_date');
+        const endDate=get(r,'Дата окончания турнира','Дата окончания','end_date');
+        const eventDate=get(r,'Дата проведения мероприятия','Дата мероприятия','event_date');
+        const organizers=get(r,'Главный организатор','Организатор','organizer');
+        const status=get(r,'Статус турнира','Статус мероприятия','Статус','status');
+        const participants=get(r,'УЧАСТНИКИ ТУРНИРА (ИГРОКИ, ЕСЛИ ТУРНИР ИНДИВИДУАЛЬНЫЙ)','Участники турнира','Участники','participants');
+        const teams=get(r,'КОМАНДЫ','Команды','teams');
+        const regulation=get(r,'Регламент','Положение','regulation');
+        const relationPlayer=get(r,'Игрок');
+        const relationStatus=get(r,'Игрок:Статус');
+        const relationNomination=get(r,'Игрок:Номинация');
+        const existingId=get(r,'id','event_id','ид','идентификатор');
+        const id=existingId||('csv-'+slug(name));
+        const isOpen=/актив|планир/i.test(status);
+        parsed.push({
+          id,name,type:kind,sourceType:eventType,
+          dates:{start:startDate,end:endDate,event:eventDate},
+          organizers:splitList(organizers),status,
+          participants:splitList(participants),teams:splitList(teams),
+          regulation:regulation||'',
+          participantLinks:relationPlayer?splitList(relationPlayer).map((player,i)=>({player,status:splitList(relationStatus)[i]||'',nomination:splitList(relationNomination)[i]||''})):[],
+          features:{registration:isOpen,applications:false}
+        });
+      });
       return parsed;
     }
     $('importEventCatalogCsv')?.addEventListener('click',async()=>{
@@ -4406,7 +4439,7 @@
       try{
         const incoming=parseEventCsv(await file.text());if(!incoming.length)throw new Error('В файле не найдено ни одной записи.');
         const existing=new Map(eventCatalog.map(x=>[String(x.id||x.name).toLowerCase(),x]));
-        incoming.forEach(item=>{const key=String(item.id||item.name).toLowerCase(),prev=existing.get(key);if(prev){prev.name=item.name;prev.type=item.type;}else eventCatalog.push(item);});
+        incoming.forEach(item=>{const key=String(item.id||item.name).toLowerCase(),prev=existing.get(key);if(prev){const oldFeatures=prev.features||{};Object.assign(prev,item);prev.features={...item.features,...oldFeatures};}else eventCatalog.push(item);});
         if(await saveEventCatalog())renderEventCatalog();
       }catch(error){setMessage('eventCatalogMessage','Ошибка CSV: '+error.message,true);}
     });

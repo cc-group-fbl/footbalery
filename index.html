@@ -4429,6 +4429,7 @@
       });
       return best;
     }
+    function normalizeEventCsvHeader(value){return normalizeHeader(value).replace(/[^\\p{L}\\p{N}]/gu,'');}
     function parseEventCsv(text){
       const delimiter=detectEventCsvDelimiter(text);
       const rows=[];let row=[],cell='',quoted=false;
@@ -4442,8 +4443,9 @@
       }
       if(cell.length||row.length){row.push(cell);if(row.some(v=>String(v).trim()!==''))rows.push(row);}
       if(!rows.length)return [];
-      const headers=rows.shift().map(x=>normalizeHeader(x));
-      const col=(...names)=>headers.findIndex(h=>names.some(n=>h===normalizeHeader(n)));
+      const headers=rows.shift().map(x=>normalizeEventCsvHeader(x));
+      const col=(...names)=>headers.findIndex(h=>names.some(n=>h===normalizeEventCsvHeader(n)));
+
       const get=(r,...names)=>{const i=col(...names);return i<0?'':String(r[i]||'').trim();};
       const splitList=value=>String(value||'').split(/[,;\\n]+/).map(x=>x.trim()).filter(Boolean);
       const slug=value=>String(value||'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^\\p{L}\\p{N}]+/gu,'-').replace(/^-|-$/g,'');

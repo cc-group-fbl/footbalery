@@ -2550,7 +2550,19 @@
       const note=document.createElement('div');note.className='muted';note.style.marginTop='8px';
       note.textContent='Всего пользователей: '+data.length;root.appendChild(note);
     }
-    async function loadMatchOptions(){const sel=$('matchSelect');if(!sel||!sb)return;const {data,error}=await sb.from('matches').select('id,title,match_date,match_time,location,registration_deadline,tournament').eq('is_open',true).order('match_date');sel.replaceChildren();if(error||!data?.length){const o=document.createElement('option');o.value='';o.textContent='Пока нет открытых матчей (администратор должен добавить их в таблицу matches)';sel.appendChild(o);updateMatchTeamVisibility();return;}data.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.dataset.tournament=m.tournament||'';o.textContent=[m.title,m.match_date,m.match_time,m.location].filter(Boolean).join(' · ');sel.appendChild(o);});updateMatchTeamVisibility();}
+    async function loadMatchOptions(){
+      const sel=$('matchSelect');if(!sel||!sb)return;
+      const [{data,error},catalog]=await Promise.all([
+        sb.from('matches').select('id,title,match_date,match_time,location,registration_deadline,tournament').eq('is_open',true).order('match_date'),
+        getEventFeatureCatalog()
+      ]);
+      sel.replaceChildren();
+      if(error||!data?.length){const o=document.createElement('option');o.value='';o.textContent='Пока нет открытых матчей (администратор должен добавить их в таблицу matches)';sel.appendChild(o);updateMatchTeamVisibility();return;}
+      const available=data.filter(m=>eventFeatureEnabledForMatch(m,catalog,'applications'));
+      if(!available.length){const o=document.createElement('option');o.value='';o.textContent='Для этих мероприятий заявки на матч отключены администратором';sel.appendChild(o);updateMatchTeamVisibility();return;}
+      available.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.dataset.tournament=m.tournament||'';o.textContent=[m.title,m.match_date,m.match_time,m.location].filter(Boolean).join(' · ');sel.appendChild(o);});
+      updateMatchTeamVisibility();
+    }
     async function loadAdminMatches(){
       const root=$('adminMatchesList');
       if(!root||!sb||currentProfile?.role!=='admin')return;
@@ -2639,15 +2651,16 @@
       const root=$('refereeProtocolsList');
       if(!root||!sb||!currentUser)return;
       root.textContent='Загружаем назначенные матчи…';
-      const {data:assignments,error}=await sb.from('match_protocol_assignments')
-        .select('id,match_id,referee_user_id,created_at,is_closed')
-        .eq('referee_user_id',currentUser.id).order('created_at',{ascending:false});
+      const [{data:assignments,error},catalog]=await Promise.all([
+        sb.from('match_protocol_assignments').select('id,match_id,referee_user_id,created_at,is_closed').eq('referee_user_id',currentUser.id).order('created_at',{ascending:false}),
+        getEventFeatureCatalog()
+      ]);
       if(error){root.textContent='Не удалось загрузить назначения: '+error.message;return;}
       root.replaceChildren();
       if(!assignments?.length){root.appendChild(protocolNode('div','muted','Пока нет матчей, на которые ты назначен судьёй.'));return;}
       const ids=assignments.map(a=>a.match_id);
       const [{data:matches,error:matchesError},{data:submissions,error:submissionsError}]=await Promise.all([
-        sb.from('matches').select('id,title,match_date,match_time,location,protocol_data').in('id',ids),
+        sb.from('matches').select('id,title,match_date,match_time,location,protocol_data,tournament').in('id',ids),
         sb.from('match_protocol_submissions').select('*').in('match_id',ids)
       ]);
       if(matchesError||submissionsError){root.textContent='Не удалось загрузить данные протоколов: '+(matchesError?.message||submissionsError?.message);return;}
@@ -2655,7 +2668,7 @@
       const submissionMap=new Map((submissions||[]).map(x=>[String(x.match_id),x]));
       assignments.forEach((assignment,index)=>{
         const match=matchMap.get(String(assignment.match_id));
-        if(!match)return;
+        if(!match||!eventFeatureEnabledForMatch(match,catalog,'protocol'))return;
         const existing=submissionMap.get(String(match.id));
         const card=protocolNode('div',null);
         card.style.cssText='padding:14px;margin:12px 0;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,.025)';
@@ -4235,6 +4248,21 @@
     // Каталог турниров/мероприятий и индивидуальные возможности каждой записи.
     const EVENT_CATALOG_KEY='event_feature_configs';
     let eventCatalog=[];
+    let eventFeatureCatalogCache=null,eventFeatureCatalogLoadedAt=0;
+    async function getEventFeatureCatalog(force=false){
+      if(!force&&eventFeatureCatalogCache&&Date.now()-eventFeatureCatalogLoadedAt<30000)return eventFeatureCatalogCache;
+      if(!sb)return [];
+      const {data,error}=await sb.from('site_settings').select('value').eq('key',EVENT_CATALOG_KEY).maybeSingle();
+      if(error){console.warn('Не удалось получить настройки мероприятий:',error.message);return eventFeatureCatalogCache||[];}
+      try{const raw=data?.value;eventFeatureCatalogCache=Array.isArray(raw)?raw:(typeof raw==='string'?JSON.parse(raw||'[]'):[]);if(!Array.isArray(eventFeatureCatalogCache))eventFeatureCatalogCache=[];eventFeatureCatalogLoadedAt=Date.now();return eventFeatureCatalogCache;}catch(_){return [];}
+    }
+    function eventFeatureEnabledForMatch(match,catalog,feature){
+      const key=String(match?.tournament||'').trim().toLocaleLowerCase('ru');
+      if(!key)return true; // Матчи без привязки к каталогу продолжают работать как раньше.
+      const item=(catalog||[]).find(x=>[x.id,x.name].some(v=>String(v||'').trim().toLocaleLowerCase('ru')===key));
+      if(!item)return true; // Неизвестные старые значения не блокируем.
+      return item.features?.[feature]!==false;
+    }
     const EVENT_FEATURES=[
       ['registration','Регистрация участников'],
       ['applications','Заявки на матч'],

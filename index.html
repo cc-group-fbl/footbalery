@@ -2802,15 +2802,23 @@
       const counts={',':(firstLine.match(/,/g)||[]).length,';':(firstLine.match(/;/g)||[]).length,'\t':(firstLine.match(/\t/g)||[]).length};
       const delimiter=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
       const rows=[];let row=[],cell='',quoted=false;
+      const saveParsedRow=()=>{
+        row.push(cell);
+        if(row.some(v=>String(v).trim())){
+          rows.push(row);
+          if(rows.length>501)throw new Error('В CSV больше 500 строк. Раздели файл на части по 500 строк.');
+        }
+        row=[];cell='';
+      };
       for(let i=0;i<source.length;i++){
         const c=source[i];
         if(c==='"'&&quoted&&source[i+1]==='"'){cell+='"';i++;}
         else if(c==='"')quoted=!quoted;
         else if(c===delimiter&&!quoted){row.push(cell);cell='';}
-        else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&source[i+1]==='\n')i++;row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);row=[];cell='';}
+        else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&source[i+1]==='\n')i++;saveParsedRow();}
         else cell+=c;
       }
-      if(cell.length||row.length){row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);}
+      if(cell.length||row.length)saveParsedRow();
       if(rows.length<2)throw new Error('В CSV нет строк с мероприятиями.');
       const headers=rows[0].map(normalizeHeader);
       const index=(...names)=>headers.findIndex(h=>names.map(normalizeHeader).includes(h));
@@ -3268,6 +3276,8 @@
       if(currentProfile?.role!=='admin')return setMessage('scheduleImportMessage','Импорт доступен только администратору.',true);
       const file=$('scheduleCsvFile')?.files?.[0];if(!file)return setMessage('scheduleImportMessage','Сначала выбери CSV-файл.',true);
       const button=$('importScheduleCsvButton');button.disabled=true;
+      const importStartedAt=performance.now();
+      const showImportStage=label=>setMessage('scheduleImportMessage',label+' · '+((performance.now()-importStartedAt)/1000).toFixed(1)+' сек.');
       const runLimited=async(items,limit,task)=>{
         let cursor=0,firstError=null;
         const workers=Array.from({length:Math.min(limit,items.length)},async()=>{
@@ -3279,17 +3289,21 @@
         await Promise.all(workers);if(firstError)throw firstError;
       };
       try{
-        setMessage('scheduleImportMessage','Читаем и проверяем CSV…');
-        const records=parseScheduleCSV(await file.text());
+        if(file.size>10*1024*1024)throw new Error('Файл больше 10 МБ. Сохрани CSV без лишних столбцов или раздели его на части.');
+        showImportStage('Читаем CSV ('+(file.size/1024).toFixed(0)+' КБ)…');
+        const csvText=await file.text();
+        const records=parseScheduleCSV(csvText);
         if(records.length>500)throw new Error('За один раз можно загрузить не более 500 строк.');
         const ids=records.map(x=>String(x.id||'').trim());
         if(ids.some(x=>!x))throw new Error('В CSV есть строка без ID.');
-        const duplicates=ids.filter((id,index)=>ids.indexOf(id)!==index);
+        const idSet=new Set(),duplicates=[];
+        for(const id of ids){if(idSet.has(id))duplicates.push(id);else idSet.add(id);}
         if(duplicates.length)throw new Error('В CSV повторяется ID: '+[...new Set(duplicates)].slice(0,10).join(', '));
+        showImportStage('CSV разобран: '+records.length+' строк. Сверяем с базой…');
         const allIds=[...new Set(ids)],matchRecords=records.filter(x=>x.type==='match');
         const matchIds=matchRecords.map(x=>String(x.id));
         const needsAutoAssign=matchRecords.some(x=>x.main_referee);
-        setMessage('scheduleImportMessage','Проверяем '+records.length+' строк и сверяем с расписанием…');
+        showImportStage('Проверяем '+records.length+' строк и сверяем с расписанием…');
         const requests=[
           sb.from('schedule_events').select('id,details').in('id',allIds),
           matchIds.length?sb.from('matches').select('id,schedule_id,is_open,protocol_data').in('schedule_id',matchIds):Promise.resolve({data:[],error:null}),
@@ -3321,24 +3335,26 @@
         const matchWork=matchRecords.map(matchPayload);
         const toInsert=matchWork.filter(x=>!x.existing);
         const toUpdate=matchWork.filter(x=>x.existing);
-        setMessage('scheduleImportMessage','Сохраняем матчи и мероприятия…');
-        await runLimited(toUpdate,6,async({item,existing,payload})=>{
-          const {error}=await sb.from('matches').update(payload).eq('id',existing.id);
-          if(error)throw new Error('Ошибка обновления матча '+item.id+': '+error.message);
-        });
-        const matchIdByScheduleId=new Map([...oldMatches.entries()].map(([id,row])=>[id,row.id]));
-        if(toInsert.length){
-          const rows=toInsert.map(({item,payload})=>({...payload,schedule_id:item.id,registration_deadline:null}));
-          const {data,error}=await sb.from('matches').insert(rows).select('id,schedule_id');
-          if(error)throw new Error('Ошибка создания матчей: '+error.message);
+        showImportStage('Сверка завершена. Пакетно сохраняем '+matchWork.length+' матчей…');
+        const matchRows=matchWork.map(({item,existing,payload})=>({
+          ...payload,
+          ...(existing?{id:existing.id}:{}),
+          schedule_id:item.id,
+          ...(!existing?{registration_deadline:null}:{})
+        }));
+        const matchIdByScheduleId=new Map();
+        if(matchRows.length){
+          const {data,error}=await sb.from('matches').upsert(matchRows,{onConflict:'id'}).select('id,schedule_id');
+          if(error)throw new Error('Не удалось пакетно сохранить матчи: '+error.message);
           (data||[]).forEach(row=>matchIdByScheduleId.set(String(row.schedule_id),row.id));
-          if((data||[]).length!==toInsert.length)throw new Error('Сервер сохранил не все новые матчи. Проверь расписание перед повторным импортом.');
+          if((data||[]).length!==matchRows.length)throw new Error('Сервер сохранил не все матчи. Проверь расписание перед повторным импортом.');
         }
         const eventRows=records.map(item=>({
           id:item.id,type:item.type,title:item.title,event_date:item.event_date,event_time:item.event_time,
           location:item.location,description:item.description,details:oldEvents.get(String(item.id))?.details||null,
           tournament:item.tournament,match_id:item.type==='match'?(matchIdByScheduleId.get(String(item.id))||null):null
         }));
+        showImportStage('Матчи сохранены. Пакетно сохраняем мероприятия…');
         const {error:eventError}=await sb.from('schedule_events').upsert(eventRows,{onConflict:'id'});
         if(eventError)throw new Error('Не удалось сохранить записи расписания: '+eventError.message);
         const assignmentNotes=[];let autoAssignedCount=0,autoAssignCheckedCount=0;
@@ -3355,6 +3371,7 @@
           autoAssignCheckedCount++;
           refereeJobs.push({item,matchId,userId:candidates[0].user_id});
         }
+        showImportStage('Мероприятия сохранены. Назначаем судей…');
         await runLimited(refereeJobs,4,async({item,matchId,userId})=>{
           const {error}=await sb.rpc('admin_assign_match_referee',{p_match_id:Number(matchId),p_referee_user_id:userId});
           if(error)assignmentNotes.push(item.title+': не удалось назначить '+item.main_referee+' — '+error.message);
@@ -3363,7 +3380,7 @@
         const importedAt=new Date().toISOString();
         const {error:metaError}=await sb.from('site_settings').upsert({key:'schedule_export_meta',value:JSON.stringify({imported_at:importedAt,file_name:file.name,records_count:records.length}),updated_by:currentUser.id,updated_at:importedAt},{onConflict:'key'});
         if(metaError)assignmentNotes.push('Не удалось сохранить дату выгрузки расписания: '+metaError.message);
-        setMessage('scheduleImportMessage','Расписание сохранено. Обновляем отображение…');
+        showImportStage('Данные сохранены. Обновляем отображение…');
         $('scheduleCsvFile').value='';
         await loadAdminImportTimestamps();
         const refreshResults=await Promise.allSettled([loadSchedule(),loadAdminScheduleScores(),loadAdminMatches(),loadMatchOptions()]);

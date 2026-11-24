@@ -2742,10 +2742,47 @@
       const assignmentMap=new Map((assignments||[]).map(x=>[String(x.match_id),x]));
       if(!assignments?.length&&!submissions?.length){root.appendChild(protocolNode('div','muted','Назначений и отправленных протоколов пока нет.'));return;}
       const ids=[...new Set([...(assignments||[]).map(x=>String(x.match_id)),...(submissions||[]).map(x=>String(x.match_id))])];
+      const bulkBar=protocolNode('div',null);bulkBar.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 0;position:sticky;top:0;background:var(--card-bg, #171b24);z-index:2';
+      const selectAllLabel=protocolNode('label',null);selectAllLabel.style.cssText='display:flex;gap:7px;align-items:center;font-weight:700';
+      const selectAll=document.createElement('input');selectAll.type='checkbox';selectAll.setAttribute('aria-label','Выбрать все протоколы');
+      selectAllLabel.append(selectAll,document.createTextNode('Выбрать все'));
+      const selectedCount=protocolNode('span','muted','Выбрано: 0');
+      const bulkClose=protocolNode('button','small-btn','Закрыть');
+      const bulkOpen=protocolNode('button','small-btn','Открыть');
+      const bulkDelete=protocolNode('button','small-btn','Удалить');
+      bulkDelete.style.background='rgba(220,60,60,.14)';
+      const selectedCards=()=>Array.from(root.querySelectorAll('[data-protocol-card]')).filter(c=>c.querySelector('[data-protocol-select]')?.checked);
+      const updateBulk=()=>{const selected=selectedCards();selectedCount.textContent='Выбрано: '+selected.length;selectAll.checked=selected.length>0&&selected.length===ids.length;selectAll.indeterminate=selected.length>0&&selected.length<ids.length;bulkClose.disabled=bulkOpen.disabled=bulkDelete.disabled=selected.length===0;};
+      selectAll.addEventListener('change',()=>{root.querySelectorAll('[data-protocol-select]').forEach(c=>c.checked=selectAll.checked);updateBulk();});
+      const runBulk=async(action)=>{
+        const chosen=selectedCards();if(!chosen.length)return;
+        const labels={close:'Закрыть выбранные протоколы?',open:'Открыть выбранные протоколы?',delete:'Удалить отправленные протоколы у выбранных матчей? Одобренные счёт и составы, связанные с этими протоколами, будут очищены.'};
+        if(!confirm(labels[action]))return;
+        [bulkClose,bulkOpen,bulkDelete,selectAll].forEach(b=>b.disabled=true);
+        let done=0,failed=[];
+        for(const card of chosen){
+          const id=card.dataset.matchId,submissionId=card.dataset.submissionId;
+          let error=null;
+          if(action==='close'||action==='open'){
+            const result=await sb.rpc('admin_set_match_protocol_closed',{p_match_id:Number(id),p_is_closed:action==='close'});error=result.error;
+          }else if(submissionId){
+            const result=await sb.rpc('admin_delete_match_protocol',{p_submission_id:submissionId});error=result.error;
+          }else {done++;continue;}
+          if(error)failed.push('Матч '+id+': '+error.message);else done++;
+        }
+        await Promise.allSettled([loadAdminProtocolManager(),loadAdminScheduleScores(),loadSchedule()]);
+        if(failed.length)alert('Выполнено: '+done+'. Ошибок: '+failed.length+'.\n'+failed.slice(0,8).join('\n'));
+      };
+      bulkClose.addEventListener('click',()=>runBulk('close'));
+      bulkOpen.addEventListener('click',()=>runBulk('open'));
+      bulkDelete.addEventListener('click',()=>runBulk('delete'));
+      bulkBar.append(selectAllLabel,selectedCount,bulkClose,bulkOpen,bulkDelete);root.appendChild(bulkBar);
       ids.forEach(id=>{
         const assignment=assignmentMap.get(id),submission=submissionMap.get(id),match=matchMap.get(id);
         const card=protocolNode('div',null);card.style.cssText='padding:12px 0;border-top:1px solid rgba(255,255,255,.12)';
-        const title=protocolNode('div',null,protocolMatchLabel(match)||('Матч ID '+id));title.style.fontWeight='900';
+        card.dataset.protocolCard='1';card.dataset.matchId=id;if(submission)card.dataset.submissionId=submission.id;
+        const pick=document.createElement('input');pick.type='checkbox';pick.setAttribute('data-protocol-select','1');pick.setAttribute('aria-label','Выбрать протокол матча '+id);pick.style.marginRight='9px';pick.addEventListener('change',updateBulk);
+        const title=protocolNode('div',null);title.style.cssText='font-weight:900;display:flex;align-items:center;gap:4px';title.append(pick,document.createTextNode(protocolMatchLabel(match)||('Матч ID '+id)));
         const referee=peopleMap.get(assignment?.referee_user_id||submission?.referee_user_id);
         const meta=protocolNode('div','muted','Судья: '+(referee?protocolPersonName(referee)+' · '+(referee.username||''): 'не назначен')+' · '+protocolStatusLabel(submission?.status));
         meta.style.textAlign='left';
@@ -2813,6 +2850,7 @@
         card.appendChild(management);
         root.appendChild(card);
       });
+      updateBulk();
     }
     async function assignProtocolReferee(){
       if(currentProfile?.role!=='admin')return;

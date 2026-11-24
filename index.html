@@ -2601,7 +2601,7 @@
       if(!root||!sb||!currentUser)return;
       root.textContent='Загружаем назначенные матчи…';
       const {data:assignments,error}=await sb.from('match_protocol_assignments')
-        .select('id,match_id,referee_user_id,created_at')
+        .select('id,match_id,referee_user_id,created_at,is_closed')
         .eq('referee_user_id',currentUser.id).order('created_at',{ascending:false});
       if(error){root.textContent='Не удалось загрузить назначения: '+error.message;return;}
       root.replaceChildren();
@@ -2622,13 +2622,17 @@
         card.style.cssText='padding:14px;margin:12px 0;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,.025)';
         const heading=protocolNode('div',null,protocolMatchLabel(match));
         heading.style.cssText='font-size:14px;font-weight:900;line-height:1.5';
-        const status=protocolNode('div','muted','Статус: '+protocolStatusLabel(existing?.status));
+        const status=protocolNode('div','muted','Статус: '+(assignment.is_closed?'Закрыт администратором':protocolStatusLabel(existing?.status)));
         status.style.textAlign='left';status.style.margin='6px 0 12px';
         card.append(heading,status);
         if(existing?.review_comment){
           const review=protocolNode('div','muted','Комментарий администратора: '+existing.review_comment);
           review.style.cssText='text-align:left;padding:10px;border-radius:9px;background:rgba(255,180,50,.08);margin-bottom:10px';
           card.appendChild(review);
+        }
+        if(assignment.is_closed){
+          card.appendChild(protocolNode('div','muted','Администратор закрыл протокол. Отправка и изменение данных недоступны.'));
+          root.appendChild(card);return;
         }
         const todayLocal=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
         if(match.match_date&&match.match_date>todayLocal){card.appendChild(protocolNode('div','muted','Протокол откроется в день мероприятия — '+scheduleDateLabel(match.match_date)+'. До этой даты заполнение недоступно.'));root.appendChild(card);return;}
@@ -2724,7 +2728,7 @@
       if(!root)return;
       root.textContent='Загружаем протоколы…';
       const [{data:assignments,error:assignmentError},{data:submissions,error:submissionError},{data:matches,error:matchError},{data:people,error:peopleError}]=await Promise.all([
-        sb.from('match_protocol_assignments').select('id,match_id,referee_user_id,created_at').order('created_at',{ascending:false}),
+        sb.from('match_protocol_assignments').select('id,match_id,referee_user_id,created_at,is_closed').order('created_at',{ascending:false}),
         sb.from('match_protocol_submissions').select('*').order('created_at',{ascending:false}),
         sb.from('matches').select('id,title,match_date,match_time,location'),
         sb.from('profiles').select('user_id,username,first_name,last_name')
@@ -2780,6 +2784,33 @@
             buttons.append(approve,returnBtn);reviewForm.append(reviewComment,buttons);card.appendChild(reviewForm);
           }
         }else card.appendChild(protocolNode('div','muted','Ожидает заполнения судьёй.'));
+        const management=protocolNode('div',null);
+        management.style.cssText='display:flex;gap:7px;flex-wrap:wrap;margin-top:10px';
+        const closeButton=protocolNode('button','small-btn',assignment?.is_closed?'Открыть протокол':'Закрыть протокол');
+        closeButton.type='button';
+        closeButton.addEventListener('click',async()=>{
+          const nextClosed=!assignment?.is_closed;
+          if(!confirm(nextClosed?'Закрыть протокол? Судья больше не сможет отправлять или изменять его.':'Открыть протокол снова? Судья сможет продолжить работу.'))return;
+          closeButton.disabled=true;
+          const {error}=await sb.rpc('admin_set_match_protocol_closed',{p_match_id:Number(id),p_is_closed:nextClosed});
+          if(error){alert('Не удалось изменить доступность протокола: '+error.message);closeButton.disabled=false;return;}
+          await loadAdminProtocolManager();
+        });
+        management.appendChild(closeButton);
+        if(submission){
+          const deleteButton=protocolNode('button','small-btn','Удалить протокол');
+          deleteButton.type='button';
+          deleteButton.style.background='rgba(220,60,60,.14)';
+          deleteButton.addEventListener('click',async()=>{
+            if(!confirm('Удалить отправленный протокол этого матча? Если он был одобрен, связанные с ним счёт и составы будут очищены из карточки матча. Назначение судьи останется.'))return;
+            deleteButton.disabled=true;
+            const {error}=await sb.rpc('admin_delete_match_protocol',{p_submission_id:submission.id});
+            if(error){alert('Не удалось удалить протокол: '+error.message);deleteButton.disabled=false;return;}
+            await Promise.allSettled([loadAdminProtocolManager(),loadAdminScheduleScores(),loadSchedule()]);
+          });
+          management.appendChild(deleteButton);
+        }
+        card.appendChild(management);
         root.appendChild(card);
       });
     }

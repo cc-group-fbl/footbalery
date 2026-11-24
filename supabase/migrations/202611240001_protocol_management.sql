@@ -1,0 +1,156 @@
+-- Управление доступностью и удалением электронных протоколов.
+-- Выполнить один раз в Supabase SQL Editor после предыдущих миграций протоколов.
+begin;
+
+alter table public.match_protocol_assignments
+  add column if not exists is_closed boolean not null default false;
+
+create or replace function public.admin_set_match_protocol_closed(
+  p_match_id bigint,
+  p_is_closed boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if auth.uid() is null or not exists (
+    select 1 from public.profiles where user_id = auth.uid() and role = 'admin'
+  ) then raise exception 'Доступно только администратору'; end if;
+
+  update public.match_protocol_assignments
+  set is_closed = coalesce(p_is_closed, false)
+  where match_id = p_match_id;
+
+  if not found then raise exception 'Назначение судьи для этого матча не найдено'; end if;
+end;
+$$;
+
+create or replace function public.admin_delete_match_protocol(p_submission_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_submission public.match_protocol_submissions%rowtype;
+begin
+  if auth.uid() is null or not exists (
+    select 1 from public.profiles where user_id = auth.uid() and role = 'admin'
+  ) then raise exception 'Доступно только администратору'; end if;
+
+  select * into v_submission
+  from public.match_protocol_submissions
+  where id = p_submission_id
+  for update;
+
+  if not found then raise exception 'Протокол не найден'; end if;
+
+  -- Убираем только те значения карточки матча, которые были записаны именно этим протоколом.
+  -- Ручные изменения и данные другого протокола не затрагиваются.
+  if v_submission.status = 'approved' then
+    update public.matches
+    set score_home = null,
+        score_away = null,
+        home_players = null,
+        away_players = null,
+        protocol_data = null
+    where id = v_submission.match_id
+      and protocol_data->>'submission_id' = v_submission.id::text;
+  end if;
+
+  delete from public.match_protocol_submissions where id = v_submission.id;
+end;
+$$;
+
+-- Запрещаем судье отправлять/перезаписывать протокол, если администратор закрыл назначение.
+create or replace function public.submit_match_protocol(
+  p_match_id bigint,
+  p_score_home integer,
+  p_score_away integer,
+  p_home_players text default null,
+  p_away_players text default null,
+  p_main_referee text default null,
+  p_assistant_referee text default null,
+  p_main_referee_rating numeric default null,
+  p_assistant_referee_rating numeric default null,
+  p_referee_comment text default null,
+  p_document_path text default null,
+  p_player_stats jsonb default '[]'::jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_id uuid;
+  v_home_goals integer;
+  v_away_goals integer;
+begin
+  if auth.uid() is null then raise exception 'Необходим вход в аккаунт'; end if;
+  if not exists (
+    select 1 from public.match_protocol_assignments
+    where match_id = p_match_id
+      and referee_user_id = auth.uid()
+      and is_closed = false
+  ) then raise exception 'Вы не назначены судьёй на этот матч или протокол закрыт администратором'; end if;
+  if p_score_home is null or p_score_away is null or p_score_home < 0 or p_score_away < 0 then
+    raise exception 'Укажи неотрицательный счёт обеих команд';
+  end if;
+  if p_player_stats is null or jsonb_typeof(p_player_stats) <> 'array' then
+    raise exception 'Статистика игроков должна быть списком';
+  end if;
+  if exists (
+    select 1
+    from jsonb_array_elements(p_player_stats) as items(item)
+    where coalesce(item->>'team','') not in ('home','away')
+       or coalesce(item->>'name','') = ''
+       or coalesce(item->>'goals','') !~ '^\\d+$'
+       or coalesce(item->>'yellow_cards','0') !~ '^\\d+$'
+       or coalesce(item->>'red_cards','0') !~ '^\\d+$'
+  ) then raise exception 'Проверь имена игроков, голы и карточки'; end if;
+
+  select
+    coalesce(sum((item->>'goals')::integer) filter (where item->>'team'='home'),0),
+    coalesce(sum((item->>'goals')::integer) filter (where item->>'team'='away'),0)
+  into v_home_goals,v_away_goals
+  from jsonb_array_elements(p_player_stats) as items(item);
+
+  if v_home_goals <> p_score_home or v_away_goals <> p_score_away then
+    raise exception 'Сумма голов по игрокам должна совпадать со счётом обеих команд';
+  end if;
+
+  insert into public.match_protocol_submissions(
+    match_id,referee_user_id,score_home,score_away,home_players,away_players,
+    main_referee,assistant_referee,main_referee_rating,assistant_referee_rating,
+    referee_comment,document_path,player_stats,status,review_comment,reviewed_by,reviewed_at,updated_at
+  ) values (
+    p_match_id,auth.uid(),p_score_home,p_score_away,p_home_players,p_away_players,
+    p_main_referee,p_assistant_referee,p_main_referee_rating,p_assistant_referee_rating,
+    p_referee_comment,p_document_path,p_player_stats,'pending',null,null,null,now()
+  )
+  on conflict (match_id) do update set
+    referee_user_id=excluded.referee_user_id,
+    score_home=excluded.score_home,score_away=excluded.score_away,
+    home_players=excluded.home_players,away_players=excluded.away_players,
+    main_referee=excluded.main_referee,assistant_referee=excluded.assistant_referee,
+    main_referee_rating=excluded.main_referee_rating,
+    assistant_referee_rating=excluded.assistant_referee_rating,
+    referee_comment=excluded.referee_comment,document_path=excluded.document_path,
+    player_stats=excluded.player_stats,status='pending',review_comment=null,
+    reviewed_by=null,reviewed_at=null,updated_at=now()
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+revoke all on function public.admin_set_match_protocol_closed(bigint,boolean) from public;
+revoke all on function public.admin_delete_match_protocol(uuid) from public;
+revoke all on function public.submit_match_protocol(bigint,integer,integer,text,text,text,text,numeric,numeric,text,text,jsonb) from public;
+grant execute on function public.admin_set_match_protocol_closed(bigint,boolean) to authenticated;
+grant execute on function public.admin_delete_match_protocol(uuid) to authenticated;
+grant execute on function public.submit_match_protocol(bigint,integer,integer,text,text,text,text,numeric,numeric,text,text,jsonb) to authenticated;
+
+commit;

@@ -949,7 +949,7 @@
       if(!currentUser)return;
       const panel=panelFromCurrentPath();showSection(panel,false);
       try{const stage=tournamentResultsRouteStage();if(stage){await openTournamentResultsRoute(stage);return;}
-        if(panel==='newsPanel')await loadNews();else if(panel==='chatsPanel')await loadChats();else if(panel==='schedulePanel')await loadSchedule();else if(panel==='financePanel')await loadFinance();else if(panel==='tournamentsPanel')await loadTournamentBrackets();else if(panel==='protocolsPanel')await loadRefereeProtocols();
+        if(panel==='newsPanel')await loadNews();else if(panel==='chatsPanel')await loadChats();else if(panel==='schedulePanel')await loadSchedule();else if(panel==='financePanel')await loadFinance();else if(panel==='tournamentsPanel'){await Promise.all([loadTournamentBrackets(),loadEventRegistrations()]);}else if(panel==='protocolsPanel')await loadRefereeProtocols();
       }catch(error){console.error('Не удалось открыть раздел по ссылке:',error);}
     });
 
@@ -2476,7 +2476,7 @@
         else if(panel==='chatsPanel')await loadChats();
         else if(panel==='schedulePanel')await loadSchedule();
         else if(panel==='financePanel')await loadFinance();
-        else if(panel==='tournamentsPanel'){const stage=tournamentResultsRouteStage();if(stage)await openTournamentResultsRoute(stage);else await loadTournamentBrackets();}
+        else if(panel==='tournamentsPanel'){const stage=tournamentResultsRouteStage();if(stage)await openTournamentResultsRoute(stage);else await Promise.all([loadTournamentBrackets(),loadEventRegistrations()]);}
         else if(panel==='protocolsPanel')await loadRefereeProtocols();
       };
       if(!cachedProfile){
@@ -4308,7 +4308,7 @@
           const result=await saveEventCatalog();save.disabled=false;save.textContent=result?'СОХРАНЕНО':'ПОВТОРИТЬ СОХРАНЕНИЕ';
         });card.appendChild(save);
         const remove=document.createElement('button');remove.type='button';remove.className='small-btn';remove.style.cssText='width:100%;margin-top:7px;color:#ff8b8b';remove.textContent='УДАЛИТЬ ИЗ КАТАЛОГА';remove.addEventListener('click',async()=>{if(!confirm('Удалить «'+item.name+'» из каталога?'))return;eventCatalog.splice(index,1);if(await saveEventCatalog())renderEventCatalog();});card.appendChild(remove);
-        if(item.features?.registration!==false){
+        if(item.features?.registration===true){
           const registrations=document.createElement('div');registrations.style.cssText='margin-top:10px;padding-top:10px;border-top:1px solid var(--border-color)';
           const regTitle=document.createElement('strong');regTitle.textContent='Заявки на участие';registrations.appendChild(regTitle);
           const regList=document.createElement('div');regList.className='muted';regList.style.margin='7px 0';regList.textContent='Нажми, чтобы посмотреть заявки';registrations.appendChild(regList);
@@ -4325,7 +4325,7 @@
       const root=$('eventRegistrationList');if(!root||!sb||!currentUser)return;
       root.textContent='Загружаем турниры…';
       const catalog=await getEventFeatureCatalog(true);
-      const eligible=(catalog||[]).filter(item=>item.features?.registration!==false);
+      const eligible=(catalog||[]).filter(item=>item.features?.registration===true);
       if(!eligible.length){root.textContent='Пока нет турниров с включённой регистрацией. Администратор может включить её в панели управления.';return;}
       const {data:mine,error}=await sb.from('event_registrations').select('event_id,status,created_at').eq('user_id',currentUser.id);
       if(error){root.textContent='Не удалось загрузить ваши заявки: '+error.message+' Проверьте SQL-миграцию регистрации.';return;}

@@ -545,13 +545,13 @@
           <button type="button" id="importScheduleCsvButton" class="action-btn">ЗАГРУЗИТЬ CSV</button>
           <button type="button" id="downloadScheduleTemplateButton" class="small-btn" style="width:100%;margin-top:8px">Скачать пример CSV</button>
           <button type="button" id="deleteAllScheduleButton" class="action-btn" style="width:100%;margin-top:10px;background:#a83232">УДАЛИТЬ ВСЁ РАСПИСАНИЕ</button>
-          <div id="scheduleImportMessage" class="message" aria-live="polite"></div>
+          <div id="scheduleImportMessage" class="message" aria-live="polite"></div><div id="scheduleExportTimestamp" class="muted" style="margin-top:8px;text-align:left;font-size:12px">Последняя выгрузка расписания: проверяем…</div>
         </details><details class="admin-section" open>
           <summary>💰 Импорт баланса команд из CSV</summary>
           <div class="muted" style="text-align:left">Загрузи файл КОМАНДЫ.csv с колонками «Название команды» и «Баланс FC». После загрузки баланс станет виден капитанам соответствующих команд.</div>
           <input id="teamBalancesCsvFile" class="field" type="file" accept=".csv,text/csv">
           <button type="button" id="importTeamBalancesCsvButton" class="action-btn">ЗАГРУЗИТЬ БАЛАНСЫ FC</button>
-          <div id="teamBalancesImportMessage" class="message" aria-live="polite"></div>
+          <div id="teamBalancesImportMessage" class="message" aria-live="polite"></div><div id="teamBalancesExportTimestamp" class="muted" style="margin-top:8px;text-align:left;font-size:12px">Последняя выгрузка баланса команд: проверяем…</div>
         </details><details class="admin-section">
           <summary>⚽ Результаты матчей расписания</summary>
           <div class="muted">Введи голы обеих сторон и сохрани. Пока результат не внесён, в расписании отображается пустой счёт.</div>
@@ -999,12 +999,30 @@
     $('refreshAdminActivity')?.addEventListener('click',loadAdminActivity);
 
     let adminPanelLoaded=false, adminPanelLoading=false;
+    async function loadAdminImportTimestamps(){
+      const scheduleNode=$('scheduleExportTimestamp'),balanceNode=$('teamBalancesExportTimestamp');
+      if(!sb){if(scheduleNode)scheduleNode.textContent='Последняя выгрузка расписания: нет подключения';if(balanceNode)balanceNode.textContent='Последняя выгрузка баланса команд: нет подключения';return;}
+      try{
+        const {data,error}=await sb.from('site_settings').select('key,value,updated_at').in('key',['schedule_export_meta','team_balances_csv']);
+        if(error)throw error;
+        const byKey=Object.fromEntries((data||[]).map(row=>[row.key,row]));
+        const readPayload=row=>{if(!row)return null;try{return typeof row.value==='string'?JSON.parse(row.value):row.value;}catch(e){return null;}};
+        const stamp=(value,fallback)=>{const d=value?new Date(value):null;return d&&!Number.isNaN(d.getTime())?d.toLocaleString('ru-RU',{dateStyle:'medium',timeStyle:'short'}):fallback;};
+        const scheduleRow=byKey.schedule_export_meta,schedule=readPayload(scheduleRow);
+        if(scheduleNode)scheduleNode.textContent=scheduleRow?'Последняя выгрузка расписания: '+stamp(schedule?.imported_at,scheduleRow.updated_at?'дата не распознана':'дата не указана')+(schedule?.file_name?' · Файл: '+schedule.file_name:''):'Последняя выгрузка расписания: ещё не загружалась';
+        const balanceRow=byKey.team_balances_csv,balance=readPayload(balanceRow);
+        if(balanceNode)balanceNode.textContent=balanceRow?'Последняя выгрузка баланса команд: '+stamp(balance?.exported_at,balanceRow.updated_at?'дата не распознана':'дата не указана')+(balance?.file_name?' · Файл: '+balance.file_name:''):'Последняя выгрузка баланса команд: ещё не загружалась';
+      }catch(error){
+        if(scheduleNode)scheduleNode.textContent='Не удалось получить дату выгрузки расписания: '+error.message;
+        if(balanceNode)balanceNode.textContent='Не удалось получить дату выгрузки баланса команд: '+error.message;
+      }
+    }
     async function loadAdminPanelData(){
       if(currentProfile?.role!=='admin'||adminPanelLoaded||adminPanelLoading)return;
       adminPanelLoading=true;
       const jobs=[
         loadAdminResults(),loadAdminVoteDetails(),loadNewsRecipients(),loadAdminNews(),
-        loadAdminUsers(),loadAdminMatches(),loadAdminMatchApplications(),loadAdminScheduleScores(),loadAdminProtocolManager(),loadScheduledNews()
+        loadAdminUsers(),loadAdminMatches(),loadAdminMatchApplications(),loadAdminScheduleScores(),loadAdminProtocolManager(),loadScheduledNews(),loadAdminImportTimestamps()
       ];
       const results=await Promise.allSettled(jobs);
       const failures=results.filter(x=>x.status==='rejected');
@@ -3266,8 +3284,11 @@
             const {error}=await sb.from('schedule_events').upsert(eventRow,{onConflict:'id'});if(error)throw new Error('Не удалось сохранить мероприятие '+item.id+': '+error.message);
           }
         }
-        setMessage('scheduleImportMessage','Готово: обработано мероприятий — '+records.length+'. Записи, которых нет в CSV, сохранены. Автоматически назначено судей: '+autoAssignedCount+'. Проверено строк с распознанным судьёй: '+autoAssignCheckedCount+'.'+(assignmentNotes.length?' Проблемы автоназначения: '+assignmentNotes.join(' | '):''));
-        $('scheduleCsvFile').value='';await loadSchedule();await loadAdminScheduleScores();await loadAdminMatches();await loadMatchOptions();
+        const importedAt=new Date().toISOString();
+        const {error:metaError}=await sb.from('site_settings').upsert({key:'schedule_export_meta',value:JSON.stringify({imported_at:importedAt,file_name:file.name,records_count:records.length}),updated_by:currentUser.id,updated_at:importedAt},{onConflict:'key'});
+        if(metaError)assignmentNotes.push('Не удалось сохранить дату выгрузки расписания: '+metaError.message);
+        setMessage('scheduleImportMessage','Готово: обработано мероприятий — '+records.length+'. Записи, которых нет в CSV, сохранены. Автоматически назначено судей: '+autoAssignedCount+'. Проверено строк с распознанным судьёй: '+autoAssignCheckedCount+'.'+(assignmentNotes.length?' Примечания: '+assignmentNotes.join(' | '):''));
+        $('scheduleCsvFile').value='';await loadAdminImportTimestamps();await loadSchedule();await loadAdminScheduleScores();await loadAdminMatches();await loadMatchOptions();
       }catch(error){setMessage('scheduleImportMessage','Импорт остановлен: '+error.message,true);}
       finally{button.disabled=false;}
     }
@@ -3407,7 +3428,7 @@
         const {error}=await sb.from('site_settings').upsert({key:'team_balances_csv',value:JSON.stringify(payload),updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'key'});
         if(error)throw new Error('Не удалось сохранить балансы: '+error.message);
         setMessage('teamBalancesImportMessage','Готово: сохранены балансы '+teams.map(t=>t.name+' — '+new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(t.balance)+' FC').join('; ')+'.');
-        $('teamBalancesCsvFile').value='';
+        $('teamBalancesCsvFile').value='';await loadAdminImportTimestamps();
         if(currentProfile?.role==='captain')await loadCaptainTeamBalance(currentProfile.captain_team);
       }catch(error){setMessage('teamBalancesImportMessage','Импорт остановлен: '+error.message,true);}
       finally{if(button)button.disabled=false;}

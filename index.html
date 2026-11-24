@@ -2558,8 +2558,8 @@
       ]);
       sel.replaceChildren();
       if(error||!data?.length){const o=document.createElement('option');o.value='';o.textContent='Пока нет открытых матчей (администратор должен добавить их в таблицу matches)';sel.appendChild(o);updateMatchTeamVisibility();return;}
-      const available=data.filter(m=>eventFeatureEnabledForMatch(m,catalog,'applications'));
-      if(!available.length){const o=document.createElement('option');o.value='';o.textContent='Для этих мероприятий заявки на матч отключены администратором';sel.appendChild(o);updateMatchTeamVisibility();return;}
+      const available=data.filter(m=>!isOneOnOneMatch(m)&&eventFeatureEnabledForMatch(m,catalog,'applications'));
+      if(!available.length){const o=document.createElement('option');o.value='';o.textContent='Нет матчей с открытой подачей заявок (матчи 1 на 1 не требуют заявок)';sel.appendChild(o);updateMatchTeamVisibility();return;}
       available.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.dataset.tournament=m.tournament||'';o.textContent=[m.title,m.match_date,m.match_time,m.location].filter(Boolean).join(' · ');sel.appendChild(o);});
       updateMatchTeamVisibility();
     }
@@ -4267,6 +4267,10 @@
       const item=(catalog||[]).find(x=>[x.id,x.name].some(v=>String(v||'').trim().toLocaleLowerCase('ru')===key));
       if(!item)return true; // Неизвестные старые значения не блокируем.
       return item.features?.[feature]!==false;
+    }
+    function isOneOnOneMatch(match){
+      const value=String(match?.tournament||'').trim().toLocaleLowerCase('ru');
+      return /(^|[^\\p{L}\\p{N}])(1\\s*(на|х|x|v)\\s*1|один\\s+на\\s+один|one\\s*[- ]?on\\s*[- ]?one|1v1)([^\\p{L}\\p{N}]|$)/u.test(value);
     }
     const EVENT_FEATURES=[
       ['registration','Регистрация участников'],

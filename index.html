@@ -4288,12 +4288,18 @@
       const {data,error}=await sb.from('site_settings').select('value').eq('key',EVENT_CATALOG_KEY).maybeSingle();
       if(error){root.textContent='Не удалось загрузить каталог: '+error.message;return;}
       try{const raw=data?.value;eventCatalog=Array.isArray(raw)?raw:(typeof raw==='string'?JSON.parse(raw||'[]'):[]);if(!Array.isArray(eventCatalog))eventCatalog=[];}catch(_){eventCatalog=[];}
-      if(!eventCatalog.length){
-        try{
-          const seedResponse=await fetch('./data/event_catalog_seed.json',{cache:'no-store'});
-          if(seedResponse.ok){const seed=await seedResponse.json();if(Array.isArray(seed)&&seed.length){eventCatalog=seed;await saveEventCatalog();}}
-        }catch(seedError){console.warn('Не удалось загрузить начальный каталог событий:',seedError);}
-      }
+      try{
+        const seedResponse=await fetch('./data/event_catalog_seed.json',{cache:'no-store'});
+        if(seedResponse.ok){
+          const seed=await seedResponse.json();let changed=false;
+          if(Array.isArray(seed))seed.forEach(item=>{
+            const existing=eventCatalog.find(x=>String(x.id||x.name).toLowerCase()===String(item.id||item.name).toLowerCase());
+            if(!existing){eventCatalog.push(item);changed=true;}
+            else if(!existing.dates&&!existing.organizers&&!existing.participants){Object.assign(existing,item,{features:existing.features||item.features});changed=true;}
+          });
+          if(changed)await saveEventCatalog();
+        }
+      }catch(seedError){console.warn('Не удалось объединить начальный каталог событий:',seedError);}
       renderEventCatalog();
     }
     function renderEventCatalog(){

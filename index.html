@@ -2708,110 +2708,114 @@
       if(!root.childElementCount)root.appendChild(protocolNode('div','muted','Назначенные матчи не найдены в таблице matches.'));
     }
     async function loadAdminProtocolManager(){
-      if(!sb||currentProfile?.role!=='admin')return;
       const matchSelect=$('protocolMatchSelect'),refereeSelect=$('protocolRefereeSelect'),root=$('adminProtocolsList');
+      if(!sb){if(matchSelect)matchSelect.replaceChildren(protocolNode('option',null,'Нет подключения к серверу'));if(refereeSelect)refereeSelect.replaceChildren(protocolNode('option',null,'Нет подключения к серверу'));if(root)root.textContent='Не удалось загрузить протоколы: клиент Supabase не инициализирован.';return;}
+      if(currentProfile?.role!=='admin')return;
+      if(matchSelect)matchSelect.replaceChildren(protocolNode('option',null,'Загрузка матчей…'));
+      if(refereeSelect)refereeSelect.replaceChildren(protocolNode('option',null,'Загрузка участников…'));
+      if(root)root.textContent='Загружаем протоколы…';
+
+      // Каждый запрос выполняется независимо. Тайм-аут не оставляет интерфейс
+      // в вечном состоянии загрузки, даже если WebView/Supabase не отвечает.
+      const withTimeout=(promise,label)=>new Promise((resolve,reject)=>{
+        const timer=setTimeout(()=>reject(new Error(label+': превышено время ожидания (15 секунд). Проверьте интернет и повторите загрузку.')),15000);
+        Promise.resolve(promise).then(value=>{clearTimeout(timer);resolve(value);},error=>{clearTimeout(timer);reject(error);});
+      });
+      const jobs=await Promise.allSettled([
+        withTimeout(sb.from('matches').select('id,title,match_date,match_time,location').order('match_date',{ascending:false}),'Матчи'),
+        withTimeout(sb.from('profiles').select('user_id,username,first_name,last_name,role').order('last_name',{ascending:true}),'Участники'),
+        withTimeout(sb.from('match_protocol_assignments').select('id,match_id,referee_user_id,created_at,is_closed').order('created_at',{ascending:false}),'Назначения'),
+        withTimeout(sb.from('match_protocol_submissions').select('*').order('created_at',{ascending:false}),'Отправленные протоколы')
+      ]);
+      const valueAt=i=>jobs[i].status==='fulfilled'?jobs[i].value:null;
+      const errorAt=i=>jobs[i].status==='rejected'?jobs[i].reason:(jobs[i].value?.error||null);
+      const matches=valueAt(0)?.data||null,people=valueAt(1)?.data||null;
+      const assignments=valueAt(2)?.data||null,submissions=valueAt(3)?.data||null;
+      const messageOf=e=>e?.message||String(e||'Неизвестная ошибка');
+
       if(matchSelect){
-        matchSelect.replaceChildren(protocolNode('option',null,'Загрузка матчей…'));
-        const {data:matches,error}=await sb.from('matches').select('id,title,match_date,match_time,location').order('match_date',{ascending:false});
         matchSelect.replaceChildren();
-        if(error)matchSelect.appendChild(protocolNode('option',null,'Ошибка: '+error.message));
+        const error=errorAt(0);
+        if(error)matchSelect.appendChild(protocolNode('option',null,'Ошибка загрузки: '+messageOf(error)));
         else if(!matches?.length)matchSelect.appendChild(protocolNode('option',null,'Матчей пока нет'));
         else matches.forEach(m=>{const o=protocolNode('option',null,protocolMatchLabel(m));o.value=m.id;matchSelect.appendChild(o);});
       }
       if(refereeSelect){
-        refereeSelect.replaceChildren(protocolNode('option',null,'Загрузка участников…'));
-        const {data:people,error}=await sb.from('profiles').select('user_id,username,first_name,last_name,role').order('last_name',{ascending:true});
         refereeSelect.replaceChildren();
-        if(error)refereeSelect.appendChild(protocolNode('option',null,'Ошибка: '+error.message));
-        else (people||[]).forEach(p=>{const o=protocolNode('option',null,protocolPersonName(p)+' · '+(p.username||'без логина')+(p.role==='admin'?' · администратор':''));o.value=p.user_id;refereeSelect.appendChild(o);});
+        const error=errorAt(1);
+        if(error)refereeSelect.appendChild(protocolNode('option',null,'Ошибка загрузки: '+messageOf(error)));
+        else if(!people?.length)refereeSelect.appendChild(protocolNode('option',null,'Участники не найдены'));
+        else people.forEach(p=>{const o=protocolNode('option',null,protocolPersonName(p)+' · '+(p.username||'без логина')+(p.role==='admin'?' · администратор':''));o.value=p.user_id;refereeSelect.appendChild(o);});
       }
       if(!root)return;
-      root.textContent='Загружаем протоколы…';
-      const [{data:assignments,error:assignmentError},{data:submissions,error:submissionError},{data:matches,error:matchError},{data:people,error:peopleError}]=await Promise.all([
-        sb.from('match_protocol_assignments').select('id,match_id,referee_user_id,created_at,is_closed').order('created_at',{ascending:false}),
-        sb.from('match_protocol_submissions').select('*').order('created_at',{ascending:false}),
-        sb.from('matches').select('id,title,match_date,match_time,location'),
-        sb.from('profiles').select('user_id,username,first_name,last_name')
-      ]);
       root.replaceChildren();
-      const failure=assignmentError||submissionError||matchError||peopleError;
-      if(failure){root.textContent='Не удалось загрузить список протоколов: '+failure.message;return;}
+      const failures=[0,1,2,3].filter(i=>errorAt(i));
+      if(failures.length){
+        const note=protocolNode('div','muted','Не удалось полностью загрузить список протоколов: '+failures.map(i=>messageOf(errorAt(i))).join(' · '));
+        note.style.cssText='text-align:left;white-space:normal';
+        root.appendChild(note);
+        const retry=protocolNode('button','small-btn','ПОВТОРИТЬ ЗАГРУЗКУ');retry.type='button';retry.addEventListener('click',()=>loadAdminProtocolManager());root.appendChild(retry);
+        if(!assignments&&!submissions)return;
+      }
+      if(!assignments||!submissions||!matches||!people)return;
       const matchMap=new Map((matches||[]).map(m=>[String(m.id),m]));
       const peopleMap=new Map((people||[]).map(p=>[p.user_id,p]));
       const submissionMap=new Map((submissions||[]).map(x=>[String(x.match_id),x]));
       const assignmentMap=new Map((assignments||[]).map(x=>[String(x.match_id),x]));
-      if(!assignments?.length&&!submissions?.length){root.appendChild(protocolNode('div','muted','Назначений и отправленных протоколов пока нет.'));return;}
-      const ids=[...new Set([...(assignments||[]).map(x=>String(x.match_id)),...(submissions||[]).map(x=>String(x.match_id))])];
+      if(!assignments.length&&!submissions.length){root.appendChild(protocolNode('div','muted','Назначений и отправленных протоколов пока нет.'));return;}
+      const ids=[...new Set([...assignments.map(x=>String(x.match_id)),...submissions.map(x=>String(x.match_id))])];
       ids.forEach(id=>{
         const assignment=assignmentMap.get(id),submission=submissionMap.get(id),match=matchMap.get(id);
         const card=protocolNode('div',null);card.style.cssText='padding:12px 0;border-top:1px solid rgba(255,255,255,.12)';
         const title=protocolNode('div',null,protocolMatchLabel(match)||('Матч ID '+id));title.style.fontWeight='900';
         const referee=peopleMap.get(assignment?.referee_user_id||submission?.referee_user_id);
         const meta=protocolNode('div','muted','Судья: '+(referee?protocolPersonName(referee)+' · '+(referee.username||''): 'не назначен')+' · '+protocolStatusLabel(submission?.status));
-        meta.style.textAlign='left';
-        card.append(title,meta);
+        meta.style.textAlign='left';card.append(title,meta);
         if(submission){
           const statsSummary=Array.isArray(submission.player_stats)?submission.player_stats.map(p=>(p.team==='away'?'Гости':'Хозяева')+' · '+p.name+': '+(p.goals||0)+' гол., ЖК '+(p.yellow_cards||0)+', КК '+(p.red_cards||0)).join('\\n'):'—';
-          const detail=protocolNode('div','muted','Счёт: '+submission.score_home+':'+submission.score_away+
-            '\nХозяева: '+(submission.home_players||'—')+'\nГости: '+(submission.away_players||'—')+
-            '\nСтатистика игроков:\n'+statsSummary+
-            '\nГлавный судья: '+(submission.main_referee||'—')+' · оценка '+(submission.main_referee_rating??'—')+
-            '\nПомощник: '+(submission.assistant_referee||'—')+' · оценка '+(submission.assistant_referee_rating??'—')+
-            '\nКомментарий: '+(submission.referee_comment||'—'));
-          detail.style.cssText='white-space:pre-wrap;text-align:left;margin:8px 0;line-height:1.55';
-          card.appendChild(detail);
+          const detail=protocolNode('div','muted','Счёт: '+submission.score_home+':'+submission.score_away+'\nХозяева: '+(submission.home_players||'—')+'\nГости: '+(submission.away_players||'—')+'\nСтатистика игроков:\n'+statsSummary+'\nГлавный судья: '+(submission.main_referee||'—')+' · оценка '+(submission.main_referee_rating??'—')+'\nПомощник: '+(submission.assistant_referee||'—')+' · оценка '+(submission.assistant_referee_rating??'—')+'\nКомментарий: '+(submission.referee_comment||'—'));
+          detail.style.cssText='white-space:pre-wrap;text-align:left;margin:8px 0;line-height:1.55';card.appendChild(detail);
           if(submission.review_comment){const note=protocolNode('div','muted','Комментарий проверки: '+submission.review_comment);note.style.textAlign='left';card.appendChild(note);}
           if(submission.status!=='approved'){
             const reviewForm=document.createElement('form');reviewForm.style.cssText='display:grid;gap:7px;margin-top:8px';
-            const reviewComment=document.createElement('textarea');reviewComment.className='field';reviewComment.rows=2;reviewComment.placeholder='Комментарий для судьи (обязателен при возврате)';
-            reviewComment.value=submission.review_comment||'';
+            const reviewComment=document.createElement('textarea');reviewComment.className='field';reviewComment.rows=2;reviewComment.placeholder='Комментарий для судьи (обязателен при возврате)';reviewComment.value=submission.review_comment||'';
             const buttons=protocolNode('div',null);buttons.style.cssText='display:flex;gap:7px;flex-wrap:wrap';
             const approve=protocolNode('button','small-btn','Одобрить');approve.type='button';
             const returnBtn=protocolNode('button','small-btn','Вернуть на исправление');returnBtn.type='button';
             const review=async status=>{
               if(status==='needs_changes'&&!reviewComment.value.trim()){alert('Напиши, что именно нужно исправить.');return;}
               approve.disabled=true;returnBtn.disabled=true;
-              const {error}=await sb.rpc('admin_review_match_protocol',{p_submission_id:submission.id,p_status:status,p_review_comment:reviewComment.value.trim()||null});
-              if(error){alert('Не удалось изменить статус: '+error.message);approve.disabled=false;returnBtn.disabled=false;return;}
-              await Promise.allSettled([
-                loadAdminProtocolManager(),
-                loadAdminScheduleScores(),
-                loadSchedule()
-              ]);
+              try{const {error}=await withTimeout(sb.rpc('admin_review_match_protocol',{p_submission_id:submission.id,p_status:status,p_review_comment:reviewComment.value.trim()||null}),'Проверка протокола');if(error)throw error;}
+              catch(error){alert('Не удалось изменить статус: '+messageOf(error));approve.disabled=false;returnBtn.disabled=false;return;}
+              await Promise.allSettled([loadAdminProtocolManager(),loadAdminScheduleScores(),loadSchedule()]);
             };
-            approve.addEventListener('click',()=>review('approved'));
-            returnBtn.addEventListener('click',()=>review('needs_changes'));
+            approve.addEventListener('click',()=>review('approved'));returnBtn.addEventListener('click',()=>review('needs_changes'));
             buttons.append(approve,returnBtn);reviewForm.append(reviewComment,buttons);card.appendChild(reviewForm);
           }
         }else card.appendChild(protocolNode('div','muted','Ожидает заполнения судьёй.'));
-        const management=protocolNode('div',null);
-        management.style.cssText='display:flex;gap:7px;flex-wrap:wrap;margin-top:10px';
-        const closeButton=protocolNode('button','small-btn',assignment?.is_closed?'Открыть протокол':'Закрыть протокол');
-        closeButton.type='button';
+        const management=protocolNode('div',null);management.style.cssText='display:flex;gap:7px;flex-wrap:wrap;margin-top:10px';
+        const closeButton=protocolNode('button','small-btn',assignment?.is_closed?'Открыть протокол':'Закрыть протокол');closeButton.type='button';
         closeButton.addEventListener('click',async()=>{
           const nextClosed=!assignment?.is_closed;
           if(!confirm(nextClosed?'Закрыть протокол? Судья больше не сможет отправлять или изменять его.':'Открыть протокол снова? Судья сможет продолжить работу.'))return;
           closeButton.disabled=true;
-          const {error}=await sb.rpc('admin_set_match_protocol_closed',{p_match_id:Number(id),p_is_closed:nextClosed});
-          if(error){alert('Не удалось изменить доступность протокола: '+error.message);closeButton.disabled=false;return;}
+          try{const {error}=await withTimeout(sb.rpc('admin_set_match_protocol_closed',{p_match_id:Number(id),p_is_closed:nextClosed}),'Изменение доступа');if(error)throw error;}
+          catch(error){alert('Не удалось изменить доступность протокола: '+messageOf(error));closeButton.disabled=false;return;}
           await loadAdminProtocolManager();
         });
         management.appendChild(closeButton);
         if(submission){
-          const deleteButton=protocolNode('button','small-btn','Удалить протокол');
-          deleteButton.type='button';
-          deleteButton.style.background='rgba(220,60,60,.14)';
+          const deleteButton=protocolNode('button','small-btn','Удалить протокол');deleteButton.type='button';deleteButton.style.background='rgba(220,60,60,.14)';
           deleteButton.addEventListener('click',async()=>{
             if(!confirm('Удалить отправленный протокол этого матча? Если он был одобрен, связанные с ним счёт и составы будут очищены из карточки матча. Назначение судьи останется.'))return;
             deleteButton.disabled=true;
-            const {error}=await sb.rpc('admin_delete_match_protocol',{p_submission_id:submission.id});
-            if(error){alert('Не удалось удалить протокол: '+error.message);deleteButton.disabled=false;return;}
+            try{const {error}=await withTimeout(sb.rpc('admin_delete_match_protocol',{p_submission_id:submission.id}),'Удаление протокола');if(error)throw error;}
+            catch(error){alert('Не удалось удалить протокол: '+messageOf(error));deleteButton.disabled=false;return;}
             await Promise.allSettled([loadAdminProtocolManager(),loadAdminScheduleScores(),loadSchedule()]);
           });
           management.appendChild(deleteButton);
         }
-        card.appendChild(management);
-        root.appendChild(card);
+        card.appendChild(management);root.appendChild(card);
       });
     }
     async function assignProtocolReferee(){

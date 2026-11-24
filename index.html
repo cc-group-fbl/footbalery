@@ -1035,19 +1035,34 @@
 
     let editingNewsId=null, newsAttachmentsToRemove=[];
     const NEWS_ATTACHMENT_BUCKET='news-attachments';
+    async function uploadAttachmentBatch({bucket,table,files,pathFor,rowFor}) {
+      const queue=Array.from(files||[]),uploaded=[];let cursor=0,firstError=null;
+      for(const file of queue)if(file.size>25*1024*1024)throw new Error('Файл «'+file.name+'» превышает лимит 25 МБ.');
+      const worker=async()=>{
+        while(!firstError){
+          const index=cursor++;if(index>=queue.length)return;
+          const file=queue[index],path=pathFor(file);
+          try{
+            const {error}=await sb.storage.from(bucket).upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
+            if(error)throw error;
+            uploaded.push({file,path});
+          }catch(error){firstError=new Error('Не удалось загрузить «'+file.name+'»: '+(error.message||'ошибка загрузки'));}
+        }
+      };
+      await Promise.all(Array.from({length:Math.min(3,queue.length)},()=>worker()));
+      if(firstError){if(uploaded.length)await sb.storage.from(bucket).remove(uploaded.map(x=>x.path)).catch(()=>{});throw firstError;}
+      if(!uploaded.length)return [];
+      const rows=uploaded.map(rowFor);
+      const {error:metaError}=await sb.from(table).insert(rows);
+      if(metaError){await sb.storage.from(bucket).remove(uploaded.map(x=>x.path)).catch(()=>{});throw new Error('Файлы загружены, но не удалось сохранить сведения о них: '+metaError.message);}
+      return uploaded.map(x=>x.file.name);
+    }
     async function uploadNewsAttachments(newsId,files) {
-      const uploaded=[];
-      for(const file of Array.from(files||[])) {
-        if(file.size>25*1024*1024) throw new Error('Файл «'+file.name+'» превышает лимит 25 МБ.');
-        const safeName=file.name.replace(/[^a-zA-Z0-9а-яА-ЯёЁ._ -]/g,'_').replace(/\s+/g,'_').slice(-120)||'file';
-        const path=newsId+'/'+crypto.randomUUID()+'-'+safeName;
-        const {error:uploadError}=await sb.storage.from(NEWS_ATTACHMENT_BUCKET).upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
-        if(uploadError) throw new Error('Не удалось загрузить «'+file.name+'»: '+uploadError.message);
-        const {error:metaError}=await sb.from('news_attachments').insert({news_id:newsId,file_name:file.name,file_path:path,mime_type:file.type||null,file_size:file.size,uploaded_by:currentUser.id});
-        if(metaError) { await sb.storage.from(NEWS_ATTACHMENT_BUCKET).remove([path]); throw new Error('Файл загружен, но запись вложения не сохранена: '+metaError.message); }
-        uploaded.push(file.name);
-      }
-      return uploaded;
+      return uploadAttachmentBatch({
+        bucket:NEWS_ATTACHMENT_BUCKET,table:'news_attachments',files,
+        pathFor:file=>newsId+'/'+crypto.randomUUID()+'-'+(file.name.replace(/[^a-zA-Z0-9а-яА-ЯёЁ._ -]/g,'_').replace(/\s+/g,'_').slice(-120)||'file'),
+        rowFor:({file,path})=>({news_id:newsId,file_name:file.name,file_path:path,mime_type:file.type||null,file_size:file.size,uploaded_by:currentUser.id})
+      });
     }
     async function renderNewsAttachments(container,newsId) {
       const {data:files,error}=await sb.from('news_attachments').select('id,file_name,file_path,file_size,mime_type').eq('news_id',newsId).order('created_at');
@@ -1550,19 +1565,18 @@
         $('newChatTitle').value='';$('chatCreateBox').classList.add('hidden');await loadChats();await openChat(data);
       }catch(err){setMessage('chatCreateMessage','Не удалось создать чат: '+(err.message||'ошибка'),true);}finally{button.disabled=false;}
     }
-    async function uploadChatAttachments(messageId,files) {
-      const uploaded=[];for(const file of files){if(file.size>25*1024*1024)throw new Error('Файл «'+file.name+'» больше 25 МБ.');
-        const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100)||'file';const path=activeChatId+'/'+messageId+'/'+crypto.randomUUID()+'_'+safeName;
-        const {error:uploadError}=await sb.storage.from('chat-attachments').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});if(uploadError)throw uploadError;
-        const {error:metaError}=await sb.from('chat_attachments').insert({message_id:messageId,conversation_id:activeChatId,file_name:file.name,file_path:path,mime_type:file.type||null,file_size:file.size,uploaded_by:currentUser.id});
-        if(metaError){await sb.storage.from('chat-attachments').remove([path]);throw metaError;}uploaded.push(file.name);
-      }return uploaded;
+    async function uploadChatAttachments(messageId,files,chatId=activeChatId) {
+      return uploadAttachmentBatch({
+        bucket:'chat-attachments',table:'chat_attachments',files,
+        pathFor:file=>chatId+'/'+messageId+'/'+crypto.randomUUID()+'_'+(file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100)||'file'),
+        rowFor:({file,path})=>({message_id:messageId,conversation_id:chatId,file_name:file.name,file_path:path,mime_type:file.type||null,file_size:file.size,uploaded_by:currentUser.id})
+      });
     }
     async function sendChatMessage(event) {
       event.preventDefault();const input=$('chatMessageInput'),body=input.value.trim(),files=[...($('chatAttachmentInput').files||[])];if((!body&&!files.length)||!activeChatId)return;
       const chatId=activeChatId;const button=$('chatSendForm').querySelector('button[type="submit"]');button.disabled=true;
       try{const {data:message,error}=await sb.from('chat_messages').insert({conversation_id:chatId,sender_id:currentUser.id,body:body||''}).select('id').single();if(error)throw error;
-        if(!message?.id)throw new Error('Сервер не вернул ID сообщения.');if(files.length)await uploadChatAttachments(message.id,files);
+        if(!message?.id)throw new Error('Сервер не вернул ID сообщения.');if(files.length)await uploadChatAttachments(message.id,files,chatId);
         input.value='';$('chatAttachmentInput').value='';$('chatSelectedFiles').textContent='';await openChat(chatId);await loadChats();
       }catch(err){setMessage('chatSendMessage','Не удалось отправить сообщение или вложение: '+(err.message||'ошибка'),true);await openChat(chatId).catch(()=>{});}finally{button.disabled=false;}
     }

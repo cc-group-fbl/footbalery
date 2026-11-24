@@ -497,11 +497,6 @@
       <button type="button" class="small-btn section-back hidden" id="adminBackButton">← На главный экран</button>
       <section id="adminPanel" class="vote-box hidden">
         <h2>ПАНЕЛЬ АДМИНИСТРАТОРА</h2>
-        <section class="admin-section" style="margin-top:0;border-color:rgba(0,210,255,.35);background:rgba(0,160,220,.07)">
-          <h3 style="font-size:14px;margin:0 0 10px">🕒 Последнее обновление выгрузок</h3>
-          <div id="adminScheduleLastUpdated" class="muted" style="text-align:left;margin:6px 0">Расписание: проверяем…</div>
-          <div id="adminBalanceLastUpdated" class="muted" style="text-align:left;margin:6px 0">Баланс команд: проверяем…</div>
-        </section>
         <section class="admin-section" style="border-color:rgba(0,210,255,.35);background:linear-gradient(135deg,rgba(0,160,220,.10),rgba(255,255,255,.02))">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
             <div><h3 style="font-size:16px;margin:0">🔔 Последние события</h3><div class="muted" style="margin:4px 0 0">Новые участники, голоса и заявки на матчи</div></div>
@@ -1006,9 +1001,8 @@
     let adminPanelLoaded=false, adminPanelLoading=false;
     async function loadAdminImportTimestamps(){
       const scheduleNode=$('scheduleExportTimestamp'),balanceNode=$('teamBalancesExportTimestamp');
-      const scheduleTop=$('adminScheduleLastUpdated'),balanceTop=$('adminBalanceLastUpdated');
-      const setSchedule=value=>{if(scheduleNode)scheduleNode.textContent=value;if(scheduleTop)scheduleTop.textContent=value.replace('Последняя выгрузка расписания:','Расписание:');};
-      const setBalance=value=>{if(balanceNode)balanceNode.textContent=value;if(balanceTop)balanceTop.textContent=value.replace('Последняя выгрузка баланса команд:','Баланс команд:');};
+      const setSchedule=value=>{if(scheduleNode)scheduleNode.textContent=value;};
+      const setBalance=value=>{if(balanceNode)balanceNode.textContent=value;};
       if(!sb){setSchedule('Последняя выгрузка расписания: нет подключения');setBalance('Последняя выгрузка баланса команд: нет подключения');return;}
       try{
         const {data,error}=await sb.from('site_settings').select('key,value,updated_at').in('key',['schedule_export_meta','team_balances_csv']);

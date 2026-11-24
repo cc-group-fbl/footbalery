@@ -1,1 +1,380 @@
-[]
+[
+  {
+    "id": "csv-мегазаруба",
+    "name": "#МЕГАЗАРУБА",
+    "type": "tournament",
+    "sourceType": "Турнир",
+    "dates": {
+      "start": "01.06.2026",
+      "end": "",
+      "event": ""
+    },
+    "organizers": [
+      "Иван Рашев"
+    ],
+    "status": "Активен",
+    "participants": [],
+    "teams": [],
+    "regulation": "",
+    "participantLinks": [],
+    "features": {
+      "registration": true,
+      "applications": false
+    }
+  },
+  {
+    "id": "csv-д-г-2026-2027",
+    "name": "Д×Г 2026/2027",
+    "type": "tournament",
+    "sourceType": "Турнир",
+    "dates": {
+      "start": "23.08.2026",
+      "end": "31.07.2027",
+      "event": ""
+    },
+    "organizers": [
+      "Иван Рашев",
+      "Павел Пестов"
+    ],
+    "status": "Активен",
+    "participants": [],
+    "teams": [
+      "ФК ДЕРЕВЕНСКИЕ",
+      "ФК ГОРОДСКИЕ"
+    ],
+    "regulation": "file:///data/user/0/com.luckydroid.droidbase/files/files/-1330021780/reglament_futbolyory_2026_v4.pdf",
+    "participantLinks": [],
+    "features": {
+      "registration": true,
+      "applications": false
+    }
+  },
+  {
+    "id": "csv-ежегодная-премия-best-of-the-best-2026",
+    "name": "Ежегодная премия «Best of the Best 2026»",
+    "type": "event",
+    "sourceType": "Мероприятие",
+    "dates": {
+      "start": "",
+      "end": "",
+      "event": "03.01.2027 18:00:15"
+    },
+    "organizers": [
+      "Иван Рашев"
+    ],
+    "status": "Активен",
+    "participants": [],
+    "teams": [],
+    "regulation": "",
+    "participantLinks": [],
+    "features": {
+      "registration": true,
+      "applications": false
+    }
+  },
+  {
+    "id": "csv-турнир-1-на-1-сезон-2026-2027",
+    "name": "ТУРНИР 1 НА 1. СЕЗОН 2026/2027",
+    "type": "tournament",
+    "sourceType": "Турнир",
+    "dates": {
+      "start": "19.09.2026",
+      "end": "31.07.2027",
+      "event": ""
+    },
+    "organizers": [
+      "Иван Рашев"
+    ],
+    "status": "Активен",
+    "participants": [
+      "Иван Рашев",
+      "Павел Пестов",
+      "Иван Колебакин",
+      "Артём Кувалдин",
+      "Александр Собинин",
+      "Артём Карзин"
+    ],
+    "teams": [],
+    "regulation": "",
+    "participantLinks": [],
+    "features": {
+      "registration": true,
+      "applications": false
+    }
+  },
+  {
+    "id": "csv-весенний-сезон-2026-года",
+    "name": "Весенний сезон 2026 года",
+    "type": "tournament",
+    "sourceType": "Турнир",
+    "dates": {
+      "start": "28.03.2026",
+      "end": "05.04.2026",
+      "event": ""
+    },
+    "organizers": [
+      "Иван Рашев"
+    ],
+    "status": "Завершён",
+    "participants": [
+      "Константин Александрович Колебакин",
+      "Иван Рашев",
+      "Павел Пестов",
+      "Михаил Шемчук",
+      "Марчук Степан",
+      "Иван Колебакин",
+      "Сергей Кобелев",
+      "Александр Собинин",
+      "Артём Карзин",
+      "Сёма",
+      "Егор"
+    ],
+    "teams": [],
+    "regulation": "",
+    "participantLinks": [],
+    "features": {
+      "registration": false,
+      "applications": false
+    }
+  },
+  {
+    "id": "csv-д-г-2025-2026",
+    "name": "Д×Г 2025/2026",
+    "type": "tournament",
+    "sourceType": "Турнир",
+    "dates": {
+      "start": "21.07.2025",
+      "end": "07.08.2026",
+      "event": ""
+    },
+    "organizers": [
+      "Иван Рашев",
+      "Павел Пестов"
+    ],
+    "status": "Завершён",
+    "participants": [],
+    "teams": [
+      "ФК ДЕРЕВЕНСКИЕ",
+      "ФК ГОРОДСКИЕ"
+    ],
+    "regulation": "",
+    "participantLinks": [],
+    "features": {
+      "registration": false,
+      "applications": false
+    }
+  },
+  {
+    "id": "csv-зимний-сезон-2026-года",
+    "name": "Зимний сезон 2026 года",
+    "type": "tournament",
+    "sourceType": "Турнир",
+    "dates": {
+      "start": "02.01.2026",
+      "end": "11.01.2026",
+      "event": ""
+    },
+    "organizers": [
+      "Иван Рашев"
+    ],
+    "status": "Завершён",
+    "participants": [
+      "Константин Александрович Колебакин",
+      "Маргарита Яковлевна Пестова",
+      "Иван Рашев",
+      "Павел Пестов",
+      "Михаил Шемчук",
+      "Марчук Степан",
+      "Иван Колебакин",
+      "Сергей Кобелев",
+      "Артём Кувалдин",
+      "Александр Собинин",
+      "Артём Карзин",
+      "Сёма",
+      "Егор"
+    ],
+    "teams": [],
+    "regulation": "",
+    "participantLinks": [],
+    "features": {
+      "registration": false,
+      "applications": false
+    }
+  },
+  {
+    "id": "csv-летний-сезон-2025-года",
+    "name": "Летний сезон 2025 года",
+    "type": "tournament",
+    "sourceType": "Турнир",
+    "dates": {
+      "start": "01.06.2025",
+      "end": "25.08.2025",
+      "event": ""
+    },
+    "organizers": [
+      "Константин Александрович Колебакин",
+      "Маргарита Яковлевна Пестова",
+      "Иван Рашев",
+      "Павел Пестов"
+    ],
+    "status": "Завершён",
+    "participants": [
+      "Константин Александрович Колебакин",
+      "Маргарита Яковлевна Пестова",
+      "Иван Рашев",
+      "Павел Пестов",
+      "Михаил Шемчук",
+      "Данил Денисов",
+      "Марчук Степан",
+      "Иван Колебакин",
+      "Сергей Кобелев",
+      "Артём Кувалдин",
+      "Александр Собинин",
+      "Артём Карзин",
+      "Иван Денисов",
+      "Сёма",
+      "Егор"
+    ],
+    "teams": [],
+    "regulation": "",
+    "participantLinks": [],
+    "features": {
+      "registration": false,
+      "applications": false
+    }
+  },
+  {
+    "id": "csv-летний-сезон-2026-года",
+    "name": "Летний сезон 2026 года",
+    "type": "tournament",
+    "sourceType": "Турнир",
+    "dates": {
+      "start": "29.05.2026",
+      "end": "23.08.2026",
+      "event": ""
+    },
+    "organizers": [
+      "Иван Рашев",
+      "Константин Александрович Колебакин"
+    ],
+    "status": "Завершён",
+    "participants": [
+      "Константин Александрович Колебакин",
+      "Маргарита Яковлевна Пестова",
+      "Иван Рашев",
+      "Павел Пестов",
+      "Михаил Шемчук",
+      "Данил Денисов",
+      "Марчук Степан",
+      "Иван Колебакин",
+      "Сергей Кобелев",
+      "Артём Кувалдин",
+      "Александр Собинин",
+      "Артём Карзин",
+      "Иван Денисов",
+      "Сёма",
+      "Егор"
+    ],
+    "teams": [],
+    "regulation": "",
+    "participantLinks": [],
+    "features": {
+      "registration": false,
+      "applications": false
+    }
+  },
+  {
+    "id": "csv-осенний-сезон-2026-года",
+    "name": "Осенний сезон 2026 года",
+    "type": "tournament",
+    "sourceType": "Турнир",
+    "dates": {
+      "start": "24.08.2026",
+      "end": "04.11.2026",
+      "event": ""
+    },
+    "organizers": [
+      "Иван Рашев",
+      "Константин Александрович Колебакин"
+    ],
+    "status": "Завершён",
+    "participants": [
+      "Маргарита Яковлевна Пестова",
+      "Константин Александрович Колебакин",
+      "Иван Рашев",
+      "Павел Пестов",
+      "Данил Денисов",
+      "Иван Колебакин",
+      "Сергей Кобелев",
+      "Артём Кувалдин",
+      "Александр Собинин",
+      "Артём Карзин",
+      "Сёма",
+      "Егор"
+    ],
+    "teams": [
+      "ФК ДЕРЕВЕНСКИЕ",
+      "ФК ГОРОДСКИЕ"
+    ],
+    "regulation": "",
+    "participantLinks": [],
+    "features": {
+      "registration": false,
+      "applications": false
+    }
+  },
+  {
+    "id": "csv-турнир-1-на-1-лето-2026",
+    "name": "ТУРНИР 1 НА 1 ЛЕТО 2026",
+    "type": "tournament",
+    "sourceType": "Турнир",
+    "dates": {
+      "start": "13.07.2026",
+      "end": "21.07.2026",
+      "event": ""
+    },
+    "organizers": [
+      "Иван Рашев",
+      "Павел Пестов"
+    ],
+    "status": "Завершён",
+    "participants": [
+      "Иван Рашев",
+      "Павел Пестов",
+      "Данил Денисов",
+      "Марчук Степан",
+      "Иван Колебакин",
+      "Александр Собинин"
+    ],
+    "teams": [],
+    "regulation": "",
+    "participantLinks": [],
+    "features": {
+      "registration": false,
+      "applications": false
+    }
+  },
+  {
+    "id": "csv-матч-всех-звезд",
+    "name": "МАТЧ ВСЕХ ЗВЁЗД",
+    "type": "tournament",
+    "sourceType": "Турнир",
+    "dates": {
+      "start": "06.01.2027",
+      "end": "",
+      "event": ""
+    },
+    "organizers": [
+      "Иван Рашев"
+    ],
+    "status": "Планируется",
+    "participants": [],
+    "teams": [],
+    "regulation": "",
+    "participantLinks": [],
+    "features": {
+      "registration": true,
+      "applications": false
+    }
+  }
+]

@@ -949,22 +949,24 @@
       const errors=[],notes=[],events=[];
       try{
         const [profileResult,voteResult,applicationResult]=await Promise.all([
-          sb.from('profiles').select('user_id,username,first_name,last_name,created_at').order('created_at',{ascending:false}).limit(100),
+          // В profiles нет created_at: берём только реально существующие поля.
+          sb.from('profiles').select('user_id,username,first_name,last_name'),
           sb.from('votes').select('id,poll_id,voter_id,candidate_id,created_at').order('created_at',{ascending:false}).limit(60),
           sb.from('match_applications').select('id,user_id,team,player_number,created_at,matches(title,match_date)').order('created_at',{ascending:false}).limit(60)
         ]);
-        let newProfiles=profileResult.data||[];
+        let newProfiles=[];
         if(profileResult.error){
-          // Если в profiles нет created_at, используем первый зафиксированный вход и честно подписываем его как вход, а не регистрацию.
-          const fallback=await sb.from('profiles').select('user_id,username,first_name,last_name');
+          errors.push('Профили: '+profileResult.error.message);
+        }else{
           const loginResult=await sb.from('login_history').select('user_id,logged_in_at').order('logged_in_at',{ascending:true}).limit(2000);
-          if(!fallback.error&&!loginResult.error){
-            newProfiles=fallback.data||[];
+          if(!loginResult.error){
             const firstLogin=new Map();
             (loginResult.data||[]).forEach(x=>{if(!firstLogin.has(x.user_id))firstLogin.set(x.user_id,x.logged_in_at);});
-            newProfiles=newProfiles.map(p=>({...p,created_at:firstLogin.get(p.user_id)||null,_activityLabel:'Первый вход в приложение'})).filter(p=>p.created_at);
-            notes.push('В профилях нет даты регистрации: для новых участников показан первый зафиксированный вход.');
-          }else errors.push('Регистрации: '+profileResult.error.message);
+            newProfiles=(profileResult.data||[]).map(p=>({...p,created_at:firstLogin.get(p.user_id)||null,_activityLabel:'Первый вход в приложение'})).filter(p=>p.created_at);
+            notes.push('В профилях нет даты регистрации: для участников показан первый зафиксированный вход.');
+          }else{
+            errors.push('История входов: '+loginResult.error.message);
+          }
         }
         if(voteResult.error)errors.push('Голоса: '+voteResult.error.message);
         if(applicationResult.error)errors.push('Заявки: '+applicationResult.error.message);

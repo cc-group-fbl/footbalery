@@ -724,6 +724,32 @@
     const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1EBqurekL2MJH4OItnBRY_cF-Le8Q6BHyie7Q3bPMW4Q/export?format=csv';
     const ONE_ON_ONE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1NjsxexzD6iF_Y_PjJ2szJ--4EMVaBAiJtIwklqXJfMk/export?format=csv';
     let sb = null, currentUser = null, currentProfile = null, activePoll = null;
+    // Показываем точную ошибку REST-запроса Supabase прямо в приложении.
+    let lastSupabaseFailure='';
+    function showSupabaseFailure(message){
+      lastSupabaseFailure=String(message||'Неизвестная ошибка Supabase').slice(0,1200);
+      const render=()=>{
+        let node=document.getElementById('supabaseRequestFailure');
+        if(!node){node=document.createElement('div');node.id='supabaseRequestFailure';node.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:100000;background:#7f1d1d;color:#fff;border:1px solid #fecaca;border-radius:10px;padding:10px 12px;font:12px/1.45 sans-serif;box-shadow:0 4px 18px #0008;white-space:pre-wrap;overflow-wrap:anywhere';document.body.appendChild(node);}
+        node.textContent='ОШИБКА ЗАГРУЗКИ ДАННЫХ\\n'+lastSupabaseFailure+'\\nСделайте скриншот этого сообщения.';
+      };
+      if(document.body)render();else document.addEventListener('DOMContentLoaded',render,{once:true});
+    }
+    async function diagnosticSupabaseFetch(input,init){
+      const rawUrl=typeof input==='string'?input:(input?.url||String(input));
+      try{
+        const response=await fetch(input,init);
+        if(!response.ok&&rawUrl.startsWith(SUPABASE_URL)){
+          let detail='';try{detail=await response.clone().text();}catch(_){}
+          let endpoint='';try{const parsed=new URL(rawUrl);endpoint=parsed.pathname+'?'+[...parsed.searchParams.keys()].join('&');}catch(_){endpoint='REST-запрос Supabase';}
+          showSupabaseFailure('HTTP '+response.status+' · '+endpoint+'\\n'+(detail||response.statusText||'Ответ сервера без текста'));
+        }
+        return response;
+      }catch(error){
+        if(rawUrl.startsWith(SUPABASE_URL))showSupabaseFailure('Сетевая ошибка · '+rawUrl.split('?')[0]+'\\n'+(error?.message||String(error)));
+        throw error;
+      }
+    }
     const $ = id => document.getElementById(id);
     const OFFLINE_CACHE_PREFIX='footbalery_offline_v1_';
     const offlineRead=key=>{try{const raw=localStorage.getItem(OFFLINE_CACHE_PREFIX+key);return raw?JSON.parse(raw):null;}catch(_){return null;}};
@@ -736,7 +762,7 @@
     // не оставляла кнопку входа без подключения к серверу.
     try {
       if (window.supabase && SUPABASE_URL.startsWith('https://') && !SUPABASE_KEY.startsWith('ВСТАВЬТЕ_')) {
-        sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'sb-qyarjovuxthzxfaksapp-auth-token' } });
+        sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { global: { fetch: diagnosticSupabaseFetch }, auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'sb-qyarjovuxthzxfaksapp-auth-token' } });
         // Резервная копия сессии в IndexedDB: на некоторых Android WebView
         // localStorage может оказаться недоступен после пересоздания процесса.
         const AUTH_BACKUP_DB='footbalery_auth_backup_v1';

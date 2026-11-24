@@ -4404,10 +4404,43 @@
       eventFeatureCatalogCache=eventCatalog.map(x=>({...x,features:{...(x.features||{})}}));eventFeatureCatalogLoadedAt=Date.now();
       setMessage('eventCatalogMessage','Настройки каталога сохранены.');return true;
     }
+    async function readEventCsvFile(file){
+      const buffer=await file.arrayBuffer(),bytes=new Uint8Array(buffer);
+      let encoding='utf-8',offset=0;
+      if(bytes[0]===0xFF&&bytes[1]===0xFE){encoding='utf-16le';offset=2;}
+      else if(bytes[0]===0xFE&&bytes[1]===0xFF){encoding='utf-16be';offset=2;}
+      else if(bytes[0]===0xEF&&bytes[1]===0xBB&&bytes[2]===0xBF){encoding='utf-8';offset=3;}
+      else{
+        let evenZeros=0,oddZeros=0,sample=Math.min(bytes.length,4000);
+        for(let i=0;i<sample;i++)if(bytes[i]===0){if(i%2)oddZeros++;else evenZeros++;}
+        if(oddZeros>sample/10&&evenZeros<oddZeros/4)encoding='utf-16le';
+        else if(evenZeros>sample/10&&oddZeros<evenZeros/4)encoding='utf-16be';
+      }
+      try{return new TextDecoder(encoding).decode(bytes.subarray(offset)).replace(/^\\uFEFF/,'');}
+      catch(error){throw new Error('Не удалось прочитать кодировку '+encoding+': '+error.message);}
+    }
+    function detectEventCsvDelimiter(text){
+      const candidates=[',',';','\\t'];let best=',',bestCount=-1;
+      const firstLine=String(text||'').split(/\\r\\n|\\n|\\r/,1)[0]||'';
+      candidates.forEach(delimiter=>{
+        let count=0,quoted=false;
+        for(let i=0;i<firstLine.length;i++){const ch=firstLine[i];if(ch==='"'&&quoted&&firstLine[i+1]==='"'){i++;}else if(ch==='"')quoted=!quoted;else if(ch===delimiter&&!quoted)count++;}
+        if(count>bestCount){bestCount=count;best=delimiter;}
+      });
+      return best;
+    }
     function parseEventCsv(text){
+      const delimiter=detectEventCsvDelimiter(text);
       const rows=[];let row=[],cell='',quoted=false;
-      for(let i=0;i<text.length;i++){const ch=text[i];if(quoted){if(ch==='"'&&text[i+1]==='"'){cell+='"';i++;}else if(ch==='"')quoted=false;else cell+=ch;}else if(ch==='"')quoted=true;else if(ch===','||ch===';'||ch==='\\t'){row.push(cell);cell='';}else if(ch==='\\n'||ch==='\\r'){if(ch==='\\r'&&text[i+1]==='\\n')i++;row.push(cell);if(row.some(v=>String(v).trim()!==''))rows.push(row);row=[];cell='';}else cell+=ch;}
-      if(cell.length||row.length){row.push(cell);rows.push(row);}
+      for(let i=0;i<text.length;i++){
+        const ch=text[i];
+        if(quoted){if(ch==='"'&&text[i+1]==='"'){cell+='"';i++;}else if(ch==='"')quoted=false;else cell+=ch;}
+        else if(ch==='"')quoted=true;
+        else if(ch===delimiter){row.push(cell);cell='';}
+        else if(ch==='\\n'||ch==='\\r'){if(ch==='\\r'&&text[i+1]==='\\n')i++;row.push(cell);if(row.some(v=>String(v).trim()!==''))rows.push(row);row=[];cell='';}
+        else cell+=ch;
+      }
+      if(cell.length||row.length){row.push(cell);if(row.some(v=>String(v).trim()!==''))rows.push(row);}
       if(!rows.length)return [];
       const headers=rows.shift().map(x=>normalizeHeader(x));
       const col=(...names)=>headers.findIndex(h=>names.some(n=>h===normalizeHeader(n)));
@@ -4415,7 +4448,7 @@
       const splitList=value=>String(value||'').split(/[,;\\n]+/).map(x=>x.trim()).filter(Boolean);
       const slug=value=>String(value||'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^\\p{L}\\p{N}]+/gu,'-').replace(/^-|-$/g,'');
       const parsed=[];
-      rows.forEach((r,n)=>{
+      rows.forEach(r=>{
         const eventType=get(r,'Вид события','Тип события','type')||'Турнир';
         const name=get(r,'Название турнира')||get(r,'Название мероприятия')||get(r,'Название')||get(r,'name')||get(r,'title');
         if(!name)return;
@@ -4434,22 +4467,15 @@
         const existingId=get(r,'id','event_id','ид','идентификатор');
         const id=existingId||('csv-'+slug(name));
         const isOpen=/актив|планир/i.test(status);
-        parsed.push({
-          id,name,type:kind,sourceType:eventType,
-          dates:{start:startDate,end:endDate,event:eventDate},
-          organizers:splitList(organizers),status,
-          participants:splitList(participants),teams:splitList(teams),
-          regulation:regulation||'',
-          participantLinks:relationPlayer?splitList(relationPlayer).map((player,i)=>({player,status:splitList(relationStatus)[i]||'',nomination:splitList(relationNomination)[i]||''})):[],
-          features:{registration:isOpen,applications:false}
-        });
+        parsed.push({id,name,type:kind,sourceType:eventType,dates:{start:startDate,end:endDate,event:eventDate},organizers:splitList(organizers),status,participants:splitList(participants),teams:splitList(teams),regulation:regulation||'',participantLinks:relationPlayer?splitList(relationPlayer).map((player,i)=>({player,status:splitList(relationStatus)[i]||'',nomination:splitList(relationNomination)[i]||''})):[],features:{registration:isOpen,applications:false}});
       });
+      if(!parsed.length)throw new Error('Не найдено записей с названием. Заголовки распознаны так: '+headers.join(' | ')+'. Строк данных: '+rows.length+'. Разделитель: '+(delimiter==='\\t'?'TAB':delimiter)+'. Проверь, что CSV содержит столбец «Название турнира» или «Название мероприятия».');
       return parsed;
     }
     $('importEventCatalogCsv')?.addEventListener('click',async()=>{
       const file=$('eventCatalogCsv')?.files?.[0];if(!file){setMessage('eventCatalogMessage','Сначала выбери CSV-файл.',true);return;}
       try{
-        const incoming=parseEventCsv(await file.text());if(!incoming.length)throw new Error('В файле не найдено ни одной записи.');
+        const csvText=await readEventCsvFile(file);const incoming=parseEventCsv(csvText);
         const existing=new Map(eventCatalog.map(x=>[String(x.id||x.name).toLowerCase(),x]));
         incoming.forEach(item=>{const key=String(item.id||item.name).toLowerCase(),prev=existing.get(key);if(prev){const oldFeatures=prev.features||{};Object.assign(prev,item);prev.features={...item.features,...oldFeatures};}else eventCatalog.push(item);});
         if(await saveEventCatalog())renderEventCatalog();

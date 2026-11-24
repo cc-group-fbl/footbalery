@@ -4415,26 +4415,27 @@
         for(let i=0;i<sample;i++)if(bytes[i]===0){if(i%2)oddZeros++;else evenZeros++;}
         if(oddZeros>sample/20&&evenZeros<oddZeros/3)candidates.push(['utf-16le',0]);
         else if(evenZeros>sample/20&&oddZeros<evenZeros/3)candidates.push(['utf-16be',0]);
-        candidates.push(['utf-8',0],['utf-16le',0],['utf-16be',0]);
+        candidates.push(['utf-8',0],['windows-1251',0],['utf-16le',0],['utf-16be',0]);
       }
-      let bestText='',bestScore=-Infinity,bestEncoding='utf-8';
+      let bestText='',bestScore=-Infinity,bestEncoding='';
       for(const [encoding,offset] of candidates){
         try{
-          const decoded=new TextDecoder(encoding,{fatal:false}).decode(bytes.subarray(offset)).replace(/^\\uFEFF/,'');
-          const head=decoded.slice(0,Math.min(decoded.length,1200)).toLocaleLowerCase('ru');
+          const decoded=new TextDecoder(encoding,{fatal:false}).decode(bytes.subarray(offset)).replace(/^\uFEFF/,'');
+          const head=decoded.slice(0,Math.min(decoded.length,3000)).toLocaleLowerCase('ru');
           let score=0;
-          if(head.includes('название турнира'))score+=1000;
-          if(head.includes('название мероприятия'))score+=1000;
-          if(head.includes('вид события'))score+=200;
-          if(head.includes('дата начала турнира'))score+=100;
-          score-=((decoded.match(/\\u0000/g)||[]).length*20);
-          score-=((decoded.match(/\\uFFFD/g)||[]).length*10);
-          score+=Math.min(decoded.length,100000)/100000;
+          if(head.includes('название турнира'))score+=10000;
+          if(head.includes('название мероприятия'))score+=10000;
+          if(head.includes('вид события'))score+=1000;
+          if(head.includes('дата начала турнира'))score+=500;
+          if(head.includes('главный организатор'))score+=200;
+          score-=((decoded.match(/\u0000/g)||[]).length*50);
+          score-=((decoded.match(/\uFFFD/g)||[]).length*20);
           if(score>bestScore){bestScore=score;bestText=decoded;bestEncoding=encoding;}
         }catch(error){}
       }
-      if(!bestText.trim())throw new Error('Не удалось распознать кодировку CSV.');
-      console.info('[Event CSV] encoding:',bestEncoding,'bytes:',bytes.length,'chars:',bestText.length);
+      if(!bestText.trim())throw new Error('Не удалось распознать кодировку CSV. Сохрани файл как CSV UTF-8 и повтори импорт.');
+      console.info('[Event CSV] encoding:',bestEncoding,'score:',bestScore,'bytes:',bytes.length,'chars:',bestText.length);
+      if(bestScore<1000)console.warn('[Event CSV] Заголовки не распознаны. Первые символы:',bestText.slice(0,250));
       return bestText;
     }
     function detectEventCsvDelimiter(text){
@@ -4499,7 +4500,7 @@
         const existing=new Map(eventCatalog.map(x=>[String(x.id||x.name).toLowerCase(),x]));
         incoming.forEach(item=>{const key=String(item.id||item.name).toLowerCase(),prev=existing.get(key);if(prev){const oldFeatures=prev.features||{};Object.assign(prev,item);prev.features={...item.features,...oldFeatures};}else eventCatalog.push(item);});
         if(await saveEventCatalog())renderEventCatalog();
-      }catch(error){console.error('[Event CSV importer 2026.11.24.32]',error);setMessage('eventCatalogMessage','Ошибка CSV [импортёр 2026.11.24.32]: '+error.message,true);}
+      }catch(error){console.error('[Event CSV importer 2026.11.24.33]',error);setMessage('eventCatalogMessage','Ошибка CSV [импортёр 2026.11.24.33]: '+error.message,true);}
     });
     $('downloadEventCatalogTemplate')?.addEventListener('click',()=>{
       const csv='id,name,type\\nDXG,Деревенские × Городские,match\\nONE,Турнир 1 на 1,tournament\\nMEGA,Мегазаруба,event\\n';

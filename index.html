@@ -4309,6 +4309,7 @@
       tab.addEventListener('click',()=>{
         const name=tab.dataset.adminTab;
         if(name==='logins') loadLoginHistory();
+        if(name==='events') loadEventCatalog();
         document.querySelectorAll('[data-admin-tab]').forEach(btn=>{
           const selected=btn===tab;
           btn.classList.toggle('active',selected);

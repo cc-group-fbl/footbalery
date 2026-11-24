@@ -4406,7 +4406,7 @@
     }
     function parseEventCsv(text){
       const rows=[];let row=[],cell='',quoted=false;
-      for(let i=0;i<text.length;i++){const ch=text[i];if(quoted){if(ch==='"'&&text[i+1]==='"'){cell+='"';i++;}else if(ch==='"')quoted=false;else cell+=ch;}else if(ch==='"')quoted=true;else if(ch===','||ch===';'||ch==='\\t'){row.push(cell);cell='';}else if(ch==='\\n'){row.push(cell);rows.push(row);row=[];cell='';}else if(ch!=='\\r')cell+=ch;}
+      for(let i=0;i<text.length;i++){const ch=text[i];if(quoted){if(ch==='"'&&text[i+1]==='"'){cell+='"';i++;}else if(ch==='"')quoted=false;else cell+=ch;}else if(ch==='"')quoted=true;else if(ch===','||ch===';'||ch==='\\t'){row.push(cell);cell='';}else if(ch==='\\n'||ch==='\\r'){if(ch==='\\r'&&text[i+1]==='\\n')i++;row.push(cell);if(row.some(v=>String(v).trim()!==''))rows.push(row);row=[];cell='';}else cell+=ch;}
       if(cell.length||row.length){row.push(cell);rows.push(row);}
       if(!rows.length)return [];
       const headers=rows.shift().map(x=>normalizeHeader(x));
@@ -4417,7 +4417,7 @@
       const parsed=[];
       rows.forEach((r,n)=>{
         const eventType=get(r,'Вид события','Тип события','type')||'Турнир';
-        const name=get(r,'Название турнира','Название мероприятия','Название','name','title');
+        const name=get(r,'Название турнира')||get(r,'Название мероприятия')||get(r,'Название')||get(r,'name')||get(r,'title');
         if(!name)return;
         const kind=eventType.toLocaleLowerCase('ru').includes('меропр')?'event':'tournament';
         const startDate=get(r,'Дата начала турнира','Дата начала','start_date');

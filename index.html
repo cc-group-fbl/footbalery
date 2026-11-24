@@ -520,6 +520,7 @@
           <button type="button" class="admin-tab" data-admin-tab="users" role="tab" aria-selected="false">👤 Участники</button>
           <button type="button" class="admin-tab" data-admin-tab="design" role="tab" aria-selected="false">🎨 Оформление</button>
           <button type="button" class="admin-tab" data-admin-tab="logins" role="tab" aria-selected="false">🔐 Входы</button>
+          <button type="button" class="admin-tab" data-admin-tab="events" role="tab" aria-selected="false">🏆 Турниры и события</button>
         </div><div class="admin-tab-panel" data-admin-panel="matches"><details class="admin-section" open>
           <summary>⚽ Создание матча</summary>
           <div class="muted">Создай новый матч и настрой регистрацию участников.</div>
@@ -672,6 +673,16 @@
           <button type="button" id="refreshLoginHistory" class="small-btn">ОБНОВИТЬ СТАТИСТИКУ</button>
           <div id="loginHistorySummary" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0"></div>
           <div id="loginHistoryList" style="margin-top:12px"><div class="muted">Нажмите «Обновить статистику».</div></div>
+        </div>        </div><div class="admin-tab-panel" data-admin-panel="events" hidden>
+          <div class="admin-section">
+            <h3 style="font-size:15px;margin:4px 0 8px">🏆 Конструктор турниров и мероприятий</h3>
+            <div class="muted" style="text-align:left;margin-bottom:10px">Загрузи CSV со списком турниров и мероприятий. Для каждой записи отдельно настрой доступные функции. Повторная загрузка обновляет список по ID или названию и сохраняет уже выставленные переключатели.</div>
+            <input id="eventCatalogCsv" class="field" type="file" accept=".csv,text/csv">
+            <button type="button" id="importEventCatalogCsv" class="action-btn">ИМПОРТИРОВАТЬ СПИСОК CSV</button>
+            <button type="button" id="downloadEventCatalogTemplate" class="small-btn" style="width:100%;margin-top:8px">СКАЧАТЬ ПРИМЕР CSV</button>
+            <div id="eventCatalogMessage" class="message" aria-live="polite"></div>
+            <div id="eventCatalogList" style="margin-top:12px"><div class="muted">Загрузка списка…</div></div>
+          </div>
         </div>
       </div></section>
 
@@ -4221,6 +4232,78 @@
       }).catch(err=>{setMessage('loginMessage','Ошибка связи с сервером: '+(err?.message||'не удалось проверить сессию'),true);});
     }
   
+    // Каталог турниров/мероприятий и индивидуальные возможности каждой записи.
+    const EVENT_CATALOG_KEY='event_feature_configs';
+    let eventCatalog=[];
+    const EVENT_FEATURES=[
+      ['registration','Регистрация участников'],
+      ['applications','Заявки на матч'],
+      ['protocol','Электронный протокол'],
+      ['score_stats','Счёт и статистика'],
+      ['bracket','Турнирная сетка'],
+      ['voting','Голосование']
+    ];
+    async function loadEventCatalog(){
+      const root=$('eventCatalogList');if(!root)return;
+      root.innerHTML='<div class="muted">Загружаем каталог…</div>';
+      if(!sb){root.textContent='Нет подключения к Supabase';return;}
+      const {data,error}=await sb.from('site_settings').select('value').eq('key',EVENT_CATALOG_KEY).maybeSingle();
+      if(error){root.textContent='Не удалось загрузить каталог: '+error.message;return;}
+      try{const raw=data?.value;eventCatalog=Array.isArray(raw)?raw:(typeof raw==='string'?JSON.parse(raw||'[]'):[]);if(!Array.isArray(eventCatalog))eventCatalog=[];}catch(_){eventCatalog=[];}
+      renderEventCatalog();
+    }
+    function renderEventCatalog(){
+      const root=$('eventCatalogList');if(!root)return;root.replaceChildren();
+      if(!eventCatalog.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='Каталог пока пуст. Загрузи CSV со списком турниров и мероприятий.';root.appendChild(empty);return;}
+      eventCatalog.forEach((item,index)=>{
+        const card=document.createElement('details');card.className='admin-section';card.open=false;
+        const summary=document.createElement('summary');summary.textContent=(item.name||'Без названия')+(item.type?' · '+item.type:'');card.appendChild(summary);
+        const meta=document.createElement('div');meta.className='muted';meta.style.cssText='font-size:11px;margin:5px 0 8px';meta.textContent='ID: '+(item.id||'не задан');card.appendChild(meta);
+        EVENT_FEATURES.forEach(([key,label])=>{
+          const row=document.createElement('label');row.className='candidate';row.style.cssText='display:flex;align-items:center;gap:9px;margin:7px 0';
+          const check=document.createElement('input');check.type='checkbox';check.checked=!!item.features?.[key];check.dataset.eventIndex=String(index);check.dataset.feature=key;
+          const caption=document.createElement('span');caption.textContent=label;row.append(check,caption);card.appendChild(row);
+        });
+        const save=document.createElement('button');save.type='button';save.className='action-btn';save.textContent='СОХРАНИТЬ НАСТРОЙКИ';save.addEventListener('click',async()=>{
+          const features={...(item.features||{})};card.querySelectorAll('input[data-feature]').forEach(c=>features[c.dataset.feature]=c.checked);
+          item.features=features;save.disabled=true;save.textContent='СОХРАНЯЕМ…';
+          const result=await saveEventCatalog();save.disabled=false;save.textContent=result?'СОХРАНЕНО':'ПОВТОРИТЬ СОХРАНЕНИЕ';
+        });card.appendChild(save);
+        const remove=document.createElement('button');remove.type='button';remove.className='small-btn';remove.style.cssText='width:100%;margin-top:7px;color:#ff8b8b';remove.textContent='УДАЛИТЬ ИЗ КАТАЛОГА';remove.addEventListener('click',async()=>{if(!confirm('Удалить «'+item.name+'» из каталога?'))return;eventCatalog.splice(index,1);if(await saveEventCatalog())renderEventCatalog();});card.appendChild(remove);
+        root.appendChild(card);
+      });
+    }
+    async function saveEventCatalog(){
+      const {error}=await sb.from('site_settings').upsert({key:EVENT_CATALOG_KEY,value:JSON.stringify(eventCatalog),updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'key'});
+      if(error){setMessage('eventCatalogMessage','Не удалось сохранить настройки: '+error.message,true);return false;}
+      setMessage('eventCatalogMessage','Настройки каталога сохранены.');return true;
+    }
+    function parseEventCsv(text){
+      const rows=[];let row=[],cell='',quoted=false;
+      for(let i=0;i<text.length;i++){const ch=text[i];if(quoted){if(ch==='"'&&text[i+1]==='"'){cell+='"';i++;}else if(ch==='"')quoted=false;else cell+=ch;}else if(ch==='"')quoted=true;else if(ch===','){row.push(cell);cell='';}else if(ch===';'||ch==='\\t'){row.push(cell);cell='';}else if(ch==='\\n'){row.push(cell);rows.push(row);row=[];cell='';}else if(ch!=='\\r')cell+=ch;}
+      if(cell.length||row.length){row.push(cell);rows.push(row);}
+      if(!rows.length)return [];
+      const headers=rows.shift().map(x=>x.trim().toLowerCase().replace(/^\\uFEFF/,''));
+      const col=(...names)=>headers.findIndex(h=>names.includes(h));
+      const ni=col('name','title','название','турнир','мероприятие'),ii=col('id','event_id','ид','идентификатор'),ti=col('type','тип');
+      if(ni<0)throw new Error('В CSV обязательна колонка name или «Название».');
+      const parsed=[];
+      rows.forEach((r,n)=>{const name=(r[ni]||'').trim();if(!name)return;const id=ii>=0?(r[ii]||'').trim():'';const type=ti>=0?(r[ti]||'').trim():'';parsed.push({id:id||name.toLowerCase(),name,type,features:{}});});
+      return parsed;
+    }
+    $('importEventCatalogCsv')?.addEventListener('click',async()=>{
+      const file=$('eventCatalogCsv')?.files?.[0];if(!file){setMessage('eventCatalogMessage','Сначала выбери CSV-файл.',true);return;}
+      try{
+        const incoming=parseEventCsv(await file.text());if(!incoming.length)throw new Error('В файле не найдено ни одной записи.');
+        const existing=new Map(eventCatalog.map(x=>[String(x.id||x.name).toLowerCase(),x]));
+        incoming.forEach(item=>{const key=String(item.id||item.name).toLowerCase(),prev=existing.get(key);if(prev){prev.name=item.name;prev.type=item.type;}else eventCatalog.push(item);});
+        if(await saveEventCatalog())renderEventCatalog();
+      }catch(error){setMessage('eventCatalogMessage','Ошибка CSV: '+error.message,true);}
+    });
+    $('downloadEventCatalogTemplate')?.addEventListener('click',()=>{
+      const csv='id,name,type\\nDXG,Деревенские × Городские,match\\nONE,Турнир 1 на 1,tournament\\nMEGA,Мегазаруба,event\\n';
+      const url=URL.createObjectURL(new Blob(['\\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='ШАБЛОН_ТУРНИРЫ_МЕРОПРИЯТИЯ.csv';a.click();URL.revokeObjectURL(url);
+    });
     // Вкладки панели администратора: содержимое разделов сохраняет прежние ID и обработчики.
     document.querySelectorAll('[data-admin-tab]').forEach(tab=>{
       tab.addEventListener('click',()=>{

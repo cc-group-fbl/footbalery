@@ -2752,7 +2752,7 @@
       const bulkDelete=protocolNode('button','small-btn','Удалить');
       bulkDelete.style.background='rgba(220,60,60,.14)';
       const selectedCards=()=>Array.from(root.querySelectorAll('[data-protocol-card]')).filter(c=>c.querySelector('[data-protocol-select]')?.checked);
-      const updateBulk=()=>{const selected=selectedCards();selectedCount.textContent='Выбрано: '+selected.length;selectAll.checked=selected.length>0&&selected.length===ids.length;selectAll.indeterminate=selected.length>0&&selected.length<ids.length;bulkClose.disabled=bulkOpen.disabled=bulkDelete.disabled=selected.length===0;};
+      const updateBulk=()=>{const selected=selectedCards();selectedCount.textContent='Выбрано: '+selected.length;selectAll.checked=selected.length>0&&selected.length===ids.length;selectAll.indeterminate=selected.length>0&&selected.length<ids.length;bulkClose.disabled=bulkOpen.disabled=selected.length===0;bulkDelete.disabled=!selected.some(c=>!!c.dataset.submissionId);};
       selectAll.addEventListener('change',()=>{root.querySelectorAll('[data-protocol-select]').forEach(c=>c.checked=selectAll.checked);updateBulk();});
       const runBulk=async(action)=>{
         const chosen=selectedCards();if(!chosen.length)return;

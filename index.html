@@ -2087,9 +2087,9 @@
     let dgStatisticsCache=[];
     let activeDgStatisticsSeason='2026/2027';
     function parseDgCsvRows(source){
-      const text=String(source||'').replace(/^\\uFEFF/,'');
-      const first=text.split(/\\r?\\n/,1)[0]||'';
-      const counts={',':(first.match(/,/g)||[]).length,';':(first.match(/;/g)||[]).length,'\\t':(first.match(/\\t/g)||[]).length};
+      const text=String(source||'').replace(/^\uFEFF/,'');
+      const first=text.split(/\r?\n/,1)[0]||'';
+      const counts={',':(first.match(/,/g)||[]).length,';':(first.match(/;/g)||[]).length,'\t':(first.match(/\t/g)||[]).length};
       const delimiter=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
       const rows=[];let row=[],value='',quoted=false;
       for(let i=0;i<text.length;i++){
@@ -2098,8 +2098,8 @@
           if(quoted&&text[i+1]==='"'){value+='"';i++;}
           else quoted=!quoted;
         }else if(ch===delimiter&&!quoted){row.push(value);value='';}
-        else if((ch==='\\n'||ch==='\\r')&&!quoted){
-          if(ch==='\\r'&&text[i+1]==='\\n')i++;
+        else if((ch==='\n'||ch==='\r')&&!quoted){
+          if(ch==='\r'&&text[i+1]==='\n')i++;
           row.push(value);value='';
           if(row.some(cell=>String(cell).trim()!==''))rows.push(row);
           row=[];
@@ -2111,30 +2111,30 @@
     function buildDgStatisticsFromCsv(source){
       const rows=parseDgCsvRows(source);
       if(rows.length<2)throw new Error('CSV пустой или в нём нет строк данных.');
-      const headers=rows[0].map(x=>String(x||'').replace(/^\\uFEFF/,'').trim().toLocaleLowerCase('ru'));
+      const headers=rows[0].map(x=>String(x||'').replace(/^\uFEFF/,'').trim().toLocaleLowerCase('ru'));
       const col=(...names)=>headers.findIndex(h=>names.some(n=>h===n.toLocaleLowerCase('ru')));
       const eventCol=col('Вид события'),quantityCol=col('Количество'),seasonCol=col('Мероприятие'),dateCol=col('Дата события'),playerCol=col('ЛДУЧ ФБЛ В ЕСБ'),teamCol=col('КОМАНДА'),descriptionCol=col('Описание события');
       if([eventCol,quantityCol,seasonCol,dateCol,playerCol,teamCol].some(x=>x<0))throw new Error('Не найдены обязательные столбцы. Нужны: Вид события, первое поле Количество, Мероприятие, Дата события, ЛДУЧ ФБЛ В ЕСБ и КОМАНДА.');
-      const seasons={};const warnings={blankEvent:0,missingTeamCards:0,unknownSeason:0,invalidQuantity:0};
-      const norm=x=>String(x||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\\s+/g,' ');
-      const validSeason=raw=>{const m=String(raw||'').match(/д\\s*[×xх]\\s*г\\s*(20\\d{2}\\/20\\d{2})/i);return m?m[1]:null;};
-      const dateTime=value=>{const m=String(value||'').match(/^(\\d{1,2})[.\\/-](\\d{1,2})[.\\/-](\\d{4})$/);return m?Date.UTC(Number(m[3]),Number(m[2])-1,Number(m[1])):0;};
+      const seasons={};const warnings={unknownSeason:0};const seasonWarnings={};
+      const norm=x=>String(x||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ');
+      const validSeason=raw=>{const m=String(raw||'').match(/д\s*[×xх]\s*г\s*(20\d{2}\/20\d{2})/i);return m?m[1]:null;};
+      const dateTime=value=>{const m=String(value||'').match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);return m?Date.UTC(Number(m[3]),Number(m[2])-1,Number(m[1])):0;};
       const teamKey=value=>{const v=norm(value);return v==='фк деревенские'?'home':v==='фк городские'?'away':null;};
-      const ensureSeason=key=>seasons[key]||(seasons[key]={season:key,source_rows:0,matchesByDate:{},playersByName:{},warnings:[],totals:{goals:0,own_goals:0,yellow_cards:0,red_cards:0,penalties_scored:0,penalties_missed:0,mvp:0}});
+      const ensureSeason=key=>{if(!seasonWarnings[key])seasonWarnings[key]={blankEvent:0,missingTeamCards:0,invalidQuantity:0};return seasons[key]||(seasons[key]={season:key,source_rows:0,matchesByDate:{},playersByName:{},warnings:[],totals:{goals:0,own_goals:0,yellow_cards:0,red_cards:0,penalties_scored:0,penalties_missed:0,mvp:0}});};
       const addPlayer=(season,name)=>{const key=norm(name);if(!key)return null;const store=season.playersByName;return store[key]||(store[key]={name:String(name).trim(),goals:0,own_goals:0,yellow_cards:0,red_cards:0,penalties_scored:0,penalties_missed:0,mvp:0,appearanceDates:{},teams:{}});};
       rows.slice(1).forEach((r,rowIndex)=>{
         const event=String(r[eventCol]||'').trim(),rawSeason=String(r[seasonCol]||''),seasonKey=validSeason(rawSeason);
-        if(!/^д\\s*[×xх]\\s*г/i.test(rawSeason.trim()))return;
+        if(!/^д\s*[×xх]\s*г/i.test(rawSeason.trim()))return;
         if(!seasonKey){warnings.unknownSeason++;return;}
         const season=ensureSeason(seasonKey);season.source_rows++;
         const date=String(r[dateCol]||'').trim();if(!date){season.warnings.push('Строка '+(rowIndex+2)+': нет даты матча.');return;}
         const match=season.matchesByDate[date]||(season.matchesByDate[date]={date,sort_date:dateTime(date),goals_home:0,goals_away:0,own_goals_home:0,own_goals_away:0,technical_loss_team:null,has_lineups:false});
         const rawQuantity=String(r[quantityCol]??'').trim().replace(',','.');
         const quantity=rawQuantity===''?1:Number(rawQuantity);
-        if(!Number.isFinite(quantity)||quantity<0){warnings.invalidQuantity++;return;}
+        if(!Number.isFinite(quantity)||quantity<0){seasonWarnings[seasonKey].invalidQuantity++;return;}
         const q=Math.floor(quantity);
         const team=teamKey(r[teamCol]);const playerName=String(r[playerCol]||'').trim();
-        if(!event){warnings.blankEvent++;return;}
+        if(!event){seasonWarnings[seasonKey].blankEvent++;return;}
         const kind=norm(event);
         if(kind==='состав команды'){
           match.has_lineups=true;
@@ -2152,7 +2152,7 @@
         }
         if(kind==='гол'){season.totals.goals+=q;if(team==='home')match.goals_home+=q;if(team==='away')match.goals_away+=q;}
         else if(kind==='автогол'){season.totals.own_goals+=q;if(team==='home')match.own_goals_away+=q;if(team==='away')match.own_goals_home+=q;}
-        else if(kind==='желтая карточка'||kind==='жёлтая карточка'){season.totals.yellow_cards+=q;if(!team)warnings.missingTeamCards+=q;}
+        else if(kind==='желтая карточка'||kind==='жёлтая карточка'){season.totals.yellow_cards+=q;if(!team)seasonWarnings[seasonKey].missingTeamCards+=q;}
         else if(kind==='красная карточка'){season.totals.red_cards+=q;if(!team)warnings.missingTeamCards+=q;}
         else if(kind==='забитый пенальти'){season.totals.penalties_scored+=q;}
         else if(kind==='незабитый пенальти'){season.totals.penalties_missed+=q;}
@@ -2193,10 +2193,11 @@
         })).sort((a,b)=>b.goals-a.goals||b.mvp-a.mvp||a.name.localeCompare(b.name,'ru'));
         season.matches=matches;season.standings={home,away};
         season.players=players;delete season.matchesByDate;delete season.playersByName;
-        season.warnings.push(...(warnings.blankEvent?['Строки без вида события: '+warnings.blankEvent+' (не включены в статистику).']:[]));
-        if(warnings.missingTeamCards)season.warnings.push('Жёлтые/красные карточки без команды: '+warnings.missingTeamCards+' (не распределены между командами и игроками).');
-        if(warnings.invalidQuantity)season.warnings.push('Строки с некорректным количеством: '+warnings.invalidQuantity);
-        if(warnings.unknownSeason)season.warnings.push('Строки Д×Г с неизвестным сезоном: '+warnings.unknownSeason);
+        const sw=seasonWarnings[seasonKey]||{};
+        if(sw.blankEvent)season.warnings.push('Строки без вида события: '+sw.blankEvent+' (не включены в статистику).');
+        if(sw.missingTeamCards)season.warnings.push('Жёлтые/красные карточки без команды: '+sw.missingTeamCards+' (не распределены между командами и игроками).');
+        if(sw.invalidQuantity)season.warnings.push('Строки с некорректным количеством: '+sw.invalidQuantity);
+        season.warnings.push('В выгрузке Memento нет отдельного статуса одобрения; учтены все записи Д×Г из CSV.');
       });
       if(!Object.keys(seasons).length)throw new Error('В файле не найдены строки Д×Г сезонов 2025/2026 или 2026/2027.');
       return seasons;
@@ -2266,7 +2267,7 @@
       try{
         const seasons=buildDgStatisticsFromCsv(await file.text()),keys=Object.keys(seasons);
         const summary=keys.map(k=>k+': '+seasons[k].source_rows+' строк, '+seasons[k].matches.length+' матчей').join(' · ');
-        if(!confirm('Будет обновлена статистика: '+summary+'. Старые значения этих сезонов будут заменены. Продолжить?'))return;
+        if(!confirm('Будет обновлена статистика: '+summary+'. Старые значения этих сезонов будут заменены. Продолжить?')){status.textContent='Импорт отменён.';return;}
         const payload=keys.map(season=>({season,stats:seasons[season],source_name:file.name,imported_at:new Date().toISOString(),imported_by:currentUser.id}));
         const {error}=await sb.from('dg_tournament_statistics').upsert(payload,{onConflict:'season'});
         if(error)throw error;

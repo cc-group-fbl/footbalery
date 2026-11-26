@@ -1911,7 +1911,7 @@
       $('oneOnOneOverall')?.classList.toggle('hidden',activeTournamentKey!=='one'||(!isOverallStage&&activeOneOnOneView!=='overall'));
       document.querySelectorAll('[data-one-view]').forEach(b=>b.classList.toggle('active',b.dataset.oneView===activeOneOnOneView));
       document.querySelectorAll('[data-stage]').forEach(b=>b.classList.toggle('active',b.dataset.stage===activeTournamentStage));
-      $('tournamentAdminCreate')?.classList.toggle('hidden',!tournamentIsAdmin()||activeTournamentKey==='dg');
+      $('tournamentAdminCreate')?.classList.toggle('hidden',!tournamentIsAdmin()||activeTournamentKey!=='one');
     }
     async function loadCatalogTournamentStatistics(item){
       const title=$('eventTournamentStatisticsTitle'),root=$('eventTournamentStatisticsContent');

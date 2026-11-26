@@ -2157,10 +2157,10 @@
         else if(kind==='забитый пенальти'){season.totals.penalties_scored+=q;}
         else if(kind==='незабитый пенальти'){season.totals.penalties_missed+=q;}
         else if(kind==='лучший игрок дня / матча'){season.totals.mvp+=q;}
-        else continue;
+        else return;
         if(!team||!playerName){
-          if((kind==='желтая карточка'||kind==='жёлтая карточка'||kind==='красная карточка')&&!team)continue;
-          continue;
+          if((kind==='желтая карточка'||kind==='жёлтая карточка'||kind==='красная карточка')&&!team)return;
+          return;
         }
         const p=addPlayer(season,playerName);if(!p)return;p.teams[team]=true;
         if(kind==='гол')p.goals+=q;

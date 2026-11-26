@@ -2333,7 +2333,25 @@
       root.textContent='Загружаем статистику Д×Г…';
       const {data,error}=await sb.from('dg_tournament_statistics').select('season,stats,source_name,imported_at').order('season',{ascending:false});
       if(error){root.textContent='Не удалось загрузить статистику: '+error.message+'. Если это первый запуск, выполни SQL-миграцию dg_tournament_statistics в Supabase.';return;}
-      dgStatisticsCache=data||[];renderDgStatistics();
+      dgStatisticsCache=data||[];
+      // Расписание — источник окончательного счёта матча; синхронизируем его с агрегированной статистикой событий.
+      try{
+        const schedule=await getScheduleRows();
+        dgStatisticsCache.forEach(record=>{
+          const matches=record.stats?.matches||[];
+          matches.forEach(match=>{
+            const m=String(match.date||'').match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
+            if(!m)return;
+            const iso=m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+            const candidates=(schedule||[]).filter(row=>row.type==='match'&&row.event_date===iso&&(/д\s*[×xх]\s*г|деревенские/i.test(String(row.tournament||'')+' '+String(row.title||'')))&&row.match&&row.match.score_home!=null&&row.match.score_away!=null);
+            if(candidates.length===1){match.score_home=Number(candidates[0].match.score_home);match.score_away=Number(candidates[0].match.score_away);}
+          });
+          const home={played:0,wins:0,draws:0,losses:0,goals_for:0,goals_against:0,points:0},away={played:0,wins:0,draws:0,losses:0,goals_for:0,goals_against:0,points:0};
+          matches.forEach(m=>{const h=Number(m.score_home)||0,a=Number(m.score_away)||0;home.played++;away.played++;home.goals_for+=h;home.goals_against+=a;away.goals_for+=a;away.goals_against+=h;if(h>a){home.wins++;away.losses++;home.points+=3;}else if(a>h){away.wins++;home.losses++;away.points+=3;}else{home.draws++;away.draws++;home.points++;away.points++;}});
+          if(record.stats)record.stats.standings={home,away};
+        });
+      }catch(scheduleError){console.warn('Не удалось сверить счёт Д×Г с расписанием:',scheduleError);}
+      renderDgStatistics();
     }
     async function importDgStatisticsCsv(){
       const status=$('dgStatisticsImportStatus'),file=$('dgStatisticsCsvFile')?.files?.[0],button=$('dgStatisticsImportButton');
@@ -4671,6 +4689,8 @@
       const root=$('eventRegistrationList');if(!root||!sb||!currentUser)return;
       root.textContent='Загружаем турниры…';
       const catalog=await getEventFeatureCatalog(true);
+      eventCatalog=Array.isArray(catalog)?catalog:[];
+      renderTournamentSwitch();
       const eligible=(catalog||[]).filter(item=>item.features?.registration===true);
       if(!eligible.length){root.textContent='Пока нет турниров с включённой регистрацией. Администратор может включить её в панели управления.';return;}
       const {data:mine,error}=await sb.from('event_registrations').select('event_id,status,created_at').eq('user_id',currentUser.id);

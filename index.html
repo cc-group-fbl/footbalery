@@ -771,6 +771,7 @@
     </section>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   
   <script>
@@ -2224,11 +2225,29 @@
       root.replaceChildren(cards);
       const section=(title)=>{const h=dgStatsElement('h4','dg-stats-section-title',title);root.appendChild(h);};
       const table=(headers,rows)=>{
+        const block=dgStatsElement('div','dg-stats-table-block');
         const wrap=dgStatsElement('div','dg-stats-table-wrap'),t=dgStatsElement('table','dg-stats-table');
         const thead=dgStatsElement('thead'),hr=dgStatsElement('tr');headers.forEach(x=>hr.appendChild(dgStatsElement('th','',x)));thead.appendChild(hr);t.appendChild(thead);
         const tbody=dgStatsElement('tbody');
         rows.forEach(row=>{const tr=dgStatsElement('tr');row.forEach((cell,i)=>tr.appendChild(dgStatsElement('td',i===0?(cell.className||''):'',cell.value??cell)));tbody.appendChild(tr);});
-        t.appendChild(tbody);wrap.appendChild(t);root.appendChild(wrap);
+        t.appendChild(tbody);wrap.appendChild(t);block.appendChild(wrap);
+        if(currentProfile?.role==='admin'){
+          const save=dgStatsElement('button','small-btn dg-stats-save-image','⬇ СОХРАНИТЬ ТАБЛИЦУ КАК PNG');
+          save.type='button';save.style.cssText='margin:8px 0 2px;width:100%';
+          save.addEventListener('click',async()=>{
+            if(typeof window.html2canvas!=='function'){alert('Не удалось загрузить модуль создания изображения. Проверьте подключение к интернету.');return;}
+            const previous=save.textContent;save.disabled=true;save.textContent='СОЗДАЁМ ИЗОБРАЖЕНИЕ…';
+            try{
+              const canvas=await window.html2canvas(wrap,{backgroundColor:getComputedStyle(document.body).backgroundColor||'#ffffff',scale:2,useCORS:true,logging:false});
+              const link=document.createElement('a');
+              link.download='ДГ-'+(seasonKey.replace('/','-'))+'-'+(block.querySelector('table')?.previousElementSibling?.textContent||'таблица').toLowerCase().replace(/[^a-zа-яё0-9-]+/gi,'-')+'.png';
+              link.href=canvas.toDataURL('image/png');link.click();
+            }catch(error){console.error('Ошибка сохранения таблицы:',error);alert('Не удалось сохранить таблицу: '+(error?.message||error));}
+            finally{save.disabled=false;save.textContent=previous;}
+          });
+          block.appendChild(save);
+        }
+        root.appendChild(block);
       };
       section('ТУРНИРНАЯ ТАБЛИЦА');
       table(['Команда','И','В','Н','П','ЗМ','ПМ','РМ','О'],[

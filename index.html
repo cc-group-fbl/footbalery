@@ -451,6 +451,7 @@
           <button type="button" class="admin-tab active" data-tournament="dg">Д×Г</button>
           <button type="button" class="admin-tab" data-tournament="one">ТУРНИР 1 НА 1</button>
         </div>
+        <div id="eventTournamentTabs" class="tournament-switch" style="margin-top:8px"></div>
         <div id="tournamentStageWrap" class="hidden" style="margin:12px 0">
           <label for="tournamentStageSelect" class="muted" style="display:block;margin-bottom:7px;font-weight:700">ВЫБЕРИТЕ ЭТАП ТУРНИРА</label>
           <select id="tournamentStageSelect" class="field" style="width:100%;min-height:46px;font-size:15px;font-weight:700;padding:10px 12px">
@@ -502,6 +503,7 @@
             <div id="dgStatisticsImportStatus" class="message" aria-live="polite"></div>
           </section>
         </section>
+        <section id="eventTournamentStatisticsPanel" class="dg-stats-panel hidden" style="margin-top:16px"><h3 id="eventTournamentStatisticsTitle" style="font-size:15px;margin:0 0 12px"></h3><div id="eventTournamentStatisticsContent"></div></section>
         <div id="tournamentBracketsList" style="margin-top:14px"><div class="muted">Загрузка турнирных сеток…</div></div>
         <div id="oneOnOneStandings" class="hidden" style="margin-top:14px"></div>
         <div id="oneOnOneOverall" class="hidden" style="margin-top:14px"></div>
@@ -1870,6 +1872,21 @@
       return stages;
     }
     function renderTournamentSwitch(){
+      const dynamicRoot=$('eventTournamentTabs');
+      if(dynamicRoot){
+        dynamicRoot.replaceChildren();
+        (eventCatalog||[]).forEach(item=>{
+          const name=String(item.name||'').trim();
+          const normalized=name.toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ');
+          if(!name||/^(д\s*[×xх]\s*г|деревенские\s*[×x]\s*городские|турнир\s*1\s*на\s*1)$/i.test(normalized))return;
+          const key='event:'+String(item.id||item.name);
+          const button=document.createElement('button');button.type='button';button.className='admin-tab';button.dataset.catalogTournament=key;button.textContent=name;
+          button.classList.toggle('active',activeTournamentKey===key);
+          button.addEventListener('click',()=>{activeTournamentKey=key;renderTournamentSwitch();loadCatalogTournamentStatistics(item);});
+          dynamicRoot.appendChild(button);
+        });
+      }
+      const isCatalogTournament=String(activeTournamentKey).startsWith('event:');
       document.querySelectorAll('[data-tournament]').forEach(b=>b.classList.toggle('active',b.dataset.tournament===activeTournamentKey));
       const isOverallStage=activeTournamentStage==='overall';
       $('tournamentStageWrap')?.classList.toggle('hidden',activeTournamentKey!=='one');
@@ -1887,14 +1904,54 @@
       $('dgTeamsView')?.classList.toggle('hidden',activeTournamentKey!=='dg');
       $('dgStatisticsPanel')?.classList.toggle('hidden',activeTournamentKey!=='dg');
       $('dgStatisticsAdminImport')?.classList.toggle('hidden',!tournamentIsAdmin());
-
-      $('tournamentBracketsList')?.classList.toggle('hidden',activeTournamentKey==='dg'||isOverallStage||activeOneOnOneView!=='matches');
+      $('eventTournamentStatisticsPanel')?.classList.toggle('hidden',!isCatalogTournament);
+      $('tournamentBracketsList')?.classList.toggle('hidden',activeTournamentKey==='dg'||isCatalogTournament||isOverallStage||activeOneOnOneView!=='matches');
       $('oneOnOneViewTabs')?.classList.toggle('hidden',activeTournamentKey!=='one'||isOverallStage);
       $('oneOnOneStandings')?.classList.toggle('hidden',activeTournamentKey!=='one'||isOverallStage||activeOneOnOneView!=='table');
       $('oneOnOneOverall')?.classList.toggle('hidden',activeTournamentKey!=='one'||(!isOverallStage&&activeOneOnOneView!=='overall'));
       document.querySelectorAll('[data-one-view]').forEach(b=>b.classList.toggle('active',b.dataset.oneView===activeOneOnOneView));
       document.querySelectorAll('[data-stage]').forEach(b=>b.classList.toggle('active',b.dataset.stage===activeTournamentStage));
       $('tournamentAdminCreate')?.classList.toggle('hidden',!tournamentIsAdmin()||activeTournamentKey==='dg');
+    }
+    async function loadCatalogTournamentStatistics(item){
+      const title=$('eventTournamentStatisticsTitle'),root=$('eventTournamentStatisticsContent');
+      if(!title||!root)return;
+      title.textContent='📊 '+(item.name||'ТУРНИР');
+      root.textContent='Загружаем счёт и статистику…';
+      if(item.features?.score_stats!==true){root.textContent='Для этого турнира администратор не включил функцию «Счёт и статистика».';return;}
+      try{
+        const rows=await getScheduleRows();
+        const norm=value=>String(value||'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+        const name=norm(item.name);
+        const matches=(rows||[]).filter(row=>{
+          if(row.type!=='match')return false;
+          return [row.tournament,row.title].map(norm).some(value=>value===name||(value.length>3&&value.includes(name)));
+        });
+        root.replaceChildren();
+        if(!matches.length){root.textContent='В расписании пока нет матчей, относящихся к этому турниру.';return;}
+        const scores=matches.filter(row=>row.match&&row.match.score_home!=null&&row.match.score_away!=null);
+        const heading=document.createElement('h4');heading.className='dg-stats-section-title';heading.textContent='РЕЗУЛЬТАТЫ МАТЧЕЙ';root.appendChild(heading);
+        const wrap=document.createElement('div');wrap.className='dg-stats-table-wrap';
+        const table=document.createElement('table');table.className='dg-stats-table';
+        const thead=document.createElement('thead'),hr=document.createElement('tr');
+        ['Дата','Матч','Счёт'].forEach(value=>{const th=document.createElement('th');th.textContent=value;hr.appendChild(th);});thead.appendChild(hr);table.appendChild(thead);
+        const tbody=document.createElement('tbody');
+        scores.forEach(row=>{const tr=document.createElement('tr');[scheduleDateLabel(row.event_date),row.title||item.name,String(row.match.score_home)+':'+String(row.match.score_away)].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td);});tbody.appendChild(tr);});
+        table.appendChild(tbody);wrap.appendChild(table);root.appendChild(wrap);
+        const players={};
+        scores.forEach(row=>{
+          const stats=Array.isArray(row.match?.protocol_data?.player_stats)?row.match.protocol_data.player_stats:[];
+          stats.forEach(p=>{const key=norm(p.name);if(!key)return;const x=players[key]||(players[key]={name:p.name,goals:0,yellow:0,red:0});x.goals+=Number(p.goals)||0;x.yellow+=Number(p.yellow_cards)||0;x.red+=Number(p.red_cards)||0;});
+        });
+        const sub=document.createElement('h4');sub.className='dg-stats-section-title';sub.textContent='СТАТИСТИКА ИГРОКОВ';root.appendChild(sub);
+        const list=Object.values(players).sort((a,b)=>b.goals-a.goals||a.name.localeCompare(b.name,'ru'));
+        if(list.length){
+          const pw=document.createElement('div');pw.className='dg-stats-table-wrap';const pt=document.createElement('table');pt.className='dg-stats-table';
+          const ph=document.createElement('thead'),pr=document.createElement('tr');['№','Игрок','Голы','ЖК','КК'].forEach(v=>{const th=document.createElement('th');th.textContent=v;pr.appendChild(th);});ph.appendChild(pr);pt.appendChild(ph);
+          const pb=document.createElement('tbody');list.forEach((p,i)=>{const tr=document.createElement('tr');[i+1,p.name,p.goals,p.yellow,p.red].forEach(v=>{const td=document.createElement('td');td.textContent=String(v);tr.appendChild(td);});pb.appendChild(tr);});pt.appendChild(pb);pw.appendChild(pt);root.appendChild(pw);
+        }else{const note=document.createElement('div');note.className='muted';note.textContent='Индивидуальная статистика появится после одобрения электронных протоколов с показателями игроков.';root.appendChild(note);}
+        const summary=document.createElement('div');summary.className='muted';summary.style.marginTop='10px';summary.textContent='Матчей в расписании: '+matches.length+' · со счётом: '+scores.length;root.appendChild(summary);
+      }catch(error){root.textContent='Не удалось загрузить статистику турнира: '+(error?.message||error);}
     }
     function tournamentSafeText(value){return String(value??'');}
     let tournamentParticipantProfiles=[],tournamentParticipantsLoaded=false;
@@ -4547,7 +4604,7 @@
       registration:'Разрешает игрокам подавать отдельную заявку на участие в этом турнире. Заявки отображаются администратору в карточке турнира.',
       applications:'Разрешает подавать заявки на матчи, связанные с этим турниром. В заявке указываются команда (если предусмотрено) и игровой номер. Для матчей 1 на 1 заявки не показываются.',
       protocol:'Показывает матчи этого турнира в электронных протоколах и позволяет администратору назначать судей. Если выключить — матчи турнира исключаются из списков протоколов.',
-      score_stats:'Пока не подключено к отдельному механизму турниров: переключатель сохраняет настройку, но сам по себе не включает и не скрывает ввод счёта или статистику.',
+      score_stats:'Показывает результаты матчей и статистику игроков этого турнира в разделе «Турниры». Данные берутся из расписания и электронных протоколов.',
       bracket:'Пока не подключено к механизму турнирной сетки: переключатель сохраняет настройку, но сам по себе не включает и не скрывает сетку.',
       voting:'Пока не подключено к голосованию конкретного турнира: переключатель сохраняет настройку, но сам по себе не включает и не скрывает голосование.'
     };

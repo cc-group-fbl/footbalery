@@ -258,6 +258,30 @@
   .dg-team-symbol{width:46px;height:46px;margin:0 auto 10px;display:grid;place-items:center;border-radius:50%;font-size:24px;font-weight:900;background:rgba(255,255,255,.12)}
   .dg-team-name{font-size:clamp(10px,2.8vw,13px);font-weight:900;overflow-wrap:anywhere}
   .dg-versus{text-align:center;font-size:19px;font-weight:900;color:var(--accent-text)}
+  .dg-stats-panel{margin-top:16px;padding:14px;border:1px solid var(--border-color);border-radius:14px;background:rgba(255,255,255,.025)}
+  .dg-stats-toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:10px 0 14px}
+  .dg-stats-toolbar select{flex:1;min-width:160px}
+  .dg-stats-leaders{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+  .dg-stats-leader{padding:11px;border:1px solid var(--border-color);border-radius:11px;background:rgba(255,255,255,.035);min-width:0}
+  .dg-stats-leader-label{font-size:10px;color:#9ba9bd;text-transform:uppercase;font-weight:800}
+  .dg-stats-leader-name{font-size:13px;font-weight:900;overflow-wrap:anywhere;margin-top:5px}
+  .dg-stats-leader-value{font-size:20px;font-weight:900;color:var(--accent-text);margin-top:2px}
+  .dg-stats-table-wrap{overflow-x:auto;max-width:100%;margin:10px 0 16px;border:1px solid var(--border-color);border-radius:10px}
+  .dg-stats-table{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap}
+  .dg-stats-table th,.dg-stats-table td{padding:9px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,.09)}
+  .dg-stats-table th{font-size:10px;color:#aab7ca;background:rgba(255,255,255,.045);font-weight:900}
+  .dg-stats-table td:first-child,.dg-stats-table th:first-child{text-align:left}
+  .dg-stats-table tr:last-child td{border-bottom:0}
+  .dg-stats-table .dg-village-text{color:#8ee2ad;font-weight:900}
+  .dg-stats-table .dg-city-text{color:#91c8ff;font-weight:900}
+  .dg-stats-section-title{font-size:13px;font-weight:900;margin:15px 0 7px}
+  .dg-stats-match-list{display:grid;gap:6px}
+  .dg-stats-match{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:9px;background:rgba(255,255,255,.035);font-size:11px}
+  .dg-stats-match strong{white-space:nowrap;color:var(--accent-text)}
+  .dg-stats-admin{margin-top:14px}
+  .dg-stats-admin input[type=file]{width:100%;font-size:12px;margin:8px 0}
+  @media(max-width:420px){.dg-stats-leaders{grid-template-columns:repeat(2,minmax(0,1fr))}.dg-stats-panel{padding:10px}.dg-stats-table{font-size:10px}.dg-stats-table th,.dg-stats-table td{padding:8px 6px}}
+
   .tournament-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:12px 0}
   #tournamentStageWrap{grid-template-columns:repeat(2,minmax(0,1fr))}
   .tournament-switch .admin-tab{min-width:0}
@@ -458,6 +482,26 @@
             <div class="dg-team-card dg-city"><div class="dg-team-symbol">Г</div><div class="dg-team-name">ГОРОДСКИЕ</div></div>
           </div>
         </div>
+        <section id="dgStatisticsPanel" class="dg-stats-panel hidden">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+            <h3 style="font-size:15px;margin:0">📊 СТАТИСТИКА Д×Г</h3>
+            <span id="dgStatisticsUpdated" class="muted" style="font-size:10px"></span>
+          </div>
+          <div class="dg-stats-toolbar">
+            <select id="dgStatisticsSeason" class="field" aria-label="Сезон статистики Д×Г">
+              <option value="2026/2027">Сезон 2026/2027</option>
+              <option value="2025/2026">Сезон 2025/2026</option>
+            </select>
+          </div>
+          <div id="dgStatisticsContent"><div class="muted">Загрузка статистики…</div></div>
+          <section id="dgStatisticsAdminImport" class="admin-section dg-stats-admin hidden">
+            <h3 style="font-size:13px;margin-bottom:5px">⬆️ Обновить статистику из Memento</h3>
+            <div class="muted" style="text-align:left">Выберите свежий экспорт библиотеки «ПРОТОКОЛ» в формате CSV. Данные выбранных сезонов будут заменены новыми.</div>
+            <input id="dgStatisticsCsvFile" type="file" accept=".csv,text/csv">
+            <button id="dgStatisticsImportButton" type="button" class="action-btn">ЗАГРУЗИТЬ СТАТИСТИКУ</button>
+            <div id="dgStatisticsImportStatus" class="message" aria-live="polite"></div>
+          </section>
+        </section>
         <div id="tournamentBracketsList" style="margin-top:14px"><div class="muted">Загрузка турнирных сеток…</div></div>
         <div id="oneOnOneStandings" class="hidden" style="margin-top:14px"></div>
         <div id="oneOnOneOverall" class="hidden" style="margin-top:14px"></div>
@@ -949,7 +993,7 @@
       if(!currentUser)return;
       const panel=panelFromCurrentPath();showSection(panel,false);
       try{const stage=tournamentResultsRouteStage();if(stage){await openTournamentResultsRoute(stage);return;}
-        if(panel==='newsPanel')await loadNews();else if(panel==='chatsPanel')await loadChats();else if(panel==='schedulePanel')await loadSchedule();else if(panel==='financePanel')await loadFinance();else if(panel==='tournamentsPanel'){await Promise.all([loadTournamentBrackets(),loadEventRegistrations()]);}else if(panel==='protocolsPanel')await loadRefereeProtocols();
+        if(panel==='newsPanel')await loadNews();else if(panel==='chatsPanel')await loadChats();else if(panel==='schedulePanel')await loadSchedule();else if(panel==='financePanel')await loadFinance();else if(panel==='tournamentsPanel'){await Promise.all([loadTournamentBrackets(),loadEventRegistrations(),loadDgStatistics()]);}else if(panel==='protocolsPanel')await loadRefereeProtocols();
       }catch(error){console.error('Не удалось открыть раздел по ссылке:',error);}
     });
 
@@ -1840,6 +1884,9 @@
       const phaseDescription=$('tournamentPhaseDescription');if(phaseDescription)phaseDescription.textContent=activeTournamentPhase==='playoff'?'Победители матчей автоматически переходят в следующий раунд. Проигравшие полуфиналов попадают в матч за 3-е место.':'Правила, состав участников и порядок прохождения квалификации настраиваются администратором.';
       document.querySelectorAll('[data-phase]').forEach(b=>b.classList.toggle('active',b.dataset.phase===activeTournamentPhase));
       $('dgTeamsView')?.classList.toggle('hidden',activeTournamentKey!=='dg');
+      $('dgStatisticsPanel')?.classList.toggle('hidden',activeTournamentKey!=='dg');
+      $('dgStatisticsAdminImport')?.classList.toggle('hidden',!tournamentIsAdmin());
+
       $('tournamentBracketsList')?.classList.toggle('hidden',activeTournamentKey==='dg'||isOverallStage||activeOneOnOneView!=='matches');
       $('oneOnOneViewTabs')?.classList.toggle('hidden',activeTournamentKey!=='one'||isOverallStage);
       $('oneOnOneStandings')?.classList.toggle('hidden',activeTournamentKey!=='one'||isOverallStage||activeOneOnOneView!=='table');
@@ -2036,6 +2083,198 @@
         root.appendChild(card);
       });
     }
+
+    let dgStatisticsCache=[];
+    let activeDgStatisticsSeason='2026/2027';
+    function parseDgCsvRows(source){
+      const text=String(source||'').replace(/^\\uFEFF/,'');
+      const first=text.split(/\\r?\\n/,1)[0]||'';
+      const counts={',':(first.match(/,/g)||[]).length,';':(first.match(/;/g)||[]).length,'\\t':(first.match(/\\t/g)||[]).length};
+      const delimiter=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+      const rows=[];let row=[],value='',quoted=false;
+      for(let i=0;i<text.length;i++){
+        const ch=text[i];
+        if(ch==='"'){
+          if(quoted&&text[i+1]==='"'){value+='"';i++;}
+          else quoted=!quoted;
+        }else if(ch===delimiter&&!quoted){row.push(value);value='';}
+        else if((ch==='\\n'||ch==='\\r')&&!quoted){
+          if(ch==='\\r'&&text[i+1]==='\\n')i++;
+          row.push(value);value='';
+          if(row.some(cell=>String(cell).trim()!==''))rows.push(row);
+          row=[];
+        }else value+=ch;
+      }
+      row.push(value);if(row.some(cell=>String(cell).trim()!==''))rows.push(row);
+      return rows;
+    }
+    function buildDgStatisticsFromCsv(source){
+      const rows=parseDgCsvRows(source);
+      if(rows.length<2)throw new Error('CSV пустой или в нём нет строк данных.');
+      const headers=rows[0].map(x=>String(x||'').replace(/^\\uFEFF/,'').trim().toLocaleLowerCase('ru'));
+      const col=(...names)=>headers.findIndex(h=>names.some(n=>h===n.toLocaleLowerCase('ru')));
+      const eventCol=col('Вид события'),quantityCol=col('Количество'),seasonCol=col('Мероприятие'),dateCol=col('Дата события'),playerCol=col('ЛДУЧ ФБЛ В ЕСБ'),teamCol=col('КОМАНДА'),descriptionCol=col('Описание события');
+      if([eventCol,quantityCol,seasonCol,dateCol,playerCol,teamCol].some(x=>x<0))throw new Error('Не найдены обязательные столбцы. Нужны: Вид события, первое поле Количество, Мероприятие, Дата события, ЛДУЧ ФБЛ В ЕСБ и КОМАНДА.');
+      const seasons={};const warnings={blankEvent:0,missingTeamCards:0,unknownSeason:0,invalidQuantity:0};
+      const norm=x=>String(x||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\\s+/g,' ');
+      const validSeason=raw=>{const m=String(raw||'').match(/д\\s*[×xх]\\s*г\\s*(20\\d{2}\\/20\\d{2})/i);return m?m[1]:null;};
+      const dateTime=value=>{const m=String(value||'').match(/^(\\d{1,2})[.\\/-](\\d{1,2})[.\\/-](\\d{4})$/);return m?Date.UTC(Number(m[3]),Number(m[2])-1,Number(m[1])):0;};
+      const teamKey=value=>{const v=norm(value);return v==='фк деревенские'?'home':v==='фк городские'?'away':null;};
+      const ensureSeason=key=>seasons[key]||(seasons[key]={season:key,source_rows:0,matchesByDate:{},playersByName:{},warnings:[],totals:{goals:0,own_goals:0,yellow_cards:0,red_cards:0,penalties_scored:0,penalties_missed:0,mvp:0}});
+      const addPlayer=(season,name)=>{const key=norm(name);if(!key)return null;const store=season.playersByName;return store[key]||(store[key]={name:String(name).trim(),goals:0,own_goals:0,yellow_cards:0,red_cards:0,penalties_scored:0,penalties_missed:0,mvp:0,appearanceDates:{},teams:{}});};
+      rows.slice(1).forEach((r,rowIndex)=>{
+        const event=String(r[eventCol]||'').trim(),rawSeason=String(r[seasonCol]||''),seasonKey=validSeason(rawSeason);
+        if(!/^д\\s*[×xх]\\s*г/i.test(rawSeason.trim()))return;
+        if(!seasonKey){warnings.unknownSeason++;return;}
+        const season=ensureSeason(seasonKey);season.source_rows++;
+        const date=String(r[dateCol]||'').trim();if(!date){season.warnings.push('Строка '+(rowIndex+2)+': нет даты матча.');return;}
+        const match=season.matchesByDate[date]||(season.matchesByDate[date]={date,sort_date:dateTime(date),goals_home:0,goals_away:0,own_goals_home:0,own_goals_away:0,technical_loss_team:null,has_lineups:false});
+        const rawQuantity=String(r[quantityCol]??'').trim().replace(',','.');
+        const quantity=rawQuantity===''?1:Number(rawQuantity);
+        if(!Number.isFinite(quantity)||quantity<0){warnings.invalidQuantity++;return;}
+        const q=Math.floor(quantity);
+        const team=teamKey(r[teamCol]);const playerName=String(r[playerCol]||'').trim();
+        if(!event){warnings.blankEvent++;return;}
+        const kind=norm(event);
+        if(kind==='состав команды'){
+          match.has_lineups=true;
+          if(team&&playerName){
+            playerName.split(',').map(x=>x.trim()).filter(Boolean).forEach(name=>{
+              const p=addPlayer(season,name);if(p){p.appearanceDates[date]=true;p.teams[team]=true;}
+            });
+          }
+          return;
+        }
+        if(kind==='присуждение технического поражения'){
+          if(team)match.technical_loss_team=team;
+          else season.warnings.push('Техническое поражение без указанной команды: '+date);
+          return;
+        }
+        if(kind==='гол'){season.totals.goals+=q;if(team==='home')match.goals_home+=q;if(team==='away')match.goals_away+=q;}
+        else if(kind==='автогол'){season.totals.own_goals+=q;if(team==='home')match.own_goals_away+=q;if(team==='away')match.own_goals_home+=q;}
+        else if(kind==='желтая карточка'||kind==='жёлтая карточка'){season.totals.yellow_cards+=q;if(!team)warnings.missingTeamCards+=q;}
+        else if(kind==='красная карточка'){season.totals.red_cards+=q;if(!team)warnings.missingTeamCards+=q;}
+        else if(kind==='забитый пенальти'){season.totals.penalties_scored+=q;}
+        else if(kind==='незабитый пенальти'){season.totals.penalties_missed+=q;}
+        else if(kind==='лучший игрок дня / матча'){season.totals.mvp+=q;}
+        else continue;
+        if(!team||!playerName){
+          if((kind==='желтая карточка'||kind==='жёлтая карточка'||kind==='красная карточка')&&!team)continue;
+          continue;
+        }
+        const p=addPlayer(season,playerName);if(!p)return;p.teams[team]=true;
+        if(kind==='гол')p.goals+=q;
+        else if(kind==='автогол')p.own_goals+=q;
+        else if(kind==='желтая карточка'||kind==='жёлтая карточка')p.yellow_cards+=q;
+        else if(kind==='красная карточка')p.red_cards+=q;
+        else if(kind==='забитый пенальти')p.penalties_scored+=q;
+        else if(kind==='незабитый пенальти')p.penalties_missed+=q;
+        else if(kind==='лучший игрок дня / матча')p.mvp+=q;
+      });
+      Object.entries(seasons).forEach(([seasonKey,season])=>{
+        const matches=Object.values(season.matchesByDate).sort((a,b)=>a.sort_date-b.sort_date);
+        const home={played:0,wins:0,draws:0,losses:0,goals_for:0,goals_against:0,points:0};
+        const away={played:0,wins:0,draws:0,losses:0,goals_for:0,goals_against:0,points:0};
+        matches.forEach(m=>{
+          let h=m.goals_home+m.own_goals_home,a=m.goals_away+m.own_goals_away;
+          if(m.technical_loss_team==='away'){h=3;a=0;}
+          else if(m.technical_loss_team==='home'){h=0;a=3;}
+          m.score_home=h;m.score_away=a;
+          home.played++;away.played++;home.goals_for+=h;home.goals_against+=a;away.goals_for+=a;away.goals_against+=h;
+          if(h>a){home.wins++;away.losses++;home.points+=3;}
+          else if(a>h){away.wins++;home.losses++;away.points+=3;}
+          else{home.draws++;away.draws++;home.points++;away.points++;}
+          delete m.sort_date;delete m.goals_home;delete m.goals_away;delete m.own_goals_home;delete m.own_goals_away;
+        });
+        const players=Object.values(season.playersByName).map(p=>({
+          name:p.name,goals:p.goals,own_goals:p.own_goals,yellow_cards:p.yellow_cards,red_cards:p.red_cards,
+          penalties_scored:p.penalties_scored,penalties_missed:p.penalties_missed,mvp:p.mvp,
+          matches:Object.keys(p.appearanceDates).length,teams:Object.keys(p.teams)
+        })).sort((a,b)=>b.goals-a.goals||b.mvp-a.mvp||a.name.localeCompare(b.name,'ru'));
+        season.matches=matches;season.standings={home,away};
+        season.players=players;delete season.matchesByDate;delete season.playersByName;
+        season.warnings.push(...(warnings.blankEvent?['Строки без вида события: '+warnings.blankEvent+' (не включены в статистику).']:[]));
+        if(warnings.missingTeamCards)season.warnings.push('Жёлтые/красные карточки без команды: '+warnings.missingTeamCards+' (не распределены между командами и игроками).');
+        if(warnings.invalidQuantity)season.warnings.push('Строки с некорректным количеством: '+warnings.invalidQuantity);
+        if(warnings.unknownSeason)season.warnings.push('Строки Д×Г с неизвестным сезоном: '+warnings.unknownSeason);
+      });
+      if(!Object.keys(seasons).length)throw new Error('В файле не найдены строки Д×Г сезонов 2025/2026 или 2026/2027.');
+      return seasons;
+    }
+    function dgStatsElement(tag,className,textValue){
+      const node=document.createElement(tag);if(className)node.className=className;if(textValue!==undefined)node.textContent=String(textValue);return node;
+    }
+    function renderDgStatistics(){
+      const root=$('dgStatisticsContent');if(!root)return;
+      const seasonKey=$('dgStatisticsSeason')?.value||activeDgStatisticsSeason;
+      activeDgStatisticsSeason=seasonKey;
+      const record=dgStatisticsCache.find(x=>x.season===seasonKey);
+      if(!record){root.textContent='Статистика этого сезона ещё не загружена. Администратор может импортировать свежий CSV из Memento ниже.';return;}
+      const data=record.stats||{},players=Array.isArray(data.players)?data.players:[];
+      const standings=data.standings||{},home=standings.home||{},away=standings.away||{};
+      const cards=dgStatsElement('div','dg-stats-leaders');
+      const leaders=[
+        ['Лучший бомбардир',players.slice().sort((a,b)=>(b.goals||0)-(a.goals||0))[0],p=>(p.goals||0)+' голов'],
+        ['Пенальтист',players.slice().sort((a,b)=>(b.penalties_scored||0)-(a.penalties_scored||0))[0],p=>(p.penalties_scored||0)+' забито · '+(p.penalties_missed||0)+' мимо'],
+        ['Больше всего карточек',players.slice().sort((a,b)=>((b.yellow_cards||0)+(b.red_cards||0))-((a.yellow_cards||0)+(a.red_cards||0)))[0],p=>((p.yellow_cards||0)+(p.red_cards||0))+' карточек'],
+        ['Лучший игрок матча',players.slice().sort((a,b)=>(b.mvp||0)-(a.mvp||0))[0],p=>(p.mvp||0)+' наград MVP']
+      ];
+      leaders.forEach(([label,player,value])=>{const card=dgStatsElement('div','dg-stats-leader');card.append(dgStatsElement('div','dg-stats-leader-label',label),dgStatsElement('div','dg-stats-leader-name',player?.name||'—'),dgStatsElement('div','dg-stats-leader-value',player?value(player):'—'));cards.appendChild(card);});
+      root.replaceChildren(cards);
+      const section=(title)=>{const h=dgStatsElement('h4','dg-stats-section-title',title);root.appendChild(h);};
+      const table=(headers,rows)=>{
+        const wrap=dgStatsElement('div','dg-stats-table-wrap'),t=dgStatsElement('table','dg-stats-table');
+        const thead=dgStatsElement('thead'),hr=dgStatsElement('tr');headers.forEach(x=>hr.appendChild(dgStatsElement('th','',x)));thead.appendChild(hr);t.appendChild(thead);
+        const tbody=dgStatsElement('tbody');
+        rows.forEach(row=>{const tr=dgStatsElement('tr');row.forEach((cell,i)=>tr.appendChild(dgStatsElement('td',i===0?(cell.className||''):'',cell.value??cell)));tbody.appendChild(tr);});
+        t.appendChild(tbody);wrap.appendChild(t);root.appendChild(wrap);
+      };
+      section('ТУРНИРНАЯ ТАБЛИЦА');
+      table(['Команда','И','В','Н','П','ЗМ','ПМ','РМ','О'],[
+        [{value:'ФК ДЕРЕВЕНСКИЕ',className:'dg-village-text'},home.played||0,home.wins||0,home.draws||0,home.losses||0,home.goals_for||0,home.goals_against||0,(home.goals_for||0)-(home.goals_against||0),home.points||0],
+        [{value:'ФК ГОРОДСКИЕ',className:'dg-city-text'},away.played||0,away.wins||0,away.draws||0,away.losses||0,away.goals_for||0,away.goals_against||0,(away.goals_for||0)-(away.goals_against||0),away.points||0]
+      ]);
+      section('ЛИЧНАЯ СТАТИСТИКА');
+      table(['№','Игрок','Матчи*','Голы','АГ','ПЗ','ПН','%','ЖК','КК','MVP'],players.map((p,i)=>{
+        const attempts=(p.penalties_scored||0)+(p.penalties_missed||0);
+        return [i+1,p.name,p.matches||0,p.goals||0,p.own_goals||0,p.penalties_scored||0,p.penalties_missed||0,attempts?Math.round((p.penalties_scored||0)/attempts*100)+'%':'—',p.yellow_cards||0,p.red_cards||0,p.mvp||0];
+      }));
+      section('РЕЗУЛЬТАТЫ МАТЧЕЙ');
+      const matchList=dgStatsElement('div','dg-stats-match-list');
+      (data.matches||[]).slice().reverse().forEach(m=>{const row=dgStatsElement('div','dg-stats-match');row.append(dgStatsElement('span','',m.date),dgStatsElement('strong','',String(m.score_home)+':'+String(m.score_away)));matchList.appendChild(row);});
+      root.appendChild(matchList);
+      const totals=data.totals||{};
+      const foot=dgStatsElement('div','muted','Всего: '+(data.matches?.length||0)+' матчей · '+(totals.goals||0)+' голов · '+(totals.own_goals||0)+' автоголов · '+(totals.penalties_scored||0)+' забитых и '+(totals.penalties_missed||0)+' незабитых пенальти. *Матчи игрока считаются по записям составов.');
+      foot.style.cssText='font-size:10px;text-align:left;margin-top:10px;line-height:1.5';root.appendChild(foot);
+      const warnings=Array.isArray(data.warnings)?data.warnings:[];
+      if(warnings.length){const note=dgStatsElement('div','muted',warnings.join(' '));note.style.cssText='font-size:10px;text-align:left;color:#ffc66d;margin-top:8px;line-height:1.5';root.appendChild(note);}
+      const imported=record.imported_at?new Date(record.imported_at).toLocaleString('ru-RU'):'';
+      const updated=$('dgStatisticsUpdated');if(updated)updated.textContent=imported?'Обновлено: '+imported:'';
+    }
+    async function loadDgStatistics(){
+      const root=$('dgStatisticsContent');if(!root||!sb||!currentUser)return;
+      root.textContent='Загружаем статистику Д×Г…';
+      const {data,error}=await sb.from('dg_tournament_statistics').select('season,stats,source_name,imported_at').order('season',{ascending:false});
+      if(error){root.textContent='Не удалось загрузить статистику: '+error.message+'. Если это первый запуск, выполни SQL-миграцию dg_tournament_statistics в Supabase.';return;}
+      dgStatisticsCache=data||[];renderDgStatistics();
+    }
+    async function importDgStatisticsCsv(){
+      const status=$('dgStatisticsImportStatus'),file=$('dgStatisticsCsvFile')?.files?.[0],button=$('dgStatisticsImportButton');
+      if(!status||!button||currentProfile?.role!=='admin'||!currentUser)return;
+      if(!file){status.textContent='Сначала выбери CSV-файл из Memento.';return;}
+      button.disabled=true;status.textContent='Проверяем CSV и рассчитываем показатели…';
+      try{
+        const seasons=buildDgStatisticsFromCsv(await file.text()),keys=Object.keys(seasons);
+        const summary=keys.map(k=>k+': '+seasons[k].source_rows+' строк, '+seasons[k].matches.length+' матчей').join(' · ');
+        if(!confirm('Будет обновлена статистика: '+summary+'. Старые значения этих сезонов будут заменены. Продолжить?'))return;
+        const payload=keys.map(season=>({season,stats:seasons[season],source_name:file.name,imported_at:new Date().toISOString(),imported_by:currentUser.id}));
+        const {error}=await sb.from('dg_tournament_statistics').upsert(payload,{onConflict:'season'});
+        if(error)throw error;
+        status.textContent='Готово! '+summary+'. Статистика сохранена и доступна участникам.';
+        await loadDgStatistics();
+      }catch(error){status.textContent='Ошибка импорта: '+(error?.message||String(error));}
+      finally{button.disabled=false;}
+    }
     async function loadTournamentBrackets(){
       const root=$('tournamentBracketsList');if(!root||!sb||!currentUser)return;
       renderTournamentSwitch();
@@ -2224,7 +2463,10 @@
     });
     document.querySelectorAll('[data-tournament]').forEach(button=>button.addEventListener('click',async()=>{
       activeTournamentKey=button.dataset.tournament;await loadTournamentBrackets();
+      if(activeTournamentKey==='dg')await loadDgStatistics();
     }));
+    $('dgStatisticsSeason')?.addEventListener('change',renderDgStatistics);
+    $('dgStatisticsImportButton')?.addEventListener('click',importDgStatisticsCsv);
     $('tournamentStageSelect')?.addEventListener('change',async event=>{
       activeTournamentStage=event.target.value;
 
@@ -2266,7 +2508,7 @@
       if(!enabled&&activeTournamentPhase==='playoff')activeTournamentPhase='qualification';
       event.target.disabled=false;renderTournamentSwitch();await loadTournamentBrackets();
     });
-    $('openTournamentsButton')?.addEventListener('click',async()=>{showSection('tournamentsPanel');await Promise.all([loadTournamentBrackets(),loadEventRegistrations(),tournamentIsAdmin()?loadTournamentParticipants():Promise.resolve()]);});
+    $('openTournamentsButton')?.addEventListener('click',async()=>{showSection('tournamentsPanel');await Promise.all([loadTournamentBrackets(),loadEventRegistrations(),loadDgStatistics(),tournamentIsAdmin()?loadTournamentParticipants():Promise.resolve()]);});
     $('tournamentsBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
 
     const financeMoney=value=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(Number(value)||0);

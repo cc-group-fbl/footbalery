@@ -568,6 +568,7 @@
           <button type="button" class="admin-tab" data-admin-tab="design" role="tab" aria-selected="false">🎨 Оформление</button>
           <button type="button" class="admin-tab" data-admin-tab="logins" role="tab" aria-selected="false">🔐 Входы</button>
           <button type="button" class="admin-tab" data-admin-tab="events" role="tab" aria-selected="false">🏆 Турниры и события</button>
+          <button type="button" class="admin-tab" data-admin-tab="teams" role="tab" aria-selected="false">🎲 Генератор команд</button>
         </div><div class="admin-tab-panel" data-admin-panel="matches"><details class="admin-section" open>
           <summary>⚽ Создание матча</summary>
           <div class="muted">Создай новый матч и настрой регистрацию участников.</div>
@@ -729,6 +730,27 @@
             <button type="button" id="downloadEventCatalogTemplate" class="small-btn" style="width:100%;margin-top:8px">СКАЧАТЬ ПРИМЕР CSV</button>
             <div id="eventCatalogMessage" class="message" aria-live="polite"></div>
             <div id="eventCatalogList" style="margin-top:12px"><div class="muted">Загрузка списка…</div></div>
+          </div>
+        </div>
+        <div class="admin-tab-panel" data-admin-panel="teams" hidden>
+          <div class="admin-section">
+            <h3 style="font-size:15px;margin:4px 0 8px">🎲 Генератор команд</h3>
+            <div class="muted" style="text-align:left;margin-bottom:12px">Для обычных игровых дней и «Мегазарубы». Выбери участников, выставь силу от 1 до 10 и получи несколько вариантов сбалансированных составов. Рейтинг хранится отдельно от спортивной статистики.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <label class="muted">Количество команд<input id="teamGeneratorCount" class="field" type="number" min="2" max="10" value="2"></label>
+              <label class="muted">Вариантов составов<input id="teamGeneratorVariants" class="field" type="number" min="1" max="8" value="5"></label>
+            </div>
+            <div style="display:flex;gap:8px;margin:10px 0"><button type="button" id="teamGeneratorSelectAll" class="small-btn">ВЫБРАТЬ ВСЕХ</button><button type="button" id="teamGeneratorClearAll" class="small-btn">СНЯТЬ ВЫБОР</button></div>
+            <div id="teamGeneratorPlayers" style="max-height:360px;overflow:auto;border:1px solid var(--border-color);border-radius:12px;padding:8px"><div class="muted">Список участников загрузится при открытии раздела.</div></div>
+            <div style="display:flex;gap:8px;margin:10px 0"><input id="teamGeneratorGuestName" class="field" style="flex:1;min-width:120px" maxlength="60" placeholder="Имя гостя"><button type="button" id="teamGeneratorAddGuest" class="small-btn">＋ ГОСТЬ</button></div>
+            <button type="button" id="teamGeneratorSaveRatings" class="small-btn" style="width:100%">СОХРАНИТЬ ПОСТОЯННЫЕ РЕЙТИНГИ</button>
+            <div id="teamGeneratorRatingMessage" class="message"></div>
+            <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">⚙️ Гибкие ограничения</summary>
+              <div class="muted" style="text-align:left;margin:8px 0">По одному правилу на строку, точные имена выбранных игроков. Обязательная пара: <b>+Имя 1 | Имя 2</b>. Запрет одной команды: <b>-Имя 1 | Имя 2</b>. Закрепить игрока: <b>=Имя | 1</b> (номер команды).</div>
+              <textarea id="teamGeneratorRules" class="field" rows="5" placeholder="+Иван Иванов | Пётр Петров&#10;-Алексей | Сергей&#10;=Иван Иванов | 1"></textarea>
+            </details>
+            <button type="button" id="teamGeneratorGenerate" class="action-btn" style="margin-top:12px">СГЕНЕРИРОВАТЬ СОСТАВЫ</button>
+            <div id="teamGeneratorMessage" class="message"></div><div id="teamGeneratorResults" style="margin-top:12px"></div>
           </div>
         </div>
       </div></section>
@@ -4856,12 +4878,118 @@
       const csv='id,name,type\\nDXG,Деревенские × Городские,match\\nONE,Турнир 1 на 1,tournament\\nMEGA,Мегазаруба,event\\n';
       const url=URL.createObjectURL(new Blob(['\\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='ШАБЛОН_ТУРНИРЫ_МЕРОПРИЯТИЯ.csv';a.click();URL.revokeObjectURL(url);
     });
+    // Генератор команд: рейтинги сохраняются отдельно от спортивной статистики.
+    const TEAM_RATINGS_KEY='team_generator_ratings_v1';
+    let teamGeneratorProfiles=[],teamGeneratorRatings={},teamGeneratorLoaded=false,teamGeneratorGuests=[];
+    const teamPlayerName=p=>[p.first_name,p.last_name].filter(Boolean).join(' ').trim()||p.username||p.name||'Участник';
+    async function loadTeamGenerator(){
+      if(!tournamentIsAdmin())return;
+      const root=$('teamGeneratorPlayers');if(!root||!sb)return;
+      if(teamGeneratorLoaded){renderTeamGeneratorPlayers();return;}
+      root.textContent='Загружаем участников…';
+      const [pr,rr]=await Promise.all([sb.from('profiles').select('user_id,username,first_name,last_name').order('last_name'),sb.from('site_settings').select('value').eq('key',TEAM_RATINGS_KEY).maybeSingle()]);
+      if(pr.error||!pr.data){root.textContent='Не удалось загрузить участников: '+(pr.error?.message||'нет данных');return;}
+      teamGeneratorProfiles=pr.data;
+      try{const raw=rr.data?.value;teamGeneratorRatings=raw&&typeof raw==='object'?raw:JSON.parse(raw||'{}');if(!teamGeneratorRatings||Array.isArray(teamGeneratorRatings))teamGeneratorRatings={};}catch(_){teamGeneratorRatings={};}
+      teamGeneratorLoaded=true;renderTeamGeneratorPlayers();
+    }
+    function renderTeamGeneratorPlayers(){
+      const root=$('teamGeneratorPlayers');if(!root)return;root.replaceChildren();
+      const rows=[...teamGeneratorProfiles.map(p=>({id:p.user_id,name:teamPlayerName(p),rating:teamGeneratorRatings[p.user_id]??5})),...teamGeneratorGuests];
+      rows.sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+      rows.forEach(p=>{
+        const row=document.createElement('div');row.style.cssText='display:grid;grid-template-columns:22px minmax(0,1fr) 70px;gap:8px;align-items:center;padding:7px 3px;border-bottom:1px solid var(--border-color)';
+        const cb=document.createElement('input');cb.type='checkbox';cb.checked=true;cb.dataset.teamPlayer=p.id;cb.style.width='18px';
+        const name=document.createElement('span');name.textContent=p.name;name.style.fontSize='12px';
+        const rate=document.createElement('input');rate.type='number';rate.min='1';rate.max='10';rate.step='1';rate.value=String(p.rating);rate.className='field';rate.style.cssText='padding:7px;text-align:center';rate.dataset.teamRating=p.id;
+        row.append(cb,name,rate);root.appendChild(row);
+      });
+      if(!rows.length)root.textContent='В системе пока нет участников.';
+    }
+    async function saveTeamGeneratorRatings(){
+      if(!tournamentIsAdmin()||!sb||!currentUser?.id)return;
+      const next={...teamGeneratorRatings};
+      document.querySelectorAll('[data-team-rating]').forEach(input=>{const n=Math.max(1,Math.min(10,Math.round(Number(input.value)||5)));input.value=String(n);if(!input.dataset.teamRating.startsWith('guest:'))next[input.dataset.teamRating]=n;});
+      const {error}=await sb.from('site_settings').upsert({key:TEAM_RATINGS_KEY,value:JSON.stringify(next),updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'key'});
+      if(error){setMessage('teamGeneratorRatingMessage','Не удалось сохранить рейтинги: '+error.message,true);return;}
+      teamGeneratorRatings=next;setMessage('teamGeneratorRatingMessage','Постоянные рейтинги сохранены.');
+    }
+    function teamGeneratorPlayersSelected(){
+      return [...document.querySelectorAll('[data-team-player]:checked')].map(cb=>{
+        const id=cb.dataset.teamPlayer,p=teamGeneratorProfiles.find(x=>x.user_id===id),g=teamGeneratorGuests.find(x=>x.id===id);
+        const input=[...document.querySelectorAll('[data-team-rating]')].find(x=>x.dataset.teamRating===id);
+        return {id,name:p?teamPlayerName(p):(g?.name||'Гость'),skill:Math.max(1,Math.min(10,Math.round(Number(input?.value)||5)))};
+      });
+    }
+    function teamGeneratorRules(players,count){
+      const ids=new Map(players.map(p=>[p.name.toLocaleLowerCase('ru'),p.id])),pairs=[],bans=[],fixed=new Map(),errors=[];
+      ($('teamGeneratorRules')?.value||'').split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean).forEach((line,i)=>{
+        const parts=line.slice(1).split('|').map(x=>x.trim()),a=ids.get((parts[0]||'').toLocaleLowerCase('ru')),b=ids.get((parts[1]||'').toLocaleLowerCase('ru'));
+        if(line[0]==='+'&&parts.length===2&&a&&b)pairs.push([a,b]);
+        else if(line[0]==='-'&&parts.length===2&&a&&b)bans.push([a,b]);
+        else if(line[0]==='='&&a&&parts.length===2&&/^[0-9]+$/.test(parts[1])&&Number(parts[1])>=1&&Number(parts[1])<=count)fixed.set(a,Number(parts[1])-1);
+        else errors.push('Строка '+(i+1)+': проверь формат и наличие выбранных игроков.');
+      });
+      return {pairs,bans,fixed,errors};
+    }
+    function buildTeamVariant(players,count,rules,variant){
+      const parent=new Map(players.map(p=>[p.id,p.id]));
+      const find=x=>{while(parent.get(x)!==x){parent.set(x,parent.get(parent.get(x)));x=parent.get(x);}return x;};
+      rules.pairs.forEach(([a,b])=>{a=find(a);b=find(b);if(a!==b)parent.set(b,a);});
+      const groupsMap=new Map();players.forEach(p=>{const k=find(p.id);if(!groupsMap.has(k))groupsMap.set(k,[]);groupsMap.get(k).push(p);});
+      const groups=[...groupsMap.values()],teams=Array.from({length:count},(_,i)=>({number:i+1,players:[],skill:0}));
+      if(groups.some(g=>g.length>Math.ceil(players.length/count)))throw new Error('Обязательная группа слишком велика для выбранного количества команд.');
+      for(const [a,b] of rules.bans)if(find(a)===find(b))throw new Error('Запрещённая пара одновременно объединена обязательным правилом.');
+      const fixedRoots=new Map();rules.fixed.forEach((t,id)=>fixedRoots.set(find(id),t));
+      const bans=rules.bans.map(([a,b])=>[find(a),find(b)]);
+      groups.sort(()=>Math.random()-.5).sort((a,b)=>b.length-a.length||b.reduce((n,p)=>n+p.skill,0)-a.reduce((n,p)=>n+p.skill,0));
+      for(const group of groups){
+        const root=find(group[0].id),fixed=fixedRoots.has(root)?fixedRoots.get(root):null;
+        const options=(fixed===null?teams:[teams[fixed]]).filter(t=>t.players.length+group.length<=Math.ceil(players.length/count)&&!bans.some(([a,b])=>(a===root&&t.players.some(p=>find(p.id)===b))||(b===root&&t.players.some(p=>find(p.id)===a))));
+        if(!options.length)throw new Error('Ограничения конфликтуют: невозможно разместить '+group.map(p=>p.name).join(', ')+'.');
+        const total=players.reduce((n,p)=>n+p.skill,0),target=total/count,weight=variant%2?2.5:0.7;
+        options.sort((a,b)=>{
+          const cost=t=>Math.pow(t.skill+group.reduce((n,p)=>n+p.skill,0)-target,2)+Math.pow(t.players.length+group.length-players.length/count,2)*4+Math.random()*weight;
+          return cost(a)-cost(b);
+        });
+        const team=options[0];team.players.push(...group);team.skill+=group.reduce((n,p)=>n+p.skill,0);
+      }
+      return teams;
+    }
+    function showTeamVariants(results){
+      const root=$('teamGeneratorResults');root.replaceChildren();
+      results.forEach((teams,i)=>{
+        const card=document.createElement('div');card.className='admin-section';card.style.marginTop='10px';
+        const spread=Math.max(...teams.map(t=>t.skill))-Math.min(...teams.map(t=>t.skill));
+        const heading=document.createElement('h4');heading.textContent='Вариант '+(i+1)+' · разница силы '+spread;heading.style.margin='0 0 8px';card.appendChild(heading);
+        const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px';
+        teams.forEach(t=>{const box=document.createElement('div');box.style.cssText='padding:9px;border:1px solid var(--border-color);border-radius:10px';const h=document.createElement('b');h.textContent='Команда '+t.number+' · '+t.skill+' баллов';const list=document.createElement('div');list.style.cssText='font-size:12px;line-height:1.6;margin-top:6px';t.players.forEach(p=>{const line=document.createElement('div');line.textContent=p.name+' · '+p.skill;list.appendChild(line);});box.append(h,list);grid.appendChild(box);});
+        card.appendChild(grid);
+        const copy=document.createElement('button');copy.type='button';copy.className='small-btn';copy.style.marginTop='8px';copy.textContent='КОПИРОВАТЬ СОСТАВЫ';
+        copy.addEventListener('click',()=>{const value=teams.map(t=>'Команда '+t.number+': '+t.players.map(p=>p.name).join(', ')).join('\\n');if(navigator.clipboard?.writeText)navigator.clipboard.writeText(value).then(()=>setMessage('teamGeneratorMessage','Составы скопированы.')).catch(()=>setMessage('teamGeneratorMessage','Не удалось скопировать.',true));});
+        card.appendChild(copy);root.appendChild(card);
+      });
+    }
+    $('teamGeneratorSelectAll')?.addEventListener('click',()=>document.querySelectorAll('[data-team-player]').forEach(x=>x.checked=true));
+    $('teamGeneratorClearAll')?.addEventListener('click',()=>document.querySelectorAll('[data-team-player]').forEach(x=>x.checked=false));
+    $('teamGeneratorAddGuest')?.addEventListener('click',()=>{const input=$('teamGeneratorGuestName'),name=input?.value.trim();if(!name)return;teamGeneratorGuests.push({id:'guest:'+Date.now()+':'+Math.random().toString(36).slice(2,7),name,rating:5});input.value='';renderTeamGeneratorPlayers();});
+    $('teamGeneratorSaveRatings')?.addEventListener('click',saveTeamGeneratorRatings);
+    $('teamGeneratorGenerate')?.addEventListener('click',()=>{
+      if(!tournamentIsAdmin())return;
+      const players=teamGeneratorPlayersSelected(),count=Math.max(2,Math.min(10,Number($('teamGeneratorCount')?.value)||2)),variants=Math.max(1,Math.min(8,Number($('teamGeneratorVariants')?.value)||5));
+      if(players.length<count){setMessage('teamGeneratorMessage','Выбери не меньше игроков, чем количество команд.',true);return;}
+      const rules=teamGeneratorRules(players,count);if(rules.errors.length){setMessage('teamGeneratorMessage',rules.errors.join(' '),true);return;}
+      try{const results=[];for(let i=0;i<variants;i++)results.push(buildTeamVariant(players,count,rules,i));showTeamVariants(results);setMessage('teamGeneratorMessage','Готово: '+variants+' вариантов. Выбери подходящий и скопируй составы.');}
+      catch(error){$('teamGeneratorResults').replaceChildren();setMessage('teamGeneratorMessage',error.message||'Ошибка распределения.',true);}
+    });
+
     // Вкладки панели администратора: содержимое разделов сохраняет прежние ID и обработчики.
     document.querySelectorAll('[data-admin-tab]').forEach(tab=>{
       tab.addEventListener('click',()=>{
         const name=tab.dataset.adminTab;
         if(name==='logins') loadLoginHistory();
         if(name==='events') loadEventCatalog();
+        if(name==='teams') loadTeamGenerator();
         document.querySelectorAll('[data-admin-tab]').forEach(btn=>{
           const selected=btn===tab;
           btn.classList.toggle('active',selected);

@@ -750,7 +750,7 @@
               <textarea id="teamGeneratorRules" class="field" rows="5" placeholder="+Иван Иванов | Пётр Петров&#10;-Алексей | Сергей&#10;=Иван Иванов | 1"></textarea>
             </details>
             <button type="button" id="teamGeneratorGenerate" class="action-btn" style="margin-top:12px">СГЕНЕРИРОВАТЬ СОСТАВЫ</button>
-            <div id="teamGeneratorMessage" class="message"></div><div id="teamGeneratorResults" style="margin-top:12px"></div>
+            <div id="teamGeneratorMessage" class="message"></div><div id="teamGeneratorResults" style="margin-top:12px"></div><div class="admin-section" style="margin-top:12px"><h4 style="margin:0 0 8px">📚 История сохранённых составов</h4><button type="button" id="teamGeneratorLoadHistory" class="small-btn">ОБНОВИТЬ ИСТОРИЮ</button><div id="teamGeneratorHistory" style="margin-top:8px"><div class="muted">Сохранённые варианты появятся здесь.</div></div></div>
           </div>
         </div>
       </div></section>
@@ -4956,24 +4956,83 @@
       }
       return teams;
     }
-    function showTeamVariants(results){
-      const root=$('teamGeneratorResults');root.replaceChildren();
-      results.forEach((teams,i)=>{
+    let teamGeneratorCurrentResults=[];
+    const TEAM_HISTORY_KEY='team_generator_saved_sessions_v1';
+    async function readTeamGeneratorHistory(){
+      const {data,error}=await sb.from('site_settings').select('value').eq('key',TEAM_HISTORY_KEY).maybeSingle();
+      if(error)throw error;
+      const raw=data?.value;const value=raw&&typeof raw==='object'?raw:JSON.parse(raw||'[]');
+      return Array.isArray(value)?value:[];
+    }
+    async function saveTeamGeneratorSession(teams){
+      if(!tournamentIsAdmin()||!sb||!currentUser?.id)return;
+      const history=await readTeamGeneratorHistory();
+      const session={id:makeTournamentId(),created_at:new Date().toISOString(),created_by:currentUser.id,teams:teams.map(t=>({number:t.number,skill:t.skill,captainId:t.captainId||null,keeperId:t.keeperId||null,players:t.players.map(p=>({id:p.id,name:p.name,skill:p.skill}))}))};
+      history.unshift(session);history.splice(30);
+      const {error}=await sb.from('site_settings').upsert({key:TEAM_HISTORY_KEY,value:JSON.stringify(history),updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'key'});
+      if(error)throw error;
+      setMessage('teamGeneratorMessage','Составы сохранены в истории.');
+      renderTeamGeneratorHistory(history);
+    }
+    function renderTeamGeneratorHistory(history){
+      const root=$('teamGeneratorHistory');if(!root)return;root.replaceChildren();
+      if(!history.length){root.textContent='История пока пуста.';return;}
+      history.forEach(session=>{
+        const item=document.createElement('div');item.style.cssText='padding:9px 0;border-bottom:1px solid var(--border-color)';
+        const title=document.createElement('b');title.textContent=new Date(session.created_at).toLocaleString('ru-RU');title.style.fontSize='12px';
+        const summary=document.createElement('div');summary.className='muted';summary.textContent=(session.teams||[]).map(t=>'Команда '+t.number+': '+(t.players||[]).map(p=>p.name).join(', ')).join(' · ');
+        const copy=document.createElement('button');copy.type='button';copy.className='small-btn';copy.style.marginTop='6px';copy.textContent='КОПИРОВАТЬ';
+        copy.addEventListener('click',()=>{const value=(session.teams||[]).map(t=>'Команда '+t.number+(t.captainId?' (капитан: '+((t.players||[]).find(p=>p.id===t.captainId)?.name||'')+')':'')+': '+(t.players||[]).map(p=>p.name).join(', ')).join('\n');navigator.clipboard?.writeText(value).then(()=>setMessage('teamGeneratorMessage','Состав скопирован из истории.')).catch(()=>setMessage('teamGeneratorMessage','Не удалось скопировать.',true));});
+        item.append(title,summary,copy);root.appendChild(item);
+      });
+    }
+    async function loadTeamGeneratorHistory(){
+      if(!tournamentIsAdmin()||!sb)return;
+      const root=$('teamGeneratorHistory');if(root)root.textContent='Загружаем историю…';
+      try{renderTeamGeneratorHistory(await readTeamGeneratorHistory());}catch(e){if(root)root.textContent='Не удалось загрузить историю: '+e.message;}
+    }
+    function renderTeamGeneratorResults(results){
+      teamGeneratorCurrentResults=results;const root=$('teamGeneratorResults');root.replaceChildren();
+      results.forEach((teams,index)=>{
         const card=document.createElement('div');card.className='admin-section';card.style.marginTop='10px';
         const spread=Math.max(...teams.map(t=>t.skill))-Math.min(...teams.map(t=>t.skill));
-        const heading=document.createElement('h4');heading.textContent='Вариант '+(i+1)+' · разница силы '+spread;heading.style.margin='0 0 8px';card.appendChild(heading);
-        const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px';
-        teams.forEach(t=>{const box=document.createElement('div');box.style.cssText='padding:9px;border:1px solid var(--border-color);border-radius:10px';const h=document.createElement('b');h.textContent='Команда '+t.number+' · '+t.skill+' баллов';const list=document.createElement('div');list.style.cssText='font-size:12px;line-height:1.6;margin-top:6px';t.players.forEach(p=>{const line=document.createElement('div');line.textContent=p.name+' · '+p.skill;list.appendChild(line);});box.append(h,list);grid.appendChild(box);});
+        const heading=document.createElement('h4');heading.textContent='Вариант '+(index+1)+' · разница силы '+spread;heading.style.margin='0 0 8px';card.appendChild(heading);
+        const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px';
+        teams.forEach(team=>{
+          const box=document.createElement('div');box.style.cssText='padding:9px;border:1px solid var(--border-color);border-radius:10px';
+          const h=document.createElement('b');h.textContent='Команда '+team.number+' · '+team.skill+' баллов';
+          const list=document.createElement('div');list.style.cssText='font-size:12px;line-height:1.6;margin:6px 0';
+          team.players.forEach(p=>{
+            const line=document.createElement('div');line.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) 68px;gap:4px;align-items:center;margin:3px 0';
+            const name=document.createElement('span');name.textContent=p.name+' · '+p.skill;
+            const move=document.createElement('select');move.className='field';move.style.cssText='padding:4px;font-size:10px';move.title='Переместить игрока в другую команду';
+            teams.forEach(target=>{const option=document.createElement('option');option.value=String(target.number);option.textContent='Команда '+target.number;option.selected=target===team;move.appendChild(option);});
+            move.addEventListener('change',()=>{const target=teams.find(t=>t.number===Number(move.value));if(!target||target===team)return;team.players=team.players.filter(x=>x.id!==p.id);team.skill-=p.skill;target.players.push(p);target.skill+=p.skill;if(team.captainId===p.id)team.captainId=null;if(team.keeperId===p.id)team.keeperId=null;renderTeamGeneratorResults(results);});
+            line.append(name,move);list.appendChild(line);
+          });
+          const roleSelect=(role,label)=>{
+            const wrap=document.createElement('label');wrap.style.cssText='display:block;font-size:11px;margin-top:6px';wrap.textContent=label+' ';
+            const select=document.createElement('select');select.className='field';select.style.cssText='padding:5px;font-size:11px;width:100%';
+            const none=document.createElement('option');none.value='';none.textContent='Не назначен';select.appendChild(none);
+            team.players.forEach(p=>{const option=document.createElement('option');option.value=p.id;option.textContent=p.name;select.appendChild(option);});
+            select.value=team[role]||'';select.addEventListener('change',()=>{team[role]=select.value||null;});wrap.appendChild(select);return wrap;
+          };
+          box.append(h,list,roleSelect('captainId','Капитан:'),roleSelect('keeperId','Вратарь:'));grid.appendChild(box);
+        });
         card.appendChild(grid);
-        const copy=document.createElement('button');copy.type='button';copy.className='small-btn';copy.style.marginTop='8px';copy.textContent='КОПИРОВАТЬ СОСТАВЫ';
-        copy.addEventListener('click',()=>{const value=teams.map(t=>'Команда '+t.number+': '+t.players.map(p=>p.name).join(', ')).join('\\n');if(navigator.clipboard?.writeText)navigator.clipboard.writeText(value).then(()=>setMessage('teamGeneratorMessage','Составы скопированы.')).catch(()=>setMessage('teamGeneratorMessage','Не удалось скопировать.',true));});
-        card.appendChild(copy);root.appendChild(card);
+        const actions=document.createElement('div');actions.style.cssText='display:flex;gap:7px;flex-wrap:wrap;margin-top:9px';
+        const copy=document.createElement('button');copy.type='button';copy.className='small-btn';copy.textContent='КОПИРОВАТЬ СОСТАВЫ';
+        copy.addEventListener('click',()=>{const value=teams.map(t=>'Команда '+t.number+(t.captainId?' · капитан: '+(t.players.find(p=>p.id===t.captainId)?.name||''):'')+(t.keeperId?' · вратарь: '+(t.players.find(p=>p.id===t.keeperId)?.name||''):'')+': '+t.players.map(p=>p.name).join(', ')).join('\n');navigator.clipboard?.writeText(value).then(()=>setMessage('teamGeneratorMessage','Составы скопированы.')).catch(()=>setMessage('teamGeneratorMessage','Не удалось скопировать.',true));});
+        const save=document.createElement('button');save.type='button';save.className='small-btn';save.textContent='СОХРАНИТЬ В ИСТОРИЮ';
+        save.addEventListener('click',async()=>{save.disabled=true;try{await saveTeamGeneratorSession(teams);}catch(e){setMessage('teamGeneratorMessage','Не удалось сохранить: '+e.message,true);}finally{save.disabled=false;}});
+        actions.append(copy,save);card.appendChild(actions);root.appendChild(card);
       });
     }
     $('teamGeneratorSelectAll')?.addEventListener('click',()=>document.querySelectorAll('[data-team-player]').forEach(x=>x.checked=true));
     $('teamGeneratorClearAll')?.addEventListener('click',()=>document.querySelectorAll('[data-team-player]').forEach(x=>x.checked=false));
     $('teamGeneratorAddGuest')?.addEventListener('click',()=>{const input=$('teamGeneratorGuestName'),name=input?.value.trim();if(!name)return;teamGeneratorGuests.push({id:'guest:'+Date.now()+':'+Math.random().toString(36).slice(2,7),name,rating:5});input.value='';renderTeamGeneratorPlayers();});
     $('teamGeneratorSaveRatings')?.addEventListener('click',saveTeamGeneratorRatings);
+    $('teamGeneratorLoadHistory')?.addEventListener('click',loadTeamGeneratorHistory);
     $('teamGeneratorGenerate')?.addEventListener('click',()=>{
       if(!tournamentIsAdmin())return;
       const players=teamGeneratorPlayersSelected(),count=Math.max(2,Math.min(10,Number($('teamGeneratorCount')?.value)||2)),variants=Math.max(1,Math.min(8,Number($('teamGeneratorVariants')?.value)||5));

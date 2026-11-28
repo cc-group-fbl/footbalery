@@ -4940,7 +4940,7 @@
       const groups=[...groupsMap.values()],teams=Array.from({length:count},(_,i)=>({number:i+1,players:[],skill:0}));
       if(groups.some(g=>g.length>Math.ceil(players.length/count)))throw new Error('Обязательная группа слишком велика для выбранного количества команд.');
       for(const [a,b] of rules.bans)if(find(a)===find(b))throw new Error('Запрещённая пара одновременно объединена обязательным правилом.');
-      const fixedRoots=new Map();rules.fixed.forEach((t,id)=>fixedRoots.set(find(id),t));
+      const fixedRoots=new Map();rules.fixed.forEach((t,id)=>{const root=find(id);if(fixedRoots.has(root)&&fixedRoots.get(root)!==t)throw new Error('Игроки обязательной группы закреплены за разными командами.');fixedRoots.set(root,t);});
       const bans=rules.bans.map(([a,b])=>[find(a),find(b)]);
       groups.sort(()=>Math.random()-.5).sort((a,b)=>b.length-a.length||b.reduce((n,p)=>n+p.skill,0)-a.reduce((n,p)=>n+p.skill,0));
       for(const group of groups){

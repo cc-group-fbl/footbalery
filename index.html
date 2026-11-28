@@ -5028,6 +5028,8 @@
         actions.append(copy,save);card.appendChild(actions);root.appendChild(card);
       });
     }
+    // Backward-compatible alias for cached/older generator handlers.
+    function showTeamVariants(results){return renderTeamGeneratorResults(results);}
     $('teamGeneratorSelectAll')?.addEventListener('click',()=>document.querySelectorAll('[data-team-player]').forEach(x=>x.checked=true));
     $('teamGeneratorClearAll')?.addEventListener('click',()=>document.querySelectorAll('[data-team-player]').forEach(x=>x.checked=false));
     $('teamGeneratorAddGuest')?.addEventListener('click',()=>{const input=$('teamGeneratorGuestName'),name=input?.value.trim();if(!name)return;teamGeneratorGuests.push({id:'guest:'+Date.now()+':'+Math.random().toString(36).slice(2,7),name,rating:5});input.value='';renderTeamGeneratorPlayers();});

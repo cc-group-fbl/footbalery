@@ -378,6 +378,7 @@
           <button type="button" class="dashboard-card" id="openVoteButton"><span class="dashboard-icon">🗳️</span><span><span class="dashboard-title">ГОЛОСОВАНИЕ</span><span class="dashboard-description">Участвуй в активных опросах сообщества</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openTournamentsButton"><span class="dashboard-icon">🏆</span><span><span class="dashboard-title">ТУРНИРЫ</span><span class="dashboard-description">Д×Г и Турнир 1 на 1 · турнирные сетки</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card" id="openProtocolsButton"><span class="dashboard-icon">📋</span><span><span class="dashboard-title">ЭЛЕКТРОННЫЕ ПРОТОКОЛЫ</span><span class="dashboard-description">Назначенные матчи и заполнение протоколов</span></span><span class="dashboard-arrow">›</span></button>
+          <button type="button" class="dashboard-card hidden" id="openTeamGeneratorButton"><span class="dashboard-icon">🎲</span><span><span class="dashboard-title">ГЕНЕРАТОР КОМАНД</span><span class="dashboard-description">Создание сбалансированных составов для игровых дней</span></span><span class="dashboard-arrow">›</span></button>
           <button type="button" class="dashboard-card hidden" id="openAdminButton"><span class="dashboard-icon">⚙️</span><span><span class="dashboard-title">АДМИНИСТРИРОВАНИЕ</span><span class="dashboard-description">Управление опросами, участниками и результатами</span></span><span class="dashboard-arrow">›</span></button>
         </div>
       </section>
@@ -732,13 +733,9 @@
             <div id="eventCatalogList" style="margin-top:12px"><div class="muted">Загрузка списка…</div></div>
           </div>
         </div>
-        <div class="admin-section" style="margin-top:14px;border-color:rgba(0,210,255,.35);background:linear-gradient(135deg,rgba(0,160,220,.10),rgba(255,255,255,.02))">
-          <h3 style="font-size:16px;margin:0 0 6px">🎲 Генератор команд</h3>
-          <div class="muted" style="margin-bottom:10px">Отдельный инструмент для распределения участников на обычные игровые дни и «Мегазарубы».</div>
-          <button type="button" id="openTeamGeneratorButton" class="action-btn">ОТКРЫТЬ ГЕНЕРАТОР КОМАНД</button>
-        </div>
+
       </div></section>
-      <button type="button" class="small-btn section-back hidden" id="teamGeneratorBackButton">← В панель администратора</button>
+      <button type="button" class="small-btn section-back hidden" id="teamGeneratorBackButton">← В главное меню</button>
       <section id="teamGeneratorPanel" class="vote-box hidden">
         <h2>🎲 ГЕНЕРАТОР КОМАНД</h2>
         <div class="muted" style="margin-bottom:12px">Для обычных игровых дней и «Мегазарубы». Выбери участников, выставь силу от 1 до 10 и получи несколько вариантов сбалансированных составов. Рейтинг хранится отдельно от спортивной статистики.</div>
@@ -2832,6 +2829,7 @@
         // фоновой проверки профиля не лишал пользователя кнопки админки.
         // Реальные права на операции по-прежнему контролируются RLS в Supabase.
         $('openAdminButton').classList.toggle('hidden',p.role!=='admin');
+        $('openTeamGeneratorButton')?.classList.toggle('hidden',p.role!=='admin');
         $('openCaptainButton').classList.toggle('hidden',p.role!=='captain');
       };
       renderAccount(profile,!cachedProfile);
@@ -4539,7 +4537,9 @@
     $('createMemberForm')?.addEventListener('submit',createMember);
     $('refreshLoginHistory')?.addEventListener('click',loadLoginHistory);
     $('loginButton').addEventListener('click',()=>signIn());$('biometricLoginButton')?.addEventListener('click',biometricSignIn);$('biometricSettingsButton')?.addEventListener('click',toggleBiometricLogin);$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')signIn();});$('logoutButton').addEventListener('click',logout);
-    $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsDelivery"]').forEach(r=>r.addEventListener('change',()=> $('newsScheduleWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsDelivery"]:checked')?.value!=='scheduled')));$('loginHistoryPeriod')?.addEventListener('change',loadLoginHistory);$('loginHistorySearch')?.addEventListener('input',()=>{clearTimeout(window._loginHistorySearchTimer);window._loginHistorySearchTimer=setTimeout(loadLoginHistory,250);});document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();await loadAdminImportTimestamps();await loadAdminActivity();});
+    $('openTeamGeneratorButton')?.addEventListener('click',()=>{if(currentProfile?.role==='admin')showSection('teamGeneratorPanel');});
+     $('teamGeneratorBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
+     $('openStatsButton').addEventListener('click',()=>showSection('statsCard'));$('openNewsButton').addEventListener('click',async()=>{showSection('newsPanel');await loadNews();});$('createNewsForm')?.addEventListener('submit',createNews);$('cancelNewsEdit')?.addEventListener('click',resetNewsEditor);document.querySelectorAll('input[name="newsDelivery"]').forEach(r=>r.addEventListener('change',()=> $('newsScheduleWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsDelivery"]:checked')?.value!=='scheduled')));$('loginHistoryPeriod')?.addEventListener('change',loadLoginHistory);$('loginHistorySearch')?.addEventListener('input',()=>{clearTimeout(window._loginHistorySearchTimer);window._loginHistorySearchTimer=setTimeout(loadLoginHistory,250);});document.querySelectorAll('input[name="newsAudience"]').forEach(r=>r.addEventListener('change',()=> $('newsRecipientsWrap')?.classList.toggle('hidden',document.querySelector('input[name="newsAudience"]:checked')?.value!=='selected')));$('selectAllNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=true));$('clearNewsRecipients')?.addEventListener('click',()=>document.querySelectorAll('input[name="newsRecipient"]').forEach(x=>x.checked=false));$('openVoteButton').addEventListener('click',()=>showSection('votePanel'));$('openAdminButton').addEventListener('click',async()=>{if(currentProfile?.role!=='admin')return;showSection('adminPanel');await loadAdminPanelData();await loadAdminImportTimestamps();await loadAdminActivity();});
     $('openProtocolsButton')?.addEventListener('click',async()=>{showSection('protocolsPanel');await loadRefereeProtocols();});
     $('protocolsBackButton')?.addEventListener('click',()=>showSection('homeScreen'));
     $('assignProtocolRefereeButton')?.addEventListener('click',assignProtocolReferee);

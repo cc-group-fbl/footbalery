@@ -110,6 +110,8 @@
   .spinner { width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid var(--gold); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px; }
   @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+  #teamGeneratorPanel { background:#0b2d55 !important;background-image:linear-gradient(155deg,#103d70,#0b2d55 55%,#082344) !important;border:1px solid rgba(115,205,255,.32) !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;box-shadow:0 16px 38px rgba(0,0,0,.32) !important; }
+  #teamGeneratorPanel .admin-section { background:#10345f !important;border-color:rgba(125,200,255,.24) !important;backdrop-filter:none !important; }
   .auth-box,.vote-box { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; padding: 24px 22px; backdrop-filter: blur(15px); box-shadow: 0 20px 50px rgba(0,0,0,.55); margin-bottom: 16px; }
   .auth-box h2,.vote-box h2 { font-size: 16px; margin-bottom: 14px; text-align:center; }
   .field { display:block; width:100%; margin:10px 0; padding:13px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.16); background:#0d1118; color:#fff; font:inherit; outline:none; }
@@ -742,6 +744,7 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <label class="muted">Количество команд<input id="teamGeneratorCount" class="field" type="number" min="2" max="10" value="2"></label>
           <label class="muted">Вариантов составов<input id="teamGeneratorVariants" class="field" type="number" min="1" max="8" value="5"></label>
+          <label class="muted">Максимальная разница силы<input id="teamGeneratorMaxDiff" class="field" type="number" min="0" max="100" step="1" value="3"></label>
         </div>
         <div style="display:flex;gap:8px;margin:10px 0"><button type="button" id="teamGeneratorSelectAll" class="small-btn">ВЫБРАТЬ ВСЕХ</button><button type="button" id="teamGeneratorClearAll" class="small-btn">СНЯТЬ ВЫБОР</button></div>
         <div id="teamGeneratorPlayers" style="max-height:360px;overflow:auto;border:1px solid var(--border-color);border-radius:12px;padding:8px"><div class="muted">Список участников загрузится при открытии раздела.</div></div>
@@ -4999,7 +5002,7 @@
       const root=$('teamGeneratorHistory');if(root)root.textContent='Загружаем историю…';
       try{renderTeamGeneratorHistory(await readTeamGeneratorHistory());}catch(e){if(root)root.textContent='Не удалось загрузить историю: '+e.message;}
     }
-    function renderTeamGeneratorResults(results){
+    function downloadTeamVariantImage(teams,n){const w=1200,p=54,cols=Math.min(teams.length,2),rows=Math.ceil(teams.length/cols),cw=(w-108-22*(cols-1))/cols,hs=teams.map(t=>150+t.players.length*48),rh=Array.from({length:rows},(_,r)=>Math.max(...hs.slice(r*cols,(r+1)*cols))),gap=24,h=190+rh.reduce((a,b)=>a+b,0)+gap*(rows+1)+80,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d'),g=x.createLinearGradient(0,0,w,h);g.addColorStop(0,'#124579');g.addColorStop(1,'#071b34');x.fillStyle=g;x.fillRect(0,0,w,h);x.fillStyle='#fff';x.font='900 48px Arial';x.fillText('ФУТБОЛЁРЫ',p,78);x.fillStyle='#8feaff';x.font='700 34px Arial';x.fillText('СОСТАВЫ · ВАРИАНТ '+n,p,132);const d=Math.max(...teams.map(t=>t.skill))-Math.min(...teams.map(t=>t.skill));x.fillStyle='#c8e8ff';x.font='24px Arial';x.fillText('Разница силы: '+d+' баллов',p,174);teams.forEach((t,i)=>{const r=Math.floor(i/cols),col=i%cols,a=p+col*(cw+22),b=190+gap+r*(rh[r]+gap);x.fillStyle='#10365f';x.strokeStyle='#4b91c5';x.lineWidth=2;x.beginPath();x.roundRect(a,b,cw,hs[i],18);x.fill();x.stroke();x.fillStyle='#8feaff';x.font='800 29px Arial';x.fillText('КОМАНДА '+t.number,a+20,b+42);x.fillStyle='#fff';x.font='700 24px Arial';x.fillText('СИЛА: '+t.skill,a+20,b+80);let y=b+120;t.players.forEach(p=>{let name=p.name+(t.captainId===p.id?' · К':'')+(t.keeperId===p.id?' · В':'');x.font='22px Arial';while(x.measureText(name).width>cw-100&&name.length>4)name=name.slice(0,-2)+'…';x.fillStyle='#fff';x.fillText(name,a+20,y);x.textAlign='right';x.fillStyle='#9feaff';x.fillText(String(p.skill),a+cw-20,y);x.textAlign='left';y+=48;});});c.toBlob(blob=>{if(!blob)return setMessage('teamGeneratorMessage','Не удалось создать PNG.',true);const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='СОСТАВЫ_'+n+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);},'image/png');}function renderTeamGeneratorResults(results){
       teamGeneratorCurrentResults=results;const root=$('teamGeneratorResults');root.replaceChildren();
       results.forEach((teams,index)=>{
         const card=document.createElement('div');card.className='admin-section';card.style.marginTop='10px';
@@ -5015,7 +5018,7 @@
             const name=document.createElement('span');name.textContent=p.name+' · '+p.skill;
             const move=document.createElement('select');move.className='field';move.style.cssText='padding:4px;font-size:10px';move.title='Переместить игрока в другую команду';
             teams.forEach(target=>{const option=document.createElement('option');option.value=String(target.number);option.textContent='Команда '+target.number;option.selected=target===team;move.appendChild(option);});
-            move.addEventListener('change',()=>{const target=teams.find(t=>t.number===Number(move.value));if(!target||target===team)return;team.players=team.players.filter(x=>x.id!==p.id);team.skill-=p.skill;target.players.push(p);target.skill+=p.skill;if(team.captainId===p.id)team.captainId=null;if(team.keeperId===p.id)team.keeperId=null;renderTeamGeneratorResults(results);});
+            move.addEventListener('change',()=>{const target=teams.find(t=>t.number===Number(move.value));if(!target||target===team)return;const limit=Math.max(0,Number($('teamGeneratorMaxDiff')?.value)||0),next=teams.map(t=>t===team?t.skill-p.skill:t===target?t.skill+p.skill:t.skill),spread=Math.max(...next)-Math.min(...next);if(spread>limit){move.value=String(team.number);setMessage('teamGeneratorMessage','Перестановка нарушит предел разницы ('+spread+' > '+limit+').',true);return;}team.players=team.players.filter(x=>x.id!==p.id);team.skill-=p.skill;target.players.push(p);target.skill+=p.skill;if(team.captainId===p.id)team.captainId=null;if(team.keeperId===p.id)team.keeperId=null;renderTeamGeneratorResults(results);});
             line.append(name,move);list.appendChild(line);
           });
           const roleSelect=(role,label)=>{
@@ -5030,10 +5033,11 @@
         card.appendChild(grid);
         const actions=document.createElement('div');actions.style.cssText='display:flex;gap:7px;flex-wrap:wrap;margin-top:9px';
         const copy=document.createElement('button');copy.type='button';copy.className='small-btn';copy.textContent='КОПИРОВАТЬ СОСТАВЫ';
+         const imageSave=document.createElement('button');imageSave.type='button';imageSave.className='small-btn';imageSave.textContent='СОХРАНИТЬ КАРТИНКОЙ';imageSave.addEventListener('click',()=>downloadTeamVariantImage(teams,index+1));
         copy.addEventListener('click',()=>{const value=teams.map(t=>'Команда '+t.number+(t.captainId?' · капитан: '+(t.players.find(p=>p.id===t.captainId)?.name||''):'')+(t.keeperId?' · вратарь: '+(t.players.find(p=>p.id===t.keeperId)?.name||''):'')+': '+t.players.map(p=>p.name).join(', ')).join('\n');navigator.clipboard?.writeText(value).then(()=>setMessage('teamGeneratorMessage','Составы скопированы.')).catch(()=>setMessage('teamGeneratorMessage','Не удалось скопировать.',true));});
         const save=document.createElement('button');save.type='button';save.className='small-btn';save.textContent='СОХРАНИТЬ В ИСТОРИЮ';
         save.addEventListener('click',async()=>{save.disabled=true;try{await saveTeamGeneratorSession(teams);}catch(e){setMessage('teamGeneratorMessage','Не удалось сохранить: '+e.message,true);}finally{save.disabled=false;}});
-        actions.append(copy,save);card.appendChild(actions);root.appendChild(card);
+        actions.append(copy,imageSave,save);card.appendChild(actions);root.appendChild(card);
       });
     }
     // Backward-compatible alias for cached/older generator handlers.
@@ -5048,7 +5052,7 @@
       const players=teamGeneratorPlayersSelected(),count=Math.max(2,Math.min(10,Number($('teamGeneratorCount')?.value)||2)),variants=Math.max(1,Math.min(8,Number($('teamGeneratorVariants')?.value)||5));
       if(players.length<count){setMessage('teamGeneratorMessage','Выбери не меньше игроков, чем количество команд.',true);return;}
       const rules=teamGeneratorRules(players,count);if(rules.errors.length){setMessage('teamGeneratorMessage',rules.errors.join(' '),true);return;}
-      try{const results=[];for(let i=0;i<variants;i++)results.push(buildTeamVariant(players,count,rules,i));renderTeamGeneratorResults(results);setMessage('teamGeneratorMessage','Готово: '+variants+' вариантов. Выбери подходящий и скопируй составы.');}
+      try{const maxDiff=Math.max(0,Math.min(100,Math.round(Number($('teamGeneratorMaxDiff')?.value)||0)));$('teamGeneratorMaxDiff').value=String(maxDiff);const results=[];let best=Infinity;for(let attempt=0;attempt<Math.max(500,variants*250);attempt++){const candidate=buildTeamVariant(players,count,rules,attempt),spread=Math.max(...candidate.map(t=>t.skill))-Math.min(...candidate.map(t=>t.skill));best=Math.min(best,spread);if(spread<=maxDiff)results.push(candidate);if(results.length>=variants)break;}if(!results.length)throw new Error('Не удалось получить разницу до '+maxDiff+' баллов. Ближайший результат: '+best+'. Измени ограничения или увеличь предел.');renderTeamGeneratorResults(results);setMessage('teamGeneratorMessage','Готово: '+results.length+' вариантов. Разница не превышает '+maxDiff+' баллов.');}
       catch(error){$('teamGeneratorResults').replaceChildren();setMessage('teamGeneratorMessage',error.message||'Ошибка распределения.',true);}
     });
 

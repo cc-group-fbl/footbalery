@@ -568,7 +568,7 @@
           <button type="button" class="admin-tab" data-admin-tab="design" role="tab" aria-selected="false">🎨 Оформление</button>
           <button type="button" class="admin-tab" data-admin-tab="logins" role="tab" aria-selected="false">🔐 Входы</button>
           <button type="button" class="admin-tab" data-admin-tab="events" role="tab" aria-selected="false">🏆 Турниры и события</button>
-          <button type="button" class="admin-tab" data-admin-tab="teams" role="tab" aria-selected="false">🎲 Генератор команд</button>
+          
         </div><div class="admin-tab-panel" data-admin-panel="matches"><details class="admin-section" open>
           <summary>⚽ Создание матча</summary>
           <div class="muted">Создай новый матч и настрой регистрацию участников.</div>
@@ -732,28 +732,33 @@
             <div id="eventCatalogList" style="margin-top:12px"><div class="muted">Загрузка списка…</div></div>
           </div>
         </div>
-        <div class="admin-tab-panel" data-admin-panel="teams" hidden>
-          <div class="admin-section">
-            <h3 style="font-size:15px;margin:4px 0 8px">🎲 Генератор команд</h3>
-            <div class="muted" style="text-align:left;margin-bottom:12px">Для обычных игровых дней и «Мегазарубы». Выбери участников, выставь силу от 1 до 10 и получи несколько вариантов сбалансированных составов. Рейтинг хранится отдельно от спортивной статистики.</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <label class="muted">Количество команд<input id="teamGeneratorCount" class="field" type="number" min="2" max="10" value="2"></label>
-              <label class="muted">Вариантов составов<input id="teamGeneratorVariants" class="field" type="number" min="1" max="8" value="5"></label>
-            </div>
-            <div style="display:flex;gap:8px;margin:10px 0"><button type="button" id="teamGeneratorSelectAll" class="small-btn">ВЫБРАТЬ ВСЕХ</button><button type="button" id="teamGeneratorClearAll" class="small-btn">СНЯТЬ ВЫБОР</button></div>
-            <div id="teamGeneratorPlayers" style="max-height:360px;overflow:auto;border:1px solid var(--border-color);border-radius:12px;padding:8px"><div class="muted">Список участников загрузится при открытии раздела.</div></div>
-            <div style="display:flex;gap:8px;margin:10px 0"><input id="teamGeneratorGuestName" class="field" style="flex:1;min-width:120px" maxlength="60" placeholder="Имя гостя"><button type="button" id="teamGeneratorAddGuest" class="small-btn">＋ ГОСТЬ</button></div>
-            <button type="button" id="teamGeneratorSaveRatings" class="small-btn" style="width:100%">СОХРАНИТЬ ПОСТОЯННЫЕ РЕЙТИНГИ</button>
-            <div id="teamGeneratorRatingMessage" class="message"></div>
-            <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">⚙️ Гибкие ограничения</summary>
-              <div class="muted" style="text-align:left;margin:8px 0">По одному правилу на строку, точные имена выбранных игроков. Обязательная пара: <b>+Имя 1 | Имя 2</b>. Запрет одной команды: <b>-Имя 1 | Имя 2</b>. Закрепить игрока: <b>=Имя | 1</b> (номер команды).</div>
-              <textarea id="teamGeneratorRules" class="field" rows="5" placeholder="+Иван Иванов | Пётр Петров&#10;-Алексей | Сергей&#10;=Иван Иванов | 1"></textarea>
-            </details>
-            <button type="button" id="teamGeneratorGenerate" class="action-btn" style="margin-top:12px">СГЕНЕРИРОВАТЬ СОСТАВЫ</button>
-            <div id="teamGeneratorMessage" class="message"></div><div id="teamGeneratorResults" style="margin-top:12px"></div><div class="admin-section" style="margin-top:12px"><h4 style="margin:0 0 8px">📚 История сохранённых составов</h4><button type="button" id="teamGeneratorLoadHistory" class="small-btn">ОБНОВИТЬ ИСТОРИЮ</button><div id="teamGeneratorHistory" style="margin-top:8px"><div class="muted">Сохранённые варианты появятся здесь.</div></div></div>
-          </div>
+        <div class="admin-section" style="margin-top:14px;border-color:rgba(0,210,255,.35);background:linear-gradient(135deg,rgba(0,160,220,.10),rgba(255,255,255,.02))">
+          <h3 style="font-size:16px;margin:0 0 6px">🎲 Генератор команд</h3>
+          <div class="muted" style="margin-bottom:10px">Отдельный инструмент для распределения участников на обычные игровые дни и «Мегазарубы».</div>
+          <button type="button" id="openTeamGeneratorButton" class="action-btn">ОТКРЫТЬ ГЕНЕРАТОР КОМАНД</button>
         </div>
       </div></section>
+      <button type="button" class="small-btn section-back hidden" id="teamGeneratorBackButton">← В панель администратора</button>
+      <section id="teamGeneratorPanel" class="vote-box hidden">
+        <h2>🎲 ГЕНЕРАТОР КОМАНД</h2>
+        <div class="muted" style="margin-bottom:12px">Для обычных игровых дней и «Мегазарубы». Выбери участников, выставь силу от 1 до 10 и получи несколько вариантов сбалансированных составов. Рейтинг хранится отдельно от спортивной статистики.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <label class="muted">Количество команд<input id="teamGeneratorCount" class="field" type="number" min="2" max="10" value="2"></label>
+          <label class="muted">Вариантов составов<input id="teamGeneratorVariants" class="field" type="number" min="1" max="8" value="5"></label>
+        </div>
+        <div style="display:flex;gap:8px;margin:10px 0"><button type="button" id="teamGeneratorSelectAll" class="small-btn">ВЫБРАТЬ ВСЕХ</button><button type="button" id="teamGeneratorClearAll" class="small-btn">СНЯТЬ ВЫБОР</button></div>
+        <div id="teamGeneratorPlayers" style="max-height:360px;overflow:auto;border:1px solid var(--border-color);border-radius:12px;padding:8px"><div class="muted">Список участников загрузится при открытии раздела.</div></div>
+        <div style="display:flex;gap:8px;margin:10px 0"><input id="teamGeneratorGuestName" class="field" style="flex:1;min-width:120px" maxlength="60" placeholder="Имя гостя"><button type="button" id="teamGeneratorAddGuest" class="small-btn">＋ ГОСТЬ</button></div>
+        <button type="button" id="teamGeneratorSaveRatings" class="small-btn" style="width:100%">СОХРАНИТЬ ПОСТОЯННЫЕ РЕЙТИНГИ</button>
+        <div id="teamGeneratorRatingMessage" class="message"></div>
+        <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">⚙️ Гибкие ограничения</summary>
+          <div class="muted" style="text-align:left;margin:8px 0">По одному правилу на строку, точные имена выбранных игроков. Обязательная пара: <b>+Имя 1 | Имя 2</b>. Запрет одной команды: <b>-Имя 1 | Имя 2</b>. Закрепить игрока: <b>=Имя | 1</b> (номер команды).</div>
+          <textarea id="teamGeneratorRules" class="field" rows="5" placeholder="+Иван Иванов | Пётр Петров&#10;-Алексей | Сергей&#10;=Иван Иванов | 1"></textarea>
+        </details>
+        <button type="button" id="teamGeneratorGenerate" class="action-btn" style="margin-top:12px">СГЕНЕРИРОВАТЬ СОСТАВЫ</button>
+        <div id="teamGeneratorMessage" class="message"></div><div id="teamGeneratorResults" style="margin-top:12px"></div>
+        <div class="admin-section" style="margin-top:12px"><h4 style="margin:0 0 8px">📚 История сохранённых составов</h4><button type="button" id="teamGeneratorLoadHistory" class="small-btn">ОБНОВИТЬ ИСТОРИЮ</button><div id="teamGeneratorHistory" style="margin-top:8px"><div class="muted">Сохранённые варианты появятся здесь.</div></div></div>
+      </section>
 
       <button type="button" class="small-btn section-back hidden" id="chatsBackButton">← На главный экран</button>
       <section id="chatsPanel" class="vote-box hidden">
@@ -968,7 +973,8 @@
       tournamentsPanel:APP_ROUTE('/tournaments/'),
       protocolsPanel:APP_ROUTE('/protocols/'),
       votePanel:APP_ROUTE('/votes/'),
-      adminPanel:APP_ROUTE('/admin/')
+      adminPanel:APP_ROUTE('/admin/'),
+      teamGeneratorPanel:APP_ROUTE('/admin/team-generator/')
     };
     const ROUTE_SECTIONS = Object.fromEntries(Object.entries(SECTION_ROUTES).map(([panel,path])=>[path,panel]));
     function normalizedAppPath(){
@@ -1003,12 +1009,14 @@
         if(current!==target) history.pushState({sectionId},'',target);
       }
       $('accountPanel')?.classList.toggle('main-menu-open',sectionId==='homeScreen');
-      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','matchesPanel','schedulePanel','captainPanel','chatsPanel','financePanel','tournamentsPanel','protocolsPanel'].forEach(id => {
+      ['homeScreen','statsCard','votePanel','newsPanel','adminPanel','teamGeneratorPanel','matchesPanel','schedulePanel','captainPanel','chatsPanel','financePanel','tournamentsPanel','protocolsPanel'].forEach(id => {
         const panel=$(id); if(panel) panel.classList.toggle('hidden', id !== sectionId);
       });
-      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton',chatsPanel:'chatsBackButton',financePanel:'financeBackButton',tournamentsPanel:'tournamentsBackButton',protocolsPanel:'protocolsBackButton'};
+      const backButtons={statsCard:'statsBackButton',votePanel:'voteBackButton',adminPanel:'adminBackButton',teamGeneratorPanel:'teamGeneratorBackButton',newsPanel:'newsBackButton',matchesPanel:'matchesBackButton',schedulePanel:'scheduleBackButton',captainPanel:'captainBackButton',chatsPanel:'chatsBackButton',financePanel:'financeBackButton',tournamentsPanel:'tournamentsBackButton',protocolsPanel:'protocolsBackButton'};
       Object.entries(backButtons).forEach(([panelId,buttonId])=>{const button=$(buttonId);if(button)button.classList.toggle('hidden',sectionId!==panelId);});
       window.scrollTo({top:0,behavior:'smooth'});
+      if(sectionId==='teamGeneratorPanel'&&currentProfile?.role!=='admin'){showSection('homeScreen',false);return;}
+      if(sectionId==='teamGeneratorPanel'&&currentProfile?.role==='admin')loadTeamGenerator();
       if(sectionId==='adminPanel'&&currentProfile?.role==='admin'){
         Promise.resolve().then(()=>loadAdminActivity()).catch(error=>console.warn('Не удалось обновить обзор событий:',error));
       }
@@ -5050,7 +5058,6 @@
         const name=tab.dataset.adminTab;
         if(name==='logins') loadLoginHistory();
         if(name==='events') loadEventCatalog();
-        if(name==='teams') loadTeamGenerator();
         document.querySelectorAll('[data-admin-tab]').forEach(btn=>{
           const selected=btn===tab;
           btn.classList.toggle('active',selected);

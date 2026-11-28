@@ -5038,7 +5038,7 @@
       const players=teamGeneratorPlayersSelected(),count=Math.max(2,Math.min(10,Number($('teamGeneratorCount')?.value)||2)),variants=Math.max(1,Math.min(8,Number($('teamGeneratorVariants')?.value)||5));
       if(players.length<count){setMessage('teamGeneratorMessage','Выбери не меньше игроков, чем количество команд.',true);return;}
       const rules=teamGeneratorRules(players,count);if(rules.errors.length){setMessage('teamGeneratorMessage',rules.errors.join(' '),true);return;}
-      try{const results=[];for(let i=0;i<variants;i++)results.push(buildTeamVariant(players,count,rules,i));showTeamVariants(results);setMessage('teamGeneratorMessage','Готово: '+variants+' вариантов. Выбери подходящий и скопируй составы.');}
+      try{const results=[];for(let i=0;i<variants;i++)results.push(buildTeamVariant(players,count,rules,i));renderTeamGeneratorResults(results);setMessage('teamGeneratorMessage','Готово: '+variants+' вариантов. Выбери подходящий и скопируй составы.');}
       catch(error){$('teamGeneratorResults').replaceChildren();setMessage('teamGeneratorMessage',error.message||'Ошибка распределения.',true);}
     });
 
